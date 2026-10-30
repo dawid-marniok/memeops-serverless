@@ -1,0 +1,30 @@
+# LAB 5: strojenie autoskalowania (KPA) pod keynote.
+# Adnotacje są w spec.template.metadata, więc każda zmiana = nowa rewizja.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: meme-gen
+  namespace: memeops
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/metric: concurrency    # albo rps
+        autoscaling.knative.dev/target: "5"            # docelowo 5 równoczesnych żądań na pod
+        autoscaling.knative.dev/min-scale: "0"         # krok 4: decyzja na czas keynote
+        autoscaling.knative.dev/max-scale: "8"         # bezpiecznik kosztowy
+        autoscaling.knative.dev/scale-down-delay: "0s"
+    spec:
+      containerConcurrency: 0                          # 0 = bez twardego limitu (miękki target wyżej)
+      containers:
+        - image: localhost:5001/meme-gen:2.0.0
+          env:
+            - {name: APP_VERSION, value: "2.0.0"}
+            - {name: MEME_FORMAT, value: png}
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 256Mi}

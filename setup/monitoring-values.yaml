@@ -1,0 +1,19 @@
+# kube-prometheus-stack w wersji „na laptopa”: bez Alertmanagera i bez zbędnych exporterów.
+alertmanager: {enabled: false}
+kubeEtcd: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeProxy: {enabled: false}
+grafana:
+  adminPassword: memeops
+  service: {type: NodePort, nodePort: 30300}
+  sidecar:
+    dashboards: {enabled: true, searchNamespace: ALL}
+prometheus:
+  prometheusSpec:
+    retention: 12h
+    scrapeInterval: 15s
+    # zbieraj PodMonitory/ServiceMonitory ze wszystkich namespace'ów, nie tylko z etykietą release
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    resources: {requests: {cpu: 100m, memory: 400Mi}}

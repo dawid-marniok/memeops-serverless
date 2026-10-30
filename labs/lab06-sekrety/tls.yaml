@@ -1,0 +1,29 @@
+# LAB 6 (dla chętnych): HTTPS dla usług Knative przez cert-manager.
+# Na laptopie nie ma publicznego DNS, więc zamiast Let's Encrypt używamy własnego CA (self-signed).
+# Na produkcji: ClusterIssuer ACME (Let's Encrypt) z DNS-01 albo HTTP-01.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: memeops-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: MemeOps Szkoleniowe CA
+  secretName: memeops-ca
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: selfsigned, kind: ClusterIssuer}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: memeops-ca
+spec:
+  ca:
+    secretName: memeops-ca

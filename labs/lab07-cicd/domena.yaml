@@ -1,0 +1,20 @@
+# LAB 7: własny adres funkcji (DomainMapping, API v1beta1).
+# Domenę najpierw „rezerwuje” administrator klastra (ClusterDomainClaim), żeby dwa zespoły
+# nie przejęły sobie nawzajem adresu. Potem zespół mapuje ją na swoją usługę.
+apiVersion: networking.internal.knative.dev/v1alpha1
+kind: ClusterDomainClaim
+metadata:
+  name: memy.127.0.0.1.sslip.io
+spec:
+  namespace: memeops
+---
+apiVersion: serving.knative.dev/v1beta1
+kind: DomainMapping
+metadata:
+  name: memy.127.0.0.1.sslip.io
+  namespace: memeops
+spec:
+  ref:
+    name: meme-gen
+    kind: Service
+    apiVersion: serving.knative.dev/v1

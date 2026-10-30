@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MemeOps</title>
+<style>
+  :root { --bg:#f4f6fa; --fg:#14213d; --acc:#2f80c9; --card:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --acc:#58a6ff; --card:#161b22; } }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+  h1 { margin: 0 0 4px; } .sub { opacity:.7; margin:0 0 20px; }
+  form, .card { background:var(--card); border-radius:12px; padding:16px; box-shadow:0 1px 3px #0002; margin-bottom:16px; }
+  label { display:block; font-weight:600; margin:10px 0 4px; }
+  input, select, textarea { width:100%; box-sizing:border-box; padding:8px; border-radius:8px; border:1px solid #8884; background:transparent; color:inherit; }
+  button { margin-top:14px; padding:10px 18px; border:0; border-radius:8px; background:var(--acc); color:#fff; font-weight:700; cursor:pointer; }
+  #out img { max-width:100%; border-radius:8px; } #info, #err { font-family: ui-monospace, monospace; font-size: 13px; }
+  #err { color:#d33; }
+</style>
+</head>
+<body>
+<main>
+  <h1>MemeOps 🎤</h1>
+  <p class="sub">Generator memów na konferencję — serverless na Kubernetes</p>
+  <form id="f">
+    <label for="top">Tekst u góry</label><input id="top" value="Kiedy keynote się kończy">
+    <label for="bottom">Tekst na dole</label><input id="bottom" value="i 500 osób robi mema naraz">
+    <label for="template">Zdjęcie</label>
+    <select id="template"><option>keynote</option><option>kawa</option><option>piatek</option><option>zero</option></select>
+    <label for="token">Token (gdy funkcja wymaga logowania)</label><textarea id="token" rows="2" placeholder="eyJhbGciOi..."></textarea>
+    <button>Generuj mema</button>
+  </form>
+  <div class="card" id="out"><p>Tu pojawi się mem.</p></div>
+  <div class="card"><div id="info"></div><div id="err"></div></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+async function info() {
+  try { const r = await fetch('/api/info'); $('info').textContent = JSON.stringify(await r.json()); } catch (e) {}
+}
+$('f').addEventListener('submit', async (ev) => {
+  ev.preventDefault(); $('err').textContent = '';
+  const t0 = performance.now();
+  const headers = { 'Content-Type': 'application/json' };
+  if ($('token').value.trim()) headers['Authorization'] = 'Bearer ' + $('token').value.trim();
+  const r = await fetch('/api/memes', { method: 'POST', headers,
+    body: JSON.stringify({ top: $('top').value, bottom: $('bottom').value, template: $('template').value }) });
+  const body = await r.json();
+  if (!r.ok) { $('err').textContent = r.status + ': ' + (body.error || ''); return; }
+  $('out').innerHTML = '<img alt="mem" src="' + body.url + '">';
+  $('err').textContent = 'czas odpowiedzi: ' + Math.round(performance.now() - t0) + ' ms';
+  info();
+});
+info();
+</script>
+</body>
+</html>

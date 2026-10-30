@@ -1,0 +1,43 @@
+# Wzorzec pipeline'u MemeOps dla Azure DevOps. Te same etapy co ci/pipeline.sh.
+# Deploy na klaster lokalny wymaga self-hosted agenta na VM (pool: memeops-vm).
+trigger:
+  branches: {include: [main]}
+  paths: {include: [app/meme-gen/*]}
+variables:
+  image: localhost:5001/meme-gen
+  tag: $(Build.SourceVersion)
+stages:
+  - stage: CI
+    jobs:
+      - job: test_build_scan
+        pool: memeops-vm          # self-hosted agent na VM z Dockerem i kind
+        steps:
+          - script: |
+              cd app/meme-gen
+              docker run --rm -v "$PWD:/src:ro" -w /src python:3.12-slim \
+                sh -c "pip install -q pytest -r requirements.txt && python -m pytest -q -p no:cacheprovider"
+            displayName: test
+          - script: docker build -f app/meme-gen/Dockerfile.slim -t $(image):$(tag) app/meme-gen
+            displayName: build
+          - script: |
+              docker save $(image):$(tag) -o $(Agent.TempDirectory)/image.tar
+              docker run --rm -v $(Agent.TempDirectory):/scan:ro aquasec/trivy:0.75.0 \
+                image --input /scan/image.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+            displayName: scan (Trivy)
+          - script: docker push $(image):$(tag)
+            displayName: push
+  - stage: CD
+    dependsOn: CI
+    jobs:
+      - deployment: canary
+        pool: memeops-vm
+        environment: memeops-prod   # tu można dodać ręczne zatwierdzenie (Approvals)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: |
+                    CURRENT=$(kubectl get ksvc meme-gen -n memeops -o jsonpath='{.status.latestReadyRevisionName}')
+                    kn service update meme-gen -n memeops --image $(image):$(tag) \
+                      --traffic $CURRENT=90 --traffic @latest=10 --tag @latest=canary
+                  displayName: canary 10%

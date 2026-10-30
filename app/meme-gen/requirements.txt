@@ -1,0 +1,3 @@
+# v1 (SVG) nie potrzebuje żadnych zależności.
+# LAB 4: odkomentuj Pillow, gdy przechodzisz na PNG (MEME_FORMAT=png).
+# pillow==12.3.0

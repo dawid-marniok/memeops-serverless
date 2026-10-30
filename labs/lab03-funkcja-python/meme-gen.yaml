@@ -1,0 +1,29 @@
+# LAB 3: meme-gen v1 — memy w SVG, bez zależności.
+# Obraz wskazujemy tagiem semver; Knative i tak zapisze w rewizji, co faktycznie uruchomił.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: meme-gen
+  namespace: memeops
+  labels:
+    app.kubernetes.io/part-of: memeops
+spec:
+  template:
+    metadata:
+      annotations:
+        memeops/git-sha: "UZUPELNIJ"        # krok 4: git rev-parse --short HEAD
+    spec:
+      containers:
+        - image: localhost:5001/meme-gen:1.0.0
+          env:
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: MEME_FORMAT
+              value: svg
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 128Mi}

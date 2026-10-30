@@ -1,0 +1,10 @@
+# LAB 6: konfiguracja poza obrazem. ConfigMap = jawne ustawienia, Secret = klucz podpisu tokenów.
+# Secret NIE trafia do gita w prawdziwym projekcie — tu tworzysz go komendą (krok 1), plik jest tylko wzorem.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meme-config
+  namespace: memeops
+data:
+  WATERMARK: "#MemeOpsConf 2026"
+  THEME: light

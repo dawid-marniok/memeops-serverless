@@ -1,0 +1,27 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: NAZWA-FUNKCJI
+  namespace: memeops
+  labels:
+    app.kubernetes.io/part-of: memeops
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/max-scale: "5"
+    spec:
+      containers:
+        - image: localhost:5001/NAZWA-FUNKCJI:0.1.0
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz}
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}

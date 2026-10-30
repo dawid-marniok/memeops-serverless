@@ -1,0 +1,36 @@
+# LAB 6: meme-gen z konfiguracją z ConfigMap, kluczem JWT z Secretu i bezpiecznym kontekstem.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: meme-gen
+  namespace: memeops
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/target: "5"
+        autoscaling.knative.dev/max-scale: "8"
+    spec:
+      containers:
+        - image: localhost:5001/meme-gen:2.0.0
+          env:
+            - {name: APP_VERSION, value: "2.1.0"}
+            - {name: MEME_FORMAT, value: png}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: {name: meme-jwt, key: JWT_SECRET}
+          envFrom:
+            - configMapRef: {name: meme-config}
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
