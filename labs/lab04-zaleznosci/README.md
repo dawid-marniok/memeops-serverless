@@ -76,6 +76,8 @@ Powtórz dla obrazu `2.0.0-full` (`kn service update meme-gen -n memeops --image
 | meme-gen 2.0.0-full | | | | | |
 | meme-gen 2.0.0 (multi-stage) | | | | | |
 
+Różnica w kolumnie „bez obrazu na węźle” może być mała albo żadna: rejestr `localhost:5001` stoi na tej samej VM-ce, więc pobranie nawet 430 MB trwa ułamek sekundy. Koszt rozmiaru widać tu w **czasie do Ready** z kroku 3 (pierwsze uruchomienie obrazu na węźle). Na produkcji obraz idzie z zewnętrznego rejestru przez sieć na każdy nowy węzeł — tam różnica rośnie do sekund albo dziesiątek sekund.
+
 Na koniec zostaw usługę na obrazie `2.0.0` (multi-stage).
 
 ### 5. Wnioski
@@ -86,7 +88,7 @@ Z czego składa się cold start i który składnik zależy od rozmiaru obrazu? C
 
 - [ ] `meme-gen` generuje PNG na obrazie `2.0.0`
 - [ ] tabela ma pomiary dla obu obrazów, w tym cold start bez obrazu na węźle
-- [ ] umiesz wskazać, ile cold startu „zjada” pobieranie obrazu
+- [ ] umiesz wskazać, w którym pomiarze widać koszt rozmiaru obrazu i dlaczego na VM-ce jest mniejszy niż na produkcji
 
 ## Dla chętnych
 

@@ -11,13 +11,15 @@ URL=$(kubectl get ksvc "$SVC" -n "$NS" -o jsonpath='{.status.url}')
 args=(-s -o /dev/null -w '%{http_code} %{time_total}' -X "$M")
 [ -n "$DATA" ] && args+=(-H 'Content-Type: application/json' -d "$DATA")
 [ -n "${TOKEN:-}" ] && args+=(-H "Authorization: Bearer $TOKEN")
-REV=$(kubectl get ksvc "$SVC" -n "$NS" -o jsonpath='{.status.latestReadyRevisionName}')
-printf 'Czekam, aż rewizja %s zejdzie do zera podów (maks. 5 min)' "$REV"
+# Rewizja, która dostaje ruch (po --traffic v1=100 to nie musi być najnowsza gotowa)
+REV=$(kubectl get ksvc "$SVC" -n "$NS" -o jsonpath='{range .status.traffic[?(@.percent)]}{.revisionName}{"\n"}{end}' | sed -n 1p)
+[ -n "$REV" ] || REV=$(kubectl get ksvc "$SVC" -n "$NS" -o jsonpath='{.status.latestReadyRevisionName}')
+printf 'Czekam, aż usługa %s zejdzie do zera podów (maks. 5 min)' "$SVC"
 for _ in $(seq 1 60); do
-  n=$(kubectl get pods -n "$NS" -l "serving.knative.dev/revision=$REV" --no-headers 2>/dev/null | grep -vc Terminating || true)
+  n=$(kubectl get pods -n "$NS" -l "serving.knative.dev/service=$SVC" --no-headers 2>/dev/null | grep -vc Terminating || true)
   [ "$n" = 0 ] && break; printf '.'; sleep 5
 done
-[ "$n" = 0 ] || { echo; echo "Rewizja nadal ma pody. Czy ktoś wysyła ruch albo ustawiony jest min-scale?" >&2; exit 1; }
+[ "$n" = 0 ] || { echo; echo "Usługa nadal ma pody. Czy ktoś wysyła ruch albo ustawiony jest min-scale?" >&2; exit 1; }
 echo " 0 podów."
 if [ -n "${NOWY_WEZEL:-}" ]; then
   IMG=$(kubectl get revision -n "$NS" "$REV" -o jsonpath='{.spec.containers[0].image}')

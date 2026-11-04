@@ -51,7 +51,7 @@ ci/pipeline.sh 2.2.0 10 dark
 ```bash
 for i in $(seq 1 30); do curl -s http://meme-gen.memeops.127.0.0.1.sslip.io/api/info | grep -o '"theme": "[a-z]*"'; done | sort | uniq -c
 curl -s http://canary-meme-gen.memeops.127.0.0.1.sslip.io/api/info
-kn revision describe meme-gen-2-2-0 -n memeops | grep -i git-sha
+kn revision describe meme-gen-2-2-0 -n memeops -v | grep -i git-sha   # -v: bez -v kn ucina adnotacje
 ```
 
 Otwórz w przeglądarce adres `canary-…` — tak testerzy widzą dark mode, zanim dostanie go więcej osób. Decyzja PO: promuj na 100% albo zrób rollback (komendy wypisał pipeline). Zrób jedno z dwóch i sprawdź `kn revision list -n memeops -s meme-gen`.
