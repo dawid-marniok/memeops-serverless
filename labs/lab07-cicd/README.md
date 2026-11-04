@@ -1,10 +1,10 @@
 # lab07 — CI/CD i canary dla dark mode
 
-| Dzień | Czas | Po bloku |
-|---|---|---|
-| 2 | 45 min | 2.3 CI/CD i wdrażanie funkcji |
+| Dzień | Po bloku |
+|---|---|
+| 2 | 2.3 CI/CD i wdrażanie funkcji |
 
-> **Zgłoszenie od PO:** „Mamy szablon dark mode. Chcemy go pokazać 10% uczestników, a jeśli się nie spodoba — wycofać bez dramatu. Do tego ładny adres: `memy.…` zamiast technicznego.”
+> **Zgłoszenie od PO:** „Mamy szablon dark mode. Chcemy go pokazać 10% uczestników, a jeśli się nie spodoba — zrobić rollback bez dramatu. Do tego ładny adres: `memy.…` zamiast technicznego.”
 
 **Cel:** uruchamiasz pipeline test → build → skan → push → deploy, reagujesz na zatrzymanie przez skaner, wdrażasz canary 10%, promujesz albo wycofujesz i podpinasz własną domenę.
 
@@ -12,14 +12,14 @@
 
 ## Kroki
 
-| # | Co robisz | Czas |
-|---|---|---|
-| 1 | Przeczytaj pipeline | 5 min |
-| 2 | Pierwsze uruchomienie | 10 min |
-| 3 | Naprawa i ponowne uruchomienie | 10 min |
-| 4 | Canary: obserwacja, promocja albo wycofanie | 10 min |
-| 5 | Własna domena | 5 min |
-| 6 | Na prawdziwy CI | 5 min |
+| # | Co robisz |
+|---|---|
+| 1 | Przeczytaj pipeline |
+| 2 | Pierwsze uruchomienie |
+| 3 | Naprawa i ponowne uruchomienie |
+| 4 | Canary: obserwacja, promocja albo rollback |
+| 5 | Własna domena |
+| 6 | Na prawdziwy CI |
 
 ### 1. Przeczytaj pipeline
 
@@ -44,7 +44,7 @@ git add -A && git commit -m "meme-gen: aktualizacja zależności"
 ci/pipeline.sh 2.2.0 10 dark
 ```
 
-✅ Wszystkie 5 etapów zielone, na końcu adres `canary-meme-gen…` i dwie komendy: promocja i wycofanie.
+✅ Wszystkie 5 etapów zielone, na końcu adres `canary-meme-gen…` i dwie komendy: promocja i rollback.
 
 ### 4. Canary
 
@@ -54,7 +54,7 @@ curl -s http://canary-meme-gen.memeops.127.0.0.1.sslip.io/api/info
 kn revision describe meme-gen-2-2-0 -n memeops | grep -i git-sha
 ```
 
-Otwórz w przeglądarce adres `canary-…` — tak testerzy widzą dark mode, zanim dostanie go więcej osób. Decyzja PO: promuj na 100% albo wycofaj (komendy wypisał pipeline). Zrób jedno z dwóch i sprawdź `kn revision list -n memeops -s meme-gen`.
+Otwórz w przeglądarce adres `canary-…` — tak testerzy widzą dark mode, zanim dostanie go więcej osób. Decyzja PO: promuj na 100% albo zrób rollback (komendy wypisał pipeline). Zrób jedno z dwóch i sprawdź `kn revision list -n memeops -s meme-gen`.
 
 ### 5. Własna domena
 
@@ -74,7 +74,7 @@ Klaster działa na Twojej VM. Runner GitHub Actions w chmurze go nie zobaczy. Wy
 
 - [ ] masz przebieg pipeline'u zatrzymany przez skaner i przebieg zielony po poprawce
 - [ ] rewizja `meme-gen-2-2-0` ma adnotację `memeops/git-sha` z Twoim commitem
-- [ ] canary zostało promowane albo wycofane jedną komendą
+- [ ] canary: promocja albo rollback jedną komendą
 - [ ] `curl http://memy.127.0.0.1.sslip.io/api/info` odpowiada
 
 ## Pułapka, na którą trafisz po tym labie
@@ -84,7 +84,7 @@ Pipeline nadaje rewizji nazwę (`--revision-name`). Ta nazwa zostaje w `spec.tem
 ## Dogoń grupę
 
 ```bash
-tools/dogon.sh lab07
+tools/start-lab.sh lab07            # tylko jeśli LAB 6 nie skończony (usuwa Twoje rewizje meme-api i meme-gen)
 ```
 
 **Cliffhanger:** „Piątek, 16:55. Memy przestały się generować…”

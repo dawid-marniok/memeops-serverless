@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skalowanie near-RT</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Ten sam system co autoskalowanie i knative-vs-k8s: kolor = rola. turkus = Knative/warm, pomarańcz = KEDA/kolejka, róż = cold start/ryzyko. */
+:root {
+  --bg: #f7f6f2; --surface: #ffffff; --surface-2: #efede6; --text: #1d1c1a; --muted: #5f5c55; --line: #dcd8cc;
+  --accent: #0f6d6a; --kn: #b4561a; --kn-bg: #fbe9da; --kni-bg: #fdf6ef;
+  --traffic: #0f6d6a; --traffic-bg: #e3f2f0; --cold: #b0306a; --cold-bg: #f9e6ef;
+  --hpa: #4a5a8c; --hpa-bg: #e7eaf4;
+  --code-bg: #1e2124; --code-text: #e6e3da; --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28;
+    --hpa: #9fb0e6; --hpa-bg: #1e2438; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28;
+  --hpa: #9fb0e6; --hpa-bg: #1e2438; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.prose { max-width: 760px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; text-wrap: balance; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; border-top: 3px solid var(--line); }
+.answer.hpa { border-top-color: var(--hpa); }
+.answer.keda { border-top-color: var(--kn); }
+.answer.kn { border-top-color: var(--traffic); }
+.answer.none { border-top-color: var(--cold); }
+.answer .q { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 4px; letter-spacing: .02em; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-top: 16px; }
+.scroll svg { display: block; width: 100%; min-width: 720px; height: auto; }
+svg text { font-family: var(--sans); }
+figure { margin: 0; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+
+/* Skala latencji */
+.band-rt { fill: var(--cold-bg); }
+.band-nrt { fill: var(--traffic-bg); }
+.band-non { fill: var(--kni-bg); }
+.band-lbl { font-size: 12px; font-weight: 700; }
+.band-lbl.rt { fill: var(--cold); } .band-lbl.nrt { fill: var(--traffic); } .band-lbl.non { fill: var(--kn); }
+.axis { stroke: var(--muted); stroke-width: 1.2; }
+.tick { stroke: var(--line); stroke-width: 1; }
+.tick-l { font-size: 11px; fill: var(--muted); }
+.m-warm { fill: var(--traffic); } .m-cold { fill: var(--cold); }
+.m-lbl { font-size: 12px; font-weight: 650; fill: var(--text); }
+.m-sub { font-size: 11px; fill: var(--muted); font-family: var(--mono); }
+
+/* Diagram architektury */
+.box rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.3; }
+.box.kn rect { fill: var(--traffic-bg); stroke: var(--traffic); }
+.box.keda rect { fill: var(--kn-bg); stroke: var(--kn); }
+.box.rt rect { fill: var(--cold-bg); stroke: var(--cold); }
+.box .t { font-size: 14px; font-weight: 650; fill: var(--text); }
+.box .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.box .tag-l { font-size: 12px; font-weight: 800; }
+.box.kn .tag-l { fill: var(--traffic); } .box.keda .tag-l { fill: var(--kn); } .box.rt .tag-l { fill: var(--cold); }
+.a { fill: none; stroke-width: 2.2; }
+.a.kn { stroke: var(--traffic); } .a.keda { stroke: var(--kn); } .a.rt { stroke: var(--cold); } .a.ev { stroke: var(--muted); }
+.mk-kn { fill: var(--traffic); } .mk-keda { fill: var(--kn); } .mk-rt { fill: var(--cold); } .mk-ev { fill: var(--muted); }
+.lbl { font-size: 11.5px; font-weight: 700; }
+.lbl.kn { fill: var(--traffic); } .lbl.keda { fill: var(--kn); } .lbl.rt { fill: var(--cold); } .lbl.ev { fill: var(--muted); }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 720px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+thead th.hpa { color: var(--hpa); } thead th.keda { color: var(--kn); } thead th.kn { color: var(--traffic); }
+tbody th { font-weight: 650; width: 17%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code, summary code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.tag.yes { background: var(--traffic-bg); color: var(--traffic); }
+.tag.no { background: var(--cold-bg); color: var(--cold); }
+.tag.mid { background: var(--kn-bg); color: var(--kn); }
+
+/* Wybieraczka */
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 18px; min-width: 0; }
+.qs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 20px; }
+fieldset { border: none; margin: 0; padding: 0; min-width: 0; }
+legend { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: inherit; font-size: 13.5px; cursor: pointer; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.seg button:hover { border-color: var(--accent); }
+.seg button[aria-pressed="true"] { border-color: var(--accent); background: var(--traffic-bg); color: var(--accent); font-weight: 650; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.verdict { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 8px 20px; }
+@media (max-width: 640px) { .verdict { grid-template-columns: 1fr; } }
+.verdict .pick { font-size: 22px; font-weight: 800; line-height: 1.2; }
+.verdict .pick.kn { color: var(--traffic); } .verdict .pick.keda { color: var(--kn); } .verdict .pick.hpa { color: var(--hpa); } .verdict .pick.rt { color: var(--cold); }
+.verdict ul { margin: 0; padding-left: 18px; font-size: 15px; }
+.verdict li { margin-bottom: 4px; }
+
+/* Zakładki z YAML */
+.tablist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.tablist button { font: inherit; font-size: 13.5px; cursor: pointer; background: var(--surface); color: var(--muted); border: 1px solid var(--line); border-radius: 8px 8px 0 0; padding: 6px 12px; }
+.tablist button[aria-selected="true"] { color: var(--text); font-weight: 650; border-color: var(--accent); background: var(--traffic-bg); }
+.tablist button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tabpanel p { font-size: 15px; }
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; margin: 10px 0 0; }
+pre .c { color: var(--code-comment); }
+pre .h { color: #f0b37e; }
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+.callout.cold { border-left-color: var(--cold); background: var(--cold-bg); }
+.callout.kn { border-left-color: var(--traffic); background: var(--traffic-bg); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+ol.plus { padding-left: 22px; } ol.plus li { margin-bottom: 8px; }
+.src { font-size: 13.5px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+
+<header class="prose">
+  <div class="eyebrow">Serverless na Kubernetes · near-RT i 5G</div>
+  <h1>Knative, HPA czy KEDA w aplikacji near-RT</h1>
+  <p class="lede">Co skaluje każdy z mechanizmów, kiedy który wybrać i jak złożyć aplikację near real-time (pętla 10 ms – 1 s) z komponentów Knative Serving, Knative Eventing i KEDA. Z wybieraczką i gotowym YAML-em.</p>
+  <div class="meta">
+    <span class="pill">Knative Serving 1.23.0</span>
+    <span class="pill">KEDA 2.21</span>
+    <span class="pill">near-RT = 10 ms – 1 s (O-RAN)</span>
+    <span class="pill">stan na 02.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#porownanie">Porównanie</a>
+    <a href="#oran">O-RAN i RIC</a>
+    <a href="#budzet">Budżet latencji</a>
+    <a href="#plusy">Plusy Knative</a>
+    <a href="#architektura">Architektura</a>
+    <a href="#yaml">YAML</a>
+    <a href="#wybor">Wybieraczka</a>
+    <a href="#pulapka">Pułapka</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2><span class="num">1</span>W skrócie</h2>
+  <div class="answers">
+    <div class="answer hpa"><div class="q">HPA</div><p>Skaluje po <b>obciążeniu zasobów</b> (CPU/RAM). Dobry przy stałym ruchu, gdy CPU dobrze oddaje obciążenie. Nie schodzi do zera.</p></div>
+    <div class="answer keda"><div class="q">KEDA</div><p>Skaluje po <b>pracy czekającej w kolejce</b>: lag Kafki, długość kolejki, metryka z Prometheusa. Schodzi do zera. Do workerów, nie do HTTP.</p></div>
+    <div class="answer kn"><div class="q">Knative Serving</div><p>Skaluje po <b>żądaniach w locie</b> (HTTP/gRPC). Buforuje żądanie przy zerze i dokłada rewizje, canary i URL-e.</p></div>
+    <div class="answer none"><div class="q">Gorąca ścieżka RT</div><p>Poniżej 10 ms i przy przetwarzaniu pakietów <b>żaden z nich</b>. Zwykły Deployment ze stałą liczbą replik, bez proxy w ścieżce.</p></div>
+  </div>
+</section>
+
+<section id="porownanie">
+  <h2><span class="num">2</span>Co skaluje każdy mechanizm</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th class="hpa">HPA</th><th class="keda">KEDA</th><th class="kn">Knative Serving (KPA)</th></tr></thead>
+      <tbody>
+        <tr><th>Sygnał</th><td>CPU/RAM, custom metrics przez adapter</td><td>źródło zdarzeń: lag Kafki, Redis, RabbitMQ, Prometheus, cron (kilkadziesiąt skalerów)</td><td>concurrency albo RPS mierzone w queue-proxy każdego poda</td></tr>
+        <tr><th>Scale-to-zero</th><td><span class="tag no">nie</span> min 1 (zero tylko z feature gate'em alfa <code>HPAScaleToZero</code>)</td><td><span class="tag yes">tak</span> KEDA robi 0 ↔ 1, od 1 do N skaluje HPA, który KEDA tworzy</td><td><span class="tag yes">tak</span></td></tr>
+        <tr><th>Żądanie przy zerze</th><td>—</td><td><span class="tag no">przepada</span> chyba że HTTP Add-on</td><td><span class="tag yes">czeka</span> activator buforuje je do startu poda</td></tr>
+        <tr><th>Szybkość reakcji</th><td>pętla co 15 s; CPU rośnie dopiero, gdy pod jest przeciążony; scale-down po 300 s stabilizacji</td><td>polling co 30 s, <code>cooldownPeriod</code> 300 s (domyślne, da się zmienić)</td><td>stable window 60 s + <b>panika</b>: okno 6 s, przy 2× potrzebnych podów dokłada od razu</td></tr>
+        <tr><th>Dodatki</th><td>—</td><td>—</td><td>rewizje, traffic split (canary), URL per rewizja, <code>cluster-local</code></td></tr>
+        <tr><th>Pasuje do</th><td>stały ruch obciążający CPU</td><td>workery, analityka, batch, konsumenci telemetrii</td><td>synchroniczne API, zmienny ruch, częste wymiany wersji</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="oran">
+  <h2><span class="num">3</span>O-RAN i RIC w dwie minuty</h2>
+  <div class="prose">
+    <p><b>RAN</b> (Radio Access Network) to radiowa część sieci komórkowej: wszystko między telefonem a siecią rdzeniową (core). Stację bazową 5G (gNB) dzieli się na trzy elementy: <b>RU</b> (Radio Unit, przy antenie: radio i dolna część warstwy fizycznej), <b>DU</b> (Distributed Unit: RLC, MAC, górna część warstwy fizycznej) i <b>CU</b> (Central Unit: RRC, PDCP, SDAP). CU i DU mogą działać jako oprogramowanie na zwykłych serwerach.</p>
+    <p><b>O-RAN</b> to otwarta, rozdzielona architektura RAN definiowana przez <b>O-RAN Alliance</b>: konsorcjum operatorów, dostawców i instytucji badawczych, powstałe w 2018 r. z połączenia C-RAN Alliance i xRAN Forum. Specyfikuje standardowe interfejsy między elementami, żeby RU, DU, CU i oprogramowanie sterujące mogły pochodzić od różnych dostawców. W specyfikacjach elementy nazywają się O-RU, O-DU i O-CU.</p>
+    <p><b>RIC</b> (RAN Intelligent Controller) to element, który zbiera dane z RAN i odsyła decyzje sterujące. Są dwa, różnią się szybkością pętli sterowania:</p>
+    <ul>
+      <li><b>Non-RT RIC</b>: część SMO (zarządzanie i orkiestracja sieci), pętle <b>&gt; 1 s</b>. Aplikacje na nim to <b>rApps</b>: polityki, modele ML, analityka. Z Near-RT RIC rozmawia przez interfejs <b>A1</b>.</li>
+      <li><b>Near-RT RIC</b>: na krawędzi sieci, pętle <b>10 ms – 1 s</b>. Aplikacje na nim to <b>xApps</b>. Z węzłami RAN (CU, DU) łączy się przez interfejs <b>E2</b>: telemetria w górę, sterowanie w dół.</li>
+      <li><b>Pętle RT &lt; 10 ms</b> (np. scheduler, zarządzanie wiązkami) działają w samych węzłach RAN. <b>To nie są pętle RIC-a</b>: architektura O-RAN ich nie obejmuje, specyfikacje wymieniają je jako temat do dalszych prac (stan wg przeglądu z 2023 r., źródło niżej).</li>
+    </ul>
+  </div>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 440" role="img" aria-label="Diagram O-RAN: Non-RT RIC w SMO z rApps, pętla powyżej 1 s; interfejs A1 do Near-RT RIC z xApps, pętla 10 ms do 1 s; interfejs E2 do CU i DU; DU łączy się z RU przez Open Fronthaul; pętle RT poniżej 10 ms działają w DU i RU, bez RIC.">
+        <defs>
+          <marker id="or-ev" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-ev"/></marker>
+        </defs>
+
+        <!-- Non-RT RIC -->
+        <g class="box keda"><rect x="20" y="20" width="580" height="74" rx="10"/><text class="tag-l" x="36" y="42">Non-RT RIC · część SMO</text><text class="t" x="36" y="64">rApps: polityki, modele ML, analityka</text><text class="s" x="36" y="83">zarządzanie i orkiestracja całej sieci</text></g>
+        <text class="lbl keda" x="630" y="50">pętla &gt; 1 s</text>
+        <text class="lbl ev" x="630" y="68">O-RAN WG2</text>
+
+        <!-- A1 -->
+        <path class="a ev" d="M310,96 L310,141" marker-end="url(#or-ev)"/>
+        <text class="lbl ev" x="322" y="124">A1: polityki, modele ML</text>
+
+        <!-- Near-RT RIC -->
+        <g class="box kn"><rect x="20" y="145" width="580" height="74" rx="10"/><text class="tag-l" x="36" y="167">Near-RT RIC · krawędź sieci</text><text class="t" x="36" y="189">xApps = mikroserwisy w kontenerach</text><text class="s" x="36" y="208">tu trafia nasz serverless: budżet do 1 s</text></g>
+        <text class="lbl kn" x="630" y="175">pętla 10 ms – 1 s</text>
+        <text class="lbl ev" x="630" y="193">O-RAN WG3</text>
+
+        <!-- E2 -->
+        <path class="a ev" d="M160,223 L160,266" marker-start="url(#or-ev)" marker-end="url(#or-ev)"/>
+        <path class="a ev" d="M460,223 L460,266" marker-start="url(#or-ev)" marker-end="url(#or-ev)"/>
+        <text class="lbl ev" x="172" y="249">E2</text>
+        <text class="lbl ev" x="472" y="249">E2</text>
+        <text class="lbl ev" x="230" y="249">telemetria ↑ · sterowanie ↓</text>
+
+        <!-- CU, DU -->
+        <g class="box"><rect x="20" y="270" width="270" height="62" rx="10"/><text class="t" x="36" y="296">CU (Central Unit)</text><text class="s" x="36" y="316">RRC, PDCP, SDAP</text></g>
+        <g class="box rt"><rect x="330" y="270" width="270" height="62" rx="10"/><text class="t" x="346" y="296">DU (Distributed Unit)</text><text class="s" x="346" y="316">RLC, MAC, górna PHY</text></g>
+        <path class="a ev" d="M292,301 L328,301"/>
+        <text class="lbl ev" x="310" y="290" text-anchor="middle">F1</text>
+
+        <!-- Fronthaul + RU -->
+        <path class="a ev" d="M460,334 L460,361" marker-end="url(#or-ev)"/>
+        <text class="lbl ev" x="472" y="352">Open Fronthaul</text>
+        <g class="box rt"><rect x="330" y="365" width="270" height="62" rx="10"/><text class="t" x="346" y="391">RU (Radio Unit) + antena</text><text class="s" x="346" y="411">dolna PHY, radio</text></g>
+
+        <text class="lbl rt" x="630" y="320">pętle RT &lt; 10 ms</text>
+        <text class="lbl rt" x="630" y="338">np. scheduler w DU</text>
+        <text class="lbl ev" x="630" y="356">bez RIC: robi to sam węzeł RAN</text>
+      </svg>
+    </div>
+    <figcaption>Pomarańcz = Non-RT RIC, turkus = Near-RT RIC (nasz budżet), róż = pętle RT w węzłach RAN, poza RIC i poza serverless.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Gdzie tu serverless</h3>
+    <p><b>xApp</b> to aplikacja uruchamiana na Near-RT RIC: mikroserwis, który dostaje dane z RAN przez E2 i (jeśli trzeba) odsyła akcję sterującą. Specyfikacja opisuje xApp jako deskryptor plus obraz oprogramowania. W referencyjnym RIC z O-RAN Software Community (OSC) xApp to obraz kontenera wdrażany na Kubernetesie. Czyli: nasza platforma.</p>
+    <p>xApp musi zareagować w pętli 10 ms – 1 s. Warm request (7–16 ms w labie) się mieści, cold start (1,2–1,8 s) już nie. Dlatego dla xAppa: <b>bez scale-to-zero, <code>min-scale ≥ 1</code></b>. Pętle RT &lt; 10 ms to nie RIC i nie FaaS.</p>
+    
+    <p class="src">Źródła: M. Polese i in., „Understanding O-RAN: Architecture, Interfaces, Algorithms, Security, and Research Challenges”, IEEE Communications Surveys &amp; Tutorials, t. 25, nr 2, 2023 — <a href="https://arxiv.org/abs/2202.01032">arxiv.org/abs/2202.01032</a> (rozdz. II: CU/DU/RU, RIC-i i skale czasowe, RT „for further study”; rozdz. III: xApps, rApps; rozdz. IX: O-RAN Alliance). Grupy robocze: <a href="https://www.o-ran.org/technical-groups">o-ran.org/technical-groups</a> (WG1 architektura, WG2 Non-RT RIC i A1, WG3 Near-RT RIC i E2). Specyfikacje cytowane w artykule: O-RAN.WG1.O-RAN-Architecture-Description, O-RAN.WG2.Non-RT-RIC-ARCH, O-RAN.WG3.RICARCH — pobieranie po rejestracji na <a href="https://www.o-ran.org/specifications">o-ran.org/specifications</a>; zakresy czasowe podajemy za artykułem Polese i in., nie bezpośrednio za specyfikacjami. Powstanie O-RAN Alliance: <a href="https://www.businesswire.com/news/home/20180227005673/en/">komunikat xRAN Forum, 27.02.2018</a>.</p>
+  </div>
+</section>
+
+<section id="budzet">
+  <h2><span class="num">4</span>Budżet latencji: gdzie mieści się serverless</h2>
+  <p class="prose">Skala logarytmiczna. Pasy to skale czasowe pętli sterowania w O-RAN (non-RT i near-RT to pętle RIC-ów, RT to pętle w samym węźle RAN), kropki to nasze pomiary z labów. Warm request mieści się w near-RT, cold start nie mieści się w żadnym pasie poza non-RT.</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 760 216" role="img" aria-label="Skala latencji: RT poniżej 10 ms, near-RT 10 ms do 1 s, non-RT powyżej 1 s. Warm request 7–16 ms, cold start 1,2–1,8 s, duży obraz 28 s.">
+        <rect class="band-rt" x="40" y="20" width="152" height="120"/>
+        <rect class="band-nrt" x="192" y="20" width="304" height="120"/>
+        <rect class="band-non" x="496" y="20" width="224" height="120"/>
+        <text class="band-lbl rt" x="50" y="38">RT &lt; 10 ms</text>
+        <text class="band-lbl nrt" x="202" y="38">near-RT 10 ms – 1 s</text>
+        <text class="band-lbl non" x="506" y="38">non-RT &gt; 1 s</text>
+        <line class="axis" x1="40" y1="140" x2="720" y2="140"/>
+        <line class="tick" x1="40" y1="140" x2="40" y2="146"/><text class="tick-l" x="40" y="160" text-anchor="middle">1 ms</text>
+        <line class="tick" x1="192" y1="140" x2="192" y2="146"/><text class="tick-l" x="192" y="160" text-anchor="middle">10 ms</text>
+        <line class="tick" x1="344" y1="140" x2="344" y2="146"/><text class="tick-l" x="344" y="160" text-anchor="middle">100 ms</text>
+        <line class="tick" x1="496" y1="140" x2="496" y2="146"/><text class="tick-l" x="496" y="160" text-anchor="middle">1 s</text>
+        <line class="tick" x1="648" y1="140" x2="648" y2="146"/><text class="tick-l" x="648" y="160" text-anchor="middle">10 s</text>
+        <!-- warm 7–16 ms -->
+        <rect class="m-warm" x="168" y="70" width="55" height="10" rx="5"/>
+        <text class="m-lbl" x="168" y="62">warm request</text>
+        <text class="m-sub" x="168" y="98">7–16 ms</text>
+        <!-- cold start 1,2–1,8 s -->
+        <rect class="m-cold" x="508" y="70" width="26" height="10" rx="5"/>
+        <text class="m-lbl" x="508" y="62">cold start</text>
+        <text class="m-sub" x="508" y="98">1,2–1,8 s</text>
+        <!-- 28 s -->
+        <circle class="m-cold" cx="715" cy="115" r="6"/>
+        <text class="m-lbl" x="705" y="112" text-anchor="end">obraz 1,16 GB</text>
+        <text class="m-sub" x="705" y="128" text-anchor="end">28 s do Ready</text>
+        <text class="tick-l" x="40" y="186">Pomiary: LAB 2/4 (kind, lokalny rejestr). Pasy: Non-RT RIC &gt; 1 s (O-RAN WG2), Near-RT RIC 10 ms – 1 s (WG3);</text>
+        <text class="tick-l" x="40" y="202">RT &lt; 10 ms = pętle w węźle RAN (DU/RU), poza RIC (Polese i in., IEEE COMST 2023).</text>
+      </svg>
+    </div>
+    <figcaption>Wniosek: na ścieżce near-RT nie ma scale-to-zero. Usługa musi być zawsze warm (<code>min-scale ≥ 1</code>), a warm request zostawia jeszcze zapas w budżecie, z którego trzeba opłacić proxy i dostęp do stanu.</figcaption>
+  </figure>
+</section>
+
+<section id="plusy" class="prose">
+  <h2><span class="num">5</span>Plusy Knative w near-RT, skoro nie zero</h2>
+  <ol class="plus">
+    <li><b>Szybsze i trafniejsze skalowanie w górę niż HPA.</b> Knative patrzy na żądania w locie, nie na CPU. Usługa czekająca na I/O ma niskie CPU, a żądania się kolejkują: HPA tego nie zauważy, KPA tak. Panika reaguje na średnią z 6 s, HPA ma pętlę co 15 s.</li>
+    <li><b>Rewizje i canary.</b> Nowa logika pętli sterowania (np. nowa wersja xAppa albo modelu ML) dostaje 10% ruchu. Rollback to zmiana procentów, bez nowego wdrożenia.</li>
+    <li><b>Eventing.</b> Oddziela źródło zdarzeń od konsumenta: Broker, Trigger z filtrem, retry z backoffem i dead-letter sink. Nowy konsument to nowy Trigger, bez zmian u producenta.</li>
+  </ol>
+  <div class="callout cold"><b>Koszt:</b> na ścieżce żądania są dodatkowe proxy w user space: Kourier (Envoy), czasem activator, zawsze queue-proxy. Zmierz p99 na swoim stosie, zanim uznasz, że się mieści.</div>
+</section>
+
+<section id="architektura">
+  <h2><span class="num">6</span>Przykładowa aplikacja near-RT z komponentów</h2>
+  <p class="prose">Jedna aplikacja, cztery ścieżki. Każda dostaje mechanizm pasujący do swojego budżetu latencji i charakteru ruchu.</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 430" role="img" aria-label="Diagram: z sieci RAN żądanie sterujące idzie do Knative Service decyzja; telemetria i alarmy idą do Kafki, skąd przez Knative Eventing do usługi reakcja oraz przez KEDA do workerów analityki; gorąca ścieżka RT do zwykłego Deploymentu.">
+        <defs>
+          <marker id="ar-kn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-kn"/></marker>
+          <marker id="ar-keda" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-keda"/></marker>
+          <marker id="ar-rt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-rt"/></marker>
+          <marker id="ar-ev" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-ev"/></marker>
+        </defs>
+
+        <g class="box"><rect x="20" y="170" width="130" height="80" rx="10"/><text class="t" x="85" y="205" text-anchor="middle">Sieć / RAN</text><text class="s" x="85" y="225" text-anchor="middle">NF, RIC, E2</text></g>
+
+        <!-- C: decyzja -->
+        <path class="a kn" d="M150,190 C220,190 230,60 330,60" marker-end="url(#ar-kn)"/>
+        <text class="lbl kn" x="190" y="92">gRPC / HTTP2</text>
+        <g class="box kn"><rect x="335" y="20" width="250" height="84" rx="10"/><text class="tag-l" x="350" y="42">C · Knative Serving</text><text class="t" x="350" y="64">ksvc „decyzja”</text><text class="s" x="350" y="84">min-scale 2 · tbc 0 · canary</text></g>
+        <text class="lbl kn" x="600" y="56">near-RT, zawsze warm</text>
+        <text class="lbl kn" x="600" y="74">reakcja: panika 6 s</text>
+
+        <!-- Kafka -->
+        <path class="a ev" d="M150,215 L325,215" marker-end="url(#ar-ev)"/>
+        <text class="lbl ev" x="170" y="207">telemetria, alarmy</text>
+        <g class="box"><rect x="330" y="180" width="120" height="70" rx="10"/><text class="t" x="390" y="211" text-anchor="middle">Kafka</text><text class="s" x="390" y="230" text-anchor="middle">ran-alarmy, ran-kpi</text></g>
+
+        <!-- A: Eventing -->
+        <path class="a kn" d="M450,200 C500,200 500,150 540,150" marker-end="url(#ar-kn)"/>
+        <g class="box kn"><rect x="545" y="120" width="335" height="74" rx="10"/><text class="tag-l" x="560" y="142">A · Knative Eventing</text><text class="t" x="560" y="163">KafkaSource → Broker → Trigger → ksvc</text><text class="s" x="560" y="182">filtr typu · retry · dead-letter sink</text></g>
+
+        <!-- B: KEDA -->
+        <path class="a keda" d="M450,232 C500,232 500,282 540,282" marker-end="url(#ar-keda)"/>
+        <g class="box keda"><rect x="545" y="250" width="335" height="74" rx="10"/><text class="tag-l" x="560" y="272">B · KEDA (lag Kafki)</text><text class="t" x="560" y="293">Deployment workerów analityki KPI</text><text class="s" x="560" y="312">non-RT · minReplicaCount 0</text></g>
+
+        <!-- RT -->
+        <path class="a rt" d="M150,235 C220,235 230,385 330,385" marker-end="url(#ar-rt)"/>
+        <text class="lbl rt" x="188" y="340">pakiety, &lt; 10 ms</text>
+        <g class="box rt"><rect x="335" y="350" width="545" height="66" rx="10"/><text class="tag-l" x="350" y="372">Gorąca ścieżka RT · poza serverless</text><text class="t" x="350" y="394">Deployment / StatefulSet, stałe repliki, bez proxy w ścieżce</text><text class="s" x="350" y="408">DPDK / SR-IOV, CPU manager static (zależnie od środowiska)</text></g>
+      </svg>
+    </div>
+    <figcaption>Turkus = Knative, pomarańcz = KEDA, róż = poza serverless. Ścieżka A może mieć scale-to-zero tylko wtedy, gdy reakcja na alarm może poczekać ok. 2 s.</figcaption>
+  </figure>
+</section>
+
+<section id="yaml">
+  <h2><span class="num">7</span>Jak to wygląda w YAML-u</h2>
+  <div class="tablist" role="tablist" aria-label="Manifesty">
+    <button role="tab" id="t-c" aria-controls="p-c" aria-selected="true">C · ksvc near-RT</button>
+    <button role="tab" id="t-a" aria-controls="p-a" aria-selected="false" tabindex="-1">A · Eventing</button>
+    <button role="tab" id="t-b" aria-controls="p-b" aria-selected="false" tabindex="-1">B · KEDA</button>
+  </div>
+
+  <div class="tabpanel" role="tabpanel" id="p-c" aria-labelledby="t-c">
+<pre>apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: decyzja
+  labels:
+    <span class="h">networking.knative.dev/visibility: cluster-local</span>   <span class="c"># tylko ruch wewnętrzny</span>
+spec:
+  template:
+    metadata:
+      annotations:
+        <span class="h">autoscaling.knative.dev/min-scale: "2"</span>              <span class="c"># nigdy cold start</span>
+        autoscaling.knative.dev/initial-scale: "2"
+        <span class="h">autoscaling.knative.dev/target: "10"</span>                <span class="c"># niski target: skaluje wcześniej</span>
+        <span class="h">autoscaling.knative.dev/target-burst-capacity: "0"</span>  <span class="c"># activator tylko przy zerze</span>
+    spec:
+      containerConcurrency: 20
+      containers:
+        - image: registry.local/decyzja:1.4
+          ports: [{ name: h2c, containerPort: 8080 }]       <span class="c"># gRPC / HTTP2</span>
+          resources:                                        <span class="c"># requests = limits → QoS Guaranteed</span>
+            requests: { cpu: "1", memory: 512Mi }
+            limits:   { cpu: "1", memory: 512Mi }
+  traffic:
+    - revisionName: decyzja-00001
+      percent: 90
+    - latestRevision: true                                  <span class="c"># nowa logika na 10% ruchu</span>
+      percent: 10</pre>
+    <p class="prose"><code>target-burst-capacity: "0"</code> wyjmuje activator ze ścieżki, gdy są pody. Przy <code>"-1"</code> activator jest zawsze w ścieżce: lepiej rozkłada ruch, ale dokłada skok proxy.</p>
+  </div>
+
+  <div class="tabpanel" role="tabpanel" id="p-a" aria-labelledby="t-a" hidden>
+<pre>apiVersion: sources.knative.dev/v1
+kind: KafkaSource
+metadata: { name: alarmy, namespace: ran }
+spec:
+  consumerGroup: alarmy
+  bootstrapServers: [kafka-bootstrap.kafka:9092]
+  topics: [ran-alarmy]
+  sink:
+    ref: { apiVersion: eventing.knative.dev/v1, kind: Broker, name: default }
+---
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata: { name: cell-down, namespace: ran }
+spec:
+  broker: default
+  filter:
+    attributes:
+      <span class="h">type: alarm.cell.down</span>     <span class="c"># wymaga CloudEvents od producenta (nagłówek ce_type)</span>
+  subscriber:
+    ref: { apiVersion: serving.knative.dev/v1, kind: Service, name: reakcja }
+  delivery:
+    retry: 3
+    backoffPolicy: exponential
+    backoffDelay: PT0.2S
+    deadLetterSink:
+      ref: { apiVersion: serving.knative.dev/v1, kind: Service, name: alarmy-dlq }</pre>
+    <p class="prose">Bez nagłówków CloudEvents typ zdarzenia z Kafki to <code>dev.knative.kafka.event</code> i filtr po własnym typie nic nie złapie. Wtedy filtruj po <code>source</code> albo poproś producenta o nagłówek <code>ce_type</code>.</p>
+  </div>
+
+  <div class="tabpanel" role="tabpanel" id="p-b" aria-labelledby="t-b" hidden>
+<pre>apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: { name: kpi-analityka, namespace: ran }
+spec:
+  scaleTargetRef: { name: kpi-analityka }   <span class="c"># zwykły Deployment</span>
+  <span class="h">minReplicaCount: 0</span>                         <span class="c"># non-RT: zero jest OK</span>
+  maxReplicaCount: 12                       <span class="c"># ≤ liczba partycji tematu</span>
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka-bootstrap.kafka:9092
+        consumerGroup: kpi
+        topic: ran-kpi
+        <span class="h">lagThreshold: "500"</span>              <span class="c"># docelowy lag na replikę</span></pre>
+    <p class="prose">Repliki ponad liczbę partycji nic nie dają: w grupie konsumentów nadmiarowe stoją bezczynnie. KEDA domyślnie i tak ogranicza skalę do liczby partycji.</p>
+  </div>
+</section>
+
+<section id="wybor">
+  <h2><span class="num">8</span>Wybieraczka: co do Twojej funkcji</h2>
+  <p class="prose">Odpowiedz na cztery pytania o jedną funkcję.</p>
+  <div class="calc">
+    <div class="qs">
+      <fieldset><legend>Jak przychodzi praca?</legend><div class="seg" data-k="iface">
+        <button data-v="http" aria-pressed="true">żądanie HTTP/gRPC</button><button data-v="queue" aria-pressed="false">zdarzenie / kolejka</button></div></fieldset>
+      <fieldset><legend>Budżet latencji (p99)</legend><div class="seg" data-k="budget">
+        <button data-v="rt" aria-pressed="false">&lt; 10 ms</button><button data-v="nrt" aria-pressed="true">10 ms – 1 s</button><button data-v="non" aria-pressed="false">&gt; 1 s</button></div></fieldset>
+      <fieldset><legend>Ruch naprawdę spada do zera?</legend><div class="seg" data-k="zero">
+        <button data-v="yes" aria-pressed="false">tak</button><button data-v="no" aria-pressed="true">nie</button></div></fieldset>
+      <fieldset><legend>Często wymieniasz logikę?</legend><div class="seg" data-k="ver">
+        <button data-v="yes" aria-pressed="true">tak</button><button data-v="no" aria-pressed="false">nie</button></div></fieldset>
+    </div>
+    <div class="verdict" aria-live="polite">
+      <div class="pick" id="pick"></div>
+      <ul id="why"></ul>
+    </div>
+  </div>
+</section>
+
+<section id="pulapka" class="prose">
+  <h2><span class="num">9</span>Pułapka: co zostaje z serverless</h2>
+  <div class="callout kn">Po ustawieniu <code>min-scale ≥ 1</code>, <code>target-burst-capacity: 0</code> i QoS Guaranteed z „serverless” zostają głównie <b>model wdrażania</b> (rewizje, canary, URL-e) i <b>szybsze skalowanie w górę</b>. To realna wartość, ale nie oszczędność z zera.</div>
+  <p>Sprawdź u siebie: <i>czy któraś z Twoich funkcji ma ruch, który naprawdę spada do zera?</i> Jeśli żadna, argumentem za Knative jest model wdrażania, a nie koszt bezczynności.</p>
+  <p class="src">Na żywo: panika — <code>demo/06-panic/</code>, Eventing — <code>demo/04-eventing/</code>, KEDA — <code>demo/11-keda/</code>. Szerzej: <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a>.</p>
+</section>
+
+<section id="sprawdz" class="prose">
+  <h2><span class="num">10</span>Sprawdź się</h2>
+  <details><summary>Usługa near-RT czeka głównie na bazę stanu. CPU 15%, a p99 rośnie przy szczycie. HPA na CPU 70% czy Knative?</summary><p>Knative. CPU nie rośnie, więc HPA nie doda podów. KPA widzi rosnącą liczbę żądań w locie i skaluje, przy gwałtownym skoku przez panikę w oknie 6 s.</p></details>
+  <details><summary>Ustawiasz <code>min-scale: 2</code> na ksvc near-RT. Czy przy nagłym skoku nadal grozi cold start?</summary><p>Tak, dla <i>nowych</i> podów. Panika szybko dokłada pody, ale każdy z nich startuje 1–2 s, a w tym czasie żądania obsługują dwa warm. Dlatego <code>min-scale</code> dobierasz pod spodziewany szczyt, a nie pod średni ruch.</p></details>
+  <details><summary>Konsumenci KPI z Kafki mają 6 partycji. KEDA ma <code>maxReplicaCount: 20</code>. Ile podów zobaczysz przy dużym lagu?</summary><p>6. KEDA domyślnie nie skaluje ponad liczbę partycji, bo nadmiarowi konsumenci w grupie i tak byliby bezczynni.</p></details>
+  <details><summary>Alarm „komórka padła” musi wywołać reakcję w 300 ms. Usługa reakcji może mieć scale-to-zero?</summary><p>Nie. Cold start 1,2–1,8 s przekracza budżet. Dla ścieżki A: <code>min-scale: 1</code>. Scale-to-zero zostaw dla reakcji, które mogą poczekać kilka sekund.</p></details>
+  <details><summary>KEDA czy Knative do API HTTP, które w nocy ma zero ruchu?</summary><p>Knative. KEDA bez HTTP Add-on nie przytrzyma żądania, gdy jest zero podów, więc pierwsze żądanie po nocy dostanie błąd. Activator Knative je zbuforuje i odda po starcie poda.</p></details>
+</section>
+
+</div>
+
+<script>
+// Zakładki
+(() => {
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  const select = (t) => {
+    tabs.forEach(x => { const on = x === t; x.setAttribute('aria-selected', on); x.tabIndex = on ? 0 : -1;
+      document.getElementById(x.getAttribute('aria-controls')).hidden = !on; });
+  };
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => select(t));
+    t.addEventListener('keydown', e => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (d) { const n = tabs[(i + d + tabs.length) % tabs.length]; select(n); n.focus(); }
+    });
+  });
+})();
+
+// Wybieraczka
+(() => {
+  const s = { iface: 'http', budget: 'nrt', zero: 'no', ver: 'yes' };
+  const pick = document.getElementById('pick'), why = document.getElementById('why');
+  function decide() {
+    if (s.budget === 'rt') return ['rt', 'Zwykły Deployment, poza serverless', [
+      'Poniżej 10 ms nie ma miejsca na proxy (Kourier, queue-proxy) ani na start poda.',
+      'Stała liczba replik, zasoby gwarantowane, ewentualnie CPU manager static i DPDK/SR-IOV.',
+      s.zero === 'yes' ? 'Ruch spada do zera, ale cold start (1–2 s) jest 100× ponad budżetem. Zero nie wchodzi w grę.' : 'HPA możesz dodać najwyżej jako górny bezpiecznik, nie jako główny mechanizm.'
+    ]];
+    if (s.iface === 'queue') {
+      if (s.budget === 'nrt') return ['kn', 'Knative Eventing + warm ksvc', [
+        'KafkaSource → Broker → Trigger z filtrem typu → ksvc z <code>min-scale ≥ 1</code>.',
+        'Dostajesz retry, backoff i dead-letter sink bez kodu w usłudze.',
+        s.zero === 'yes' ? 'Zero kusi, ale cold start 1–2 s przekracza budżet near-RT. Zostaw co najmniej jeden pod.' : 'Ruch ciągły: warm pod i tak by stał, Eventing dodaje porządek w routingu zdarzeń.',
+        'Jeśli ważniejsza jest przepustowość niż czas pojedynczego zdarzenia, rozważ KEDA na lagu (polling 30 s to czas reakcji skalowania).'
+      ]];
+      return ['keda', 'KEDA na źródle zdarzeń', [
+        'Skaluj Deployment workerów po lagu Kafki albo długości kolejki.',
+        s.zero === 'yes' ? '<code>minReplicaCount: 0</code>: w ciszy zero podów, koszt tylko przy pracy.' : '<code>minReplicaCount ≥ 1</code>: ruch ciągły, zero nic nie da.',
+        '<code>maxReplicaCount</code> nie większy niż liczba partycji tematu.',
+        s.ver === 'yes' ? 'Rewizji i canary tu nie ma: wymiana wersji to zwykły rollout Deploymentu.' : 'Model wdrażania bez zmian: zwykły Deployment.'
+      ]];
+    }
+    // HTTP
+    if (s.budget === 'nrt') {
+      if (s.ver === 'no' && s.zero === 'no') return ['hpa', 'HPA wystarczy, Knative opcjonalnie', [
+        'Bez zera i bez częstych wymian wersji Knative wnosi głównie szybszą reakcję na concurrency.',
+        'Jeśli CPU dobrze oddaje obciążenie, HPA na CPU zrobi swoje bez dodatkowych proxy w ścieżce.',
+        'Jeśli usługa czeka na I/O (CPU niskie, żądania się kolejkują), wybierz Knative: HPA tego nie zobaczy.'
+      ]];
+      return ['kn', 'Knative Serving, zawsze warm', [
+        '<code>min-scale ≥ 1</code> pod spodziewany szczyt, <code>target-burst-capacity: 0</code>, QoS Guaranteed, <code>h2c</code>, <code>cluster-local</code>.',
+        'Skalowanie po żądaniach w locie i panika w oknie 6 s.',
+        s.ver === 'yes' ? 'Nowa logika jako rewizja na 10% ruchu, rollback zmianą procentów.' : 'Rewizje masz w pakiecie, nawet jeśli rzadko z nich korzystasz.',
+        s.zero === 'yes' ? 'Zero odpada mimo ciszy w ruchu: cold start przekracza budżet near-RT.' : 'Zmierz p99 z Kourierem i queue-proxy w ścieżce.'
+      ]];
+    }
+    // HTTP, non-RT
+    if (s.zero === 'yes') return ['kn', 'Knative Serving ze scale-to-zero', [
+      'Klasyczny przypadek: activator buforuje pierwsze żądanie, pod wstaje w 1–2 s, a budżet > 1 s to mieści (przy małym obrazie).',
+      'Duży obraz (1,16 GB → 28 s) nie zmieści się nawet tu. Odchudź obraz albo trzymaj pod.',
+      s.ver === 'yes' ? 'Rewizje i canary w pakiecie.' : 'Model wdrażania prostszy niż Deployment + Service + Ingress.'
+    ]];
+    return s.ver === 'yes'
+      ? ['kn', 'Knative Serving (dla rewizji)', ['Ruch ciągły, więc zero nic nie da, ale rewizje i traffic split upraszczają częste wydania.', 'Rozważ ksvc klasy HPA (<code>autoscaling.knative.dev/class: hpa.autoscaling.knative.dev</code>), jeśli CPU dobrze oddaje obciążenie.']]
+      : ['hpa', 'Deployment + HPA', ['Stały ruch, brak zera, rzadkie wydania: Knative nie ma tu przewagi.', 'Mniej elementów w ścieżce żądania.']];
+  }
+  function render() {
+    const [cls, title, items] = decide();
+    pick.className = 'pick ' + cls; pick.textContent = title;
+    why.innerHTML = items.map(x => '<li>' + x + '</li>').join('');
+  }
+  document.querySelectorAll('.seg').forEach(g => {
+    g.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      s[g.dataset.k] = b.dataset.v; render();
+    });
+  });
+  render();
+})();
+</script>

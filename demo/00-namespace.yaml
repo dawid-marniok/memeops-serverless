@@ -1,0 +1,7 @@
+# Wspólny namespace dla dem. Osobno od labów (memeops).
+# Osobny plik, bo `kn service apply -f` czyta tylko pierwszy dokument YAML.
+# kubectl apply -f demo/00-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo

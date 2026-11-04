@@ -6,7 +6,7 @@ Tak wygląda „repozytorium szablonów” platformy: zespół nie zaczyna od pu
 |---|---|
 | `main.py` | port z `PORT`, logi JSON na stdout, `/healthz`, konfiguracja tylko z env |
 | `Dockerfile` | `python:3.12-slim`, użytkownik bez roota (`USER 10001`), brak cache pip |
-| `service.yaml` | Knative Service z requests/limits, sondą i bezpiecznym `securityContext` |
+| `service.yaml` | Knative Service z requests/limits, probe'em i bezpiecznym `securityContext` |
 | `tests/` | pytest uruchamiany w pipeline przed buildem |
 
 Nowa funkcja: `cp -r templates/python-http app/<nazwa>` i zmiana `handle()`.

@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frameworki serverless na Kubernetes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Ten sam system co knative-vs-k8s: jedna kolumna tekstu (~70 znaków), diagramy i tabele na pełną szerokość z przewijaniem w poziomie na telefonie.
+   Kolor = rola: morski = to robisz Ty / „tak”, pomarańczowy = robi platforma Knative / „częściowo”, różowy = „nie” / ostrzeżenie. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --k8s: #2f5fa7;
+  --k8s-bg: #e7eef9;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --traffic: #0f6d6a;
+  --traffic-bg: #e3f2f0;
+  --cold: #b0306a;
+  --cold-bg: #f9e6ef;
+  --ctrl: #6b675e;
+  --metric: #6d4bb0;
+  --zone: #efede6;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --ctrl: #a3a097; --metric: #b39cf0; --zone: #1a1d1c; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --ctrl: #a3a097; --metric: #b39cf0; --zone: #1a1d1c; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-block: 32px 96px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.prose { max-width: 760px; }
+header.hero { margin-bottom: 28px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+
+figure.diagram { margin: 18px 0 0; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.scroll svg { display: block; width: 100%; min-width: 980px; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; max-width: 900px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 13.5px; margin: 14px 0 4px; }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.sw { width: 30px; height: 18px; border-radius: 5px; flex: none; }
+.sw.you { background: var(--traffic-bg); border: 1.5px solid var(--traffic); }
+.sw.plat { background: var(--kn-bg); border: 1.5px solid var(--kn); }
+.sw.mix { background: var(--surface); border: 1.5px dashed var(--muted); }
+.ln { width: 34px; height: 0; flex: none; }
+.ln.traffic { border-top: 3px solid var(--traffic); }
+.ln.ctrl { border-top: 2px dashed var(--ctrl); }
+.ln.event { border-top: 2.5px dotted var(--metric); }
+
+/* SVG */
+svg text { font-family: var(--sans); }
+.zone rect { fill: var(--zone); stroke: var(--line); }
+.zone text { font-size: 11px; font-weight: 700; letter-spacing: .09em; fill: var(--muted); }
+.b .k { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.b .t { font-size: 13.5px; font-weight: 650; fill: var(--text); }
+.b .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.b.you rect { fill: var(--traffic-bg); stroke: var(--traffic); stroke-width: 1.3; }
+.b.you .k { fill: var(--traffic); }
+.b.plat rect { fill: var(--kn-bg); stroke: var(--kn); stroke-width: 1.3; }
+.b.plat .k { fill: var(--kn); }
+.b.mix rect { fill: var(--surface); stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 5 3; }
+.b.mix .k { fill: var(--muted); }
+.b.proc rect { fill: var(--surface); stroke: var(--kn); stroke-width: 2.5; }
+.b.proc .k { fill: var(--kn); }
+.b.ev rect { fill: var(--surface); stroke: var(--metric); stroke-width: 1.5; }
+.b.ev .k { fill: var(--metric); }
+.b.cli rect { fill: var(--surface); stroke: var(--traffic); stroke-width: 1.5; }
+.b.cli .k { fill: var(--traffic); }
+.owner { font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.owner.you { fill: var(--traffic); }
+.owner.plat { fill: var(--kn); }
+.owner.mix { fill: var(--muted); }
+.ptitle { font-size: 17px; font-weight: 750; fill: var(--text); }
+.psub { font-size: 12.5px; fill: var(--muted); }
+.note { font-size: 12px; fill: var(--muted); }
+.note.strong { fill: var(--text); font-weight: 650; }
+
+.a { fill: none; }
+.a.traffic { stroke: var(--traffic); stroke-width: 2.4; }
+.a.ctrl { stroke: var(--ctrl); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.a.event { stroke: var(--metric); stroke-width: 2.2; stroke-dasharray: 1 5; stroke-linecap: round; }
+.mk-traffic { fill: var(--traffic); }
+.mk-ctrl { fill: var(--ctrl); }
+.mk-event { fill: var(--metric); }
+.lbl { font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.lbl.traffic { fill: var(--traffic); }
+.lbl.ctrl { fill: var(--ctrl); }
+.lbl.event { fill: var(--metric); }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 760px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 22%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+table.cmp { min-width: 1480px; font-size: 13.5px; }
+table.cmp th, table.cmp td { padding: 9px 11px; line-height: 1.45; }
+table.cmp tbody th { width: 150px; position: sticky; left: 0; background: var(--surface); z-index: 1; box-shadow: 1px 0 0 var(--line); }
+table.cmp thead th:first-child { position: sticky; left: 0; z-index: 2; }
+table.cmp thead th { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); }
+table.cmp thead th small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+table.cmp th.ours, table.cmp td.ours { background: var(--kni-bg); }
+table.cmp thead th.ours { background: var(--kn-bg); }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; white-space: nowrap; margin-bottom: 3px; }
+.tag.yes { background: var(--traffic-bg); color: var(--traffic); }
+.tag.no { background: var(--cold-bg); color: var(--cold); }
+.tag.mid { background: var(--kn-bg); color: var(--kn); }
+.tag.na { background: var(--surface-2); color: var(--muted); }
+.verify { font-size: 12px; font-weight: 700; color: var(--kn); white-space: nowrap; }
+
+/* Wybieraczka */
+.ladder { list-style: none; padding: 0; margin: 18px 0 0; counter-reset: krok; max-width: 900px; }
+.ladder > li { counter-increment: krok; position: relative; padding: 0 0 18px 48px; }
+.ladder > li::before { content: counter(krok); position: absolute; left: 0; top: 2px; width: 32px; height: 32px; border-radius: 50%; background: var(--text); color: var(--bg); font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+.ladder > li::after { content: ""; position: absolute; left: 15px; top: 38px; bottom: 4px; border-left: 2px dashed var(--line); }
+.ladder > li:last-child::after { display: none; }
+.ladder .qq { font-weight: 700; font-size: 16.5px; margin: 4px 0 8px; }
+.ladder .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.opt { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--surface); font-size: 14.5px; min-width: 0; }
+.opt .when { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.opt .pick { font-weight: 750; font-size: 15.5px; margin: 2px 0 4px; }
+.opt.go { border-left: 4px solid var(--traffic); }
+.opt.go .pick { color: var(--traffic); }
+.opt.next { border-left: 4px solid var(--line); color: var(--muted); }
+.opt.kn { border-left: 4px solid var(--kn); }
+.opt.kn .pick { color: var(--kn); }
+.opt p { margin: 0; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; min-width: 0; }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
+.card li { margin-bottom: 5px; }
+.card.pro { border-top: 3px solid var(--traffic); }
+.card.con { border-top: 3px solid var(--cold); }
+.card.fix { border-top: 3px solid var(--kn); }
+
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+.callout.cold { border-left-color: var(--cold); background: var(--cold-bg); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.src { font-size: 13.5px; color: var(--muted); }
+.src ul { padding-left: 18px; margin: 6px 0 0; }
+.src li { margin-bottom: 3px; overflow-wrap: anywhere; }
+</style>
+
+<div class="wrap">
+<header class="hero prose">
+  <div class="eyebrow">Blok 1.1 · Serverless na Kubernetes</div>
+  <h1>Frameworki serverless na Kubernetes</h1>
+  <p class="lede">Co właściwie oddajesz platformie, z czego składa się Knative, czym różnią się OpenFaaS, Fission, OpenWhisk, Nuclio i KEDA. Na końcu prosta wybieraczka: co kiedy użyć i dlaczego MemeOps jedzie na Knative.</p>
+  <div class="meta">
+    <span class="pill">Knative 1.23.0 (na nim laby)</span>
+    <span class="pill">statusy projektów: stan na 29.10.2026</span>
+    <span class="pill">dopisane z dokumentacji: 03.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#caas-faas">CaaS a FaaS</a>
+    <a href="#knative">Z czego jest Knative</a>
+    <a href="#tabela">Porównanie funkcji</a>
+    <a href="#wybor">Co kiedy użyć</a>
+    <a href="#memeops">Wybór dla MemeOps</a>
+    <a href="#sprawdz">Sprawdź się</a>
+    <a href="#zrodla">Źródła</a>
+  </nav>
+</header>
+
+<!-- ============ W SKRÓCIE ============ -->
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Jaka jest główna różnica?</div><p><b>CaaS</b>: oddajesz gotowy kontener z serwerem HTTP. <b>FaaS</b>: oddajesz samą funkcję (handler), a serwer i obraz dokłada platforma. W obu przypadkach na klastrze ląduje zwykły kontener.</p></div>
+    <div class="answer"><div class="q">Czym jest Knative?</div><p>Platformą z trzech części. <b>Serving</b> uruchamia usługi HTTP i skaluje je do zera. <b>Eventing</b> dowozi zdarzenia. <b>func</b> to CLI, które robi z handlera obraz i wdraża go jako usługę Serving.</p></div>
+    <div class="answer"><div class="q">A KEDA?</div><p>To nie framework funkcji, tylko <b>autoskaler</b>. Skaluje zwykłe Deploymenty (także do zera) po długości kolejki, metryce z Prometheusa czy harmonogramie.</p></div>
+    <div class="answer"><div class="q">Kiedy nie potrzebujesz serverless?</div><p>Gdy ruch jest stały przez całą dobę. Wtedy <b>Deployment + HPA</b> jest prostszy i tańszy w utrzymaniu.</p></div>
+    <div class="answer"><div class="q">Dlaczego OpenFaaS CE nie wystarczy dla MemeOps?</div><p>Brak scale-to-zero, maks. 5 replik na funkcję, 15 funkcji, 1 namespace i 60 dni użycia komercyjnego.</p></div>
+    <div class="answer"><div class="q">Co wybieramy na szkoleniu?</div><p><b>Knative Serving</b>: zero w nocy, rewizje i traffic split z pudełka, projekt CNCF graduated. Cena: cold start i więcej komponentów do utrzymania.</p></div>
+  </div>
+</section>
+
+<!-- ============ CAAS vs FAAS ============ -->
+<section id="caas-faas">
+  <h2 class="prose"><span class="num">1</span>CaaS a FaaS: kto pisze serwer HTTP</h2>
+  <p class="prose">Każda aplikacja webowa ma te same piętra: logikę, serwer HTTP, zależności, obraz i coś, co ją uruchamia i skaluje. Modele różnią się tym, <b>ile z tych pięter robisz sam</b>.</p>
+  <div class="legend">
+    <div class="item"><span class="sw you"></span>robisz Ty</div>
+    <div class="item"><span class="sw plat"></span>robi platforma</div>
+    <div class="item"><span class="sw mix"></span>wspólnie: Ty podajesz listę, platforma instaluje</div>
+  </div>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 440" role="img" aria-label="Porównanie CaaS i FaaS. CaaS: logikę, serwer HTTP, zależności i obraz robisz Ty, platforma tylko uruchamia i skaluje. FaaS: Ty piszesz tylko handler i listę zależności, serwer HTTP, obraz, uruchamianie i skalowanie daje platforma.">
+  <!-- CaaS -->
+  <g class="zone"><rect x="20" y="20" width="570" height="400" rx="12"/><text x="40" y="44">CAAS · CONTAINER AS A SERVICE</text></g>
+  <text class="ptitle" x="40" y="72">Oddajesz kontener</text>
+  <text class="psub" x="40" y="92">Knative Serving, Cloud Run, zwykły Deployment</text>
+
+  <g class="b you"><rect x="40" y="108" width="530" height="44" rx="8"/><text class="t" x="56" y="135">Logika aplikacji</text><text class="owner you" x="554" y="135" text-anchor="end">TY</text></g>
+  <g class="b you"><rect x="40" y="160" width="530" height="44" rx="8"/><text class="t" x="56" y="187">Serwer HTTP (np. Flask, FastAPI) i probe'y</text><text class="owner you" x="554" y="187" text-anchor="end">TY</text></g>
+  <g class="b you"><rect x="40" y="212" width="530" height="44" rx="8"/><text class="t" x="56" y="239">Runtime i zależności (Python, biblioteki)</text><text class="owner you" x="554" y="239" text-anchor="end">TY</text></g>
+  <g class="b you"><rect x="40" y="264" width="530" height="44" rx="8"/><text class="t" x="56" y="291">Obraz kontenera (Dockerfile, build, rejestr)</text><text class="owner you" x="554" y="291" text-anchor="end">TY</text></g>
+  <g class="b plat"><rect x="40" y="316" width="530" height="44" rx="8"/><text class="t" x="56" y="343">Uruchamianie, skalowanie, routing ruchu</text><text class="owner plat" x="554" y="343" text-anchor="end">PLATFORMA</text></g>
+  <text class="note strong" x="40" y="388">Plus: pełna kontrola nad obrazem, dowolny język i serwer.</text>
+  <text class="note" x="40" y="406">Minus: więcej do napisania i utrzymania (Dockerfile, serwer, probe'y).</text>
+
+  <!-- FaaS -->
+  <g class="zone"><rect x="610" y="20" width="570" height="400" rx="12"/><text x="630" y="44">FAAS · FUNCTION AS A SERVICE</text></g>
+  <text class="ptitle" x="630" y="72">Oddajesz handler</text>
+  <text class="psub" x="630" y="92">func (Knative Functions), OpenFaaS, Fission, OpenWhisk, Nuclio</text>
+
+  <g class="b you"><rect x="630" y="108" width="530" height="44" rx="8"/><text class="t" x="646" y="135">Logika: funkcja handle(request)</text><text class="owner you" x="1144" y="135" text-anchor="end">TY</text></g>
+  <g class="b plat"><rect x="630" y="160" width="530" height="44" rx="8"/><text class="t" x="646" y="187">Serwer HTTP i probe'y (z szablonu)</text><text class="owner plat" x="1144" y="187" text-anchor="end">PLATFORMA</text></g>
+  <g class="b mix"><rect x="630" y="212" width="530" height="44" rx="8"/><text class="t" x="646" y="239">Runtime i zależności (requirements.txt)</text><text class="owner mix" x="1144" y="239" text-anchor="end">WSPÓLNIE</text></g>
+  <g class="b plat"><rect x="630" y="264" width="530" height="44" rx="8"/><text class="t" x="646" y="291">Obraz kontenera (budowany przez CLI)</text><text class="owner plat" x="1144" y="291" text-anchor="end">PLATFORMA</text></g>
+  <g class="b plat"><rect x="630" y="316" width="530" height="44" rx="8"/><text class="t" x="646" y="343">Uruchamianie, skalowanie, routing ruchu</text><text class="owner plat" x="1144" y="343" text-anchor="end">PLATFORMA</text></g>
+  <text class="note strong" x="630" y="388">Plus: mniej kodu, szybki start, jednolity szablon w zespole.</text>
+  <text class="note" x="630" y="406">Minus: mniej kontroli (np. biblioteki z kodem C, własny serwer).</text>
+</svg>
+    </div>
+    <figcaption>Na końcu obu dróg jest kontener. FaaS nie usuwa kontenera, tylko go za Ciebie buduje. W demo 05 <code>func</code> zbudował obraz bez Dockerfile'a i wdrożył go jako zwykłą usługę Knative.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <h3>Gdzie w tym jest Knative?</h3>
+    <p><b>Knative Serving to CaaS z cechami FaaS.</b> Oddajesz kontener (CaaS), ale dostajesz to, z czego słynie FaaS: scale-to-zero, płacenie zasobami tylko za ruch i gotowy adres URL. <b><code>func</code> dokłada nad tym warstwę FaaS:</b> piszesz handler, a <code>func</code> robi serwer, probe'y (<code>/health/liveness</code>, <code>/health/readiness</code>) i obraz. Wynikiem i tak jest zwykły kontener w zwykłym ksvc.</p>
+  </div>
+</section>
+
+<!-- ============ KNATIVE ============ -->
+<section id="knative">
+  <h2 class="prose"><span class="num">2</span>Z czego składa się Knative</h2>
+  <p class="prose">Trzy części, które można instalować osobno. W labach używamy Serving i <code>func</code>. Eventing pokazujemy w demo 04.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Część</th><th scope="col">Co robi</th><th scope="col">Co piszesz</th><th scope="col">Na szkoleniu</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Knative Serving</th><td>Uruchamia usługi HTTP. Każda zmiana szablonu tworzy niezmienną <b>rewizję</b>. Route dzieli ruch między rewizje (np. 90/10). Autoskaler KPA skaluje po liczbie równoczesnych żądań, także <b>do zera</b>.</td><td>jeden obiekt <code>Service</code> (ksvc) albo <code>kn service create</code></td><td>LAB 2–8</td></tr>
+        <tr><th scope="row">Knative Eventing</th><td>Dowozi zdarzenia w formacie <b>CloudEvents</b>. Źródło (np. PingSource, KafkaSource) wysyła je do <b>Brokera</b>, a <b>Trigger</b> z filtrem przekazuje pasujące do odbiorcy, najczęściej ksvc.</td><td>źródło, Broker, Trigger</td><td>demo 04 (w labach nie ma)</td></tr>
+        <tr><th scope="row"><code>func</code> (Knative Functions)</th><td>CLI na Twojej maszynie. Z handlera buduje obraz (builder <code>host</code>, <code>pack</code> albo <code>s2i</code>) i wdraża go jako <b>Knative Service</b>. Wynik to normalny kontener.</td><td>handler (<code>func create -l python</code>, szablony <code>http</code> i <code>cloudevents</code>)</td><td>demo 05, LAB 3 część A</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="legend">
+    <div class="item"><span class="ln traffic"></span>wdrożenie: tworzy ksvc</div>
+    <div class="item"><span class="ln event"></span>zdarzenie CloudEvents (HTTP POST)</div>
+    <div class="item"><span class="ln ctrl"></span>Knative tworzy i steruje</div>
+  </div>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 520" role="img" aria-label="Relacje części Knative. func na Twojej maszynie: handler, budowanie obrazu, func deploy, który tworzy ksvc w Knative Serving. Knative Eventing: źródło wysyła zdarzenie do Brokera, Trigger z filtrem przekazuje je do ksvc. Knative Serving: ksvc tworzy rewizje, które mają pody skalowane od zera do N.">
+  <defs>
+    <marker id="f-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="f-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="f-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-event" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <!-- func -->
+  <g class="zone"><rect x="20" y="20" width="560" height="210" rx="12"/><text x="36" y="42">FUNC · CLI NA TWOJEJ MASZYNIE</text></g>
+  <g class="b you"><rect x="40" y="70" width="150" height="64" rx="10"/><text class="k" x="52" y="88">TY PISZESZ</text><text class="t" x="52" y="106">handler</text><text class="s" x="52" y="123">function/func.py</text></g>
+  <g class="b cli"><rect x="225" y="70" width="150" height="64" rx="3"/><text class="k" x="237" y="88">FUNC BUILD</text><text class="t" x="237" y="106">obraz kontenera</text><text class="s" x="237" y="123">host · pack · s2i</text></g>
+  <g class="b cli"><rect x="410" y="70" width="150" height="64" rx="3"/><text class="k" x="422" y="88">FUNC DEPLOY</text><text class="t" x="422" y="106">push + ksvc</text><text class="s" x="422" y="123">obraz po digeście</text></g>
+  <path class="a traffic" d="M190 102 H221" marker-end="url(#f-t)"/>
+  <path class="a traffic" d="M375 102 H406" marker-end="url(#f-t)"/>
+  <text class="note" x="40" y="170">Bez func zrobisz to samo: Dockerfile, docker build,</text>
+  <text class="note" x="40" y="188">push i kn service create. Wynik na klastrze jest ten sam.</text>
+
+  <!-- Eventing -->
+  <g class="zone"><rect x="20" y="250" width="560" height="250" rx="12"/><text x="36" y="272">KNATIVE EVENTING · DOWOZI ZDARZENIA</text></g>
+  <g class="b ev"><rect x="40" y="300" width="150" height="64" rx="10"/><text class="k" x="52" y="318">ŹRÓDŁO</text><text class="t" x="52" y="336">PingSource</text><text class="s" x="52" y="353">albo KafkaSource…</text></g>
+  <g class="b ev"><rect x="225" y="300" width="150" height="64" rx="10"/><text class="k" x="237" y="318">BROKER</text><text class="t" x="237" y="336">default</text><text class="s" x="237" y="353">zbiera zdarzenia</text></g>
+  <g class="b ev"><rect x="410" y="300" width="150" height="64" rx="10"/><text class="k" x="422" y="318">TRIGGER</text><text class="t" x="422" y="336">filtr po type</text><text class="s" x="422" y="353">wskazuje odbiorcę</text></g>
+  <path class="a event" d="M190 332 H221" marker-end="url(#f-e)"/>
+  <path class="a event" d="M375 332 H406" marker-end="url(#f-e)"/>
+  <text class="note" x="40" y="410">Zdarzenia mają format CloudEvents i docierają</text>
+  <text class="note" x="40" y="428">do odbiorcy jako zwykłe żądanie HTTP POST.</text>
+  <text class="note" x="40" y="460">Szablon odbiorcy: func create -l python -t cloudevents</text>
+
+  <!-- Serving -->
+  <g class="zone"><rect x="620" y="20" width="560" height="480" rx="12"/><text x="636" y="42">KNATIVE SERVING · URUCHAMIA USŁUGI HTTP</text></g>
+  <text class="note" x="636" y="66">Ruch od klientów HTTP wchodzi przez Kourier (Envoy).</text>
+  <g class="b plat"><rect x="650" y="196" width="500" height="64" rx="10"/><text class="k" x="662" y="214">SERVICE (KSVC)</text><text class="t" x="662" y="232">meme-api</text><text class="s" x="662" y="249">adres URL · szablon · traffic split</text></g>
+  <g class="b plat"><rect x="650" y="300" width="240" height="64" rx="10"/><text class="k" x="662" y="318">REVISION</text><text class="t" x="662" y="336">meme-api-00001</text><text class="s" x="662" y="353">90% ruchu</text></g>
+  <g class="b plat"><rect x="910" y="300" width="240" height="64" rx="10"/><text class="k" x="922" y="318">REVISION</text><text class="t" x="922" y="336">meme-api-00002</text><text class="s" x="922" y="353">10% ruchu</text></g>
+  <g class="b proc"><rect x="650" y="404" width="500" height="64" rx="3"/><text class="k" x="662" y="422">PODY REWIZJI</text><text class="t" x="662" y="440">od 0 do N, decyduje autoskaler KPA</text><text class="s" x="662" y="457">brak ruchu → 0 podów · ruch → pody wstają</text></g>
+  <path class="a ctrl" d="M770 260 V296" marker-end="url(#f-c)"/>
+  <path class="a ctrl" d="M1030 260 V296" marker-end="url(#f-c)"/>
+  <path class="a ctrl" d="M770 364 V400" marker-end="url(#f-c)"/>
+  <path class="a ctrl" d="M1030 364 V400" marker-end="url(#f-c)"/>
+
+  <!-- połączenia między strefami -->
+  <path class="a traffic" d="M560 112 H900 V192" marker-end="url(#f-t)"/>
+  <text class="lbl traffic" x="660" y="106">func deploy tworzy ksvc</text>
+  <path class="a event" d="M560 332 H605 V228 H646" marker-end="url(#f-e)"/>
+  <text class="lbl event" x="598" y="290" transform="rotate(-90 598 290)">Trigger → ksvc</text>
+</svg>
+    </div>
+    <figcaption>Serving jest środkiem. <code>func</code> to tylko wygodny sposób, żeby do niego trafić. Eventing dostarcza do niego zdarzenia. Każdą część można używać osobno: Serving bez Eventingu (tak jest w labach), Eventing z innym odbiorcą niż ksvc.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ TABELA ============ -->
+<section id="tabela">
+  <h2 class="prose"><span class="num">3</span>Porównanie funkcji</h2>
+  <p class="prose">Statusy i wersje: <b>stan na 29.10.2026</b>. Te projekty zmieniają się szybko, więc przed decyzją sprawdź ostatnie wydania. Komórki z <span class="verify">[nie testowane]</span> pochodzą z dokumentacji projektu, ale nie sprawdzaliśmy ich na klastrze. Tabelę przewiniesz w poziomie, pierwsza kolumna zostaje na miejscu.</p>
+  <div class="table-wrap">
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th scope="col">Cecha</th>
+          <th scope="col">Deployment + HPA<small>punkt odniesienia</small></th>
+          <th scope="col" class="ours">Knative Serving<small>+ func · laby</small></th>
+          <th scope="col">OpenFaaS CE<small>demo 02</small></th>
+          <th scope="col">OpenFaaS Pro<small>komercyjny</small></th>
+          <th scope="col">Fission</th>
+          <th scope="col">OpenWhisk<small>Apache</small></th>
+          <th scope="col">Nuclio</th>
+          <th scope="col">KEDA<small>autoskaler, nie framework</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Model</th>
+          <td>zwykłe obiekty Kubernetesa</td>
+          <td class="ours">CaaS; <code>func</code> dokłada FaaS</td>
+          <td>FaaS</td>
+          <td>FaaS</td>
+          <td>FaaS</td>
+          <td>FaaS (akcje)</td>
+          <td>FaaS</td>
+          <td>autoskaler zdarzeniowy dla Deploymentów i Jobów</td>
+        </tr>
+        <tr>
+          <th scope="row">Co oddajesz</th>
+          <td>obraz + Deployment, Service, Ingress, HPA</td>
+          <td class="ours">obraz i jeden ksvc; albo handler przez <code>func</code></td>
+          <td>handler z szablonu, np. <code>python3-http</code> (z natywnymi zależnościami <code>python3-http-debian</code>)</td>
+          <td>jak CE</td>
+          <td>kod funkcji + środowisko (obraz bazowy języka); executor <code>container</code> przyjmuje gotowy obraz</td>
+          <td>kod akcji, wysyłany przez CLI <code>wsk</code> <span class="verify">[nie testowane]</span></td>
+          <td>handler, obraz buduje Nuclio <span class="verify">[nie testowane]</span></td>
+          <td>nic nowego: Twój Deployment + <code>ScaledObject</code></td>
+        </tr>
+        <tr>
+          <th scope="row">Scale-to-zero</th>
+          <td><span class="tag no">nie</span><br>HPA trzyma min. 1 replikę (zero tylko z funkcją alfa <code>HPAScaleToZero</code>)</td>
+          <td class="ours"><span class="tag yes">tak</span><br>activator przytrzymuje pierwsze żądanie, aż pod wstanie</td>
+          <td><span class="tag no">nie</span></td>
+          <td><span class="tag yes">tak</span><br>globalny timeout, nadpisywany per funkcja</td>
+          <td><span class="tag yes">tak</span><br>pod funkcji znika po bezczynności; executor <code>poolmgr</code> trzyma pulę warm, ogólnych podów środowiska</td>
+          <td><span class="tag mid">inaczej</span><br>kontenery akcji powstają na żądanie, ale komponenty platformy działają stale <span class="verify">[nie testowane]</span></td>
+          <td><span class="tag yes">tak</span><br>w specyfikacji jest stan <code>scaledToZero</code> <span class="verify">[nie testowane]</span></td>
+          <td><span class="tag yes">tak</span><br>dla Deploymentów; dla HTTP nikt nie przytrzyma żądania bez HTTP Add-on (beta)</td>
+        </tr>
+        <tr>
+          <th scope="row">Sygnał autoskalowania</th>
+          <td>CPU / pamięć (metrics-server); własne metryki przez adapter</td>
+          <td class="ours">concurrency albo RPS (KPA, z zerem); CPU / pamięć (klasa HPA, bez zera)</td>
+          <td>tylko RPS, jedna globalna reguła, <b>maks. 5 replik</b></td>
+          <td>CPU, liczba żądań w toku, RPS, głębokość kolejki async, własne metryki; reguła per funkcja</td>
+          <td><code>newdeploy</code> i <code>container</code>: HPA po CPU; <code>poolmgr</code>: pula, limit podów na funkcję (domyślnie 500)</td>
+          <td>własny mechanizm invokera (pula pamięci na kontenery akcji) <span class="verify">[nie testowane]</span></td>
+          <td>HPA po CPU (<code>targetCPU</code>, domyślnie 75%) albo własne metryki HPA</td>
+          <td>kilkadziesiąt skalerów: kolejki, Kafka, Prometheus, cron; 0↔1 robi KEDA, 1↔N HPA</td>
+        </tr>
+        <tr>
+          <th scope="row">Rewizje i traffic split</th>
+          <td><span class="tag mid">ręcznie</span><br>rollout Deploymentu; canary sam składasz (np. wagi w HTTPRoute)</td>
+          <td class="ours"><span class="tag yes">wbudowane</span><br>niezmienne rewizje, % ruchu, tagi z osobnym adresem, rollback w sekundy</td>
+          <td><span class="tag no">nie</span><br>aktualizacja bez przestoju też niedostępna</td>
+          <td><span class="tag mid">częściowo</span><br>aktualizacja bez przestoju (probe'y + rolling update); traffic splitu brak w tabeli CE vs Pro</td>
+          <td><span class="tag mid">canary</span><br>obiekt <code>CanaryConfig</code>, włączany flagą Helm <code>canaryDeployment.enabled</code> <span class="verify">[nie testowane]</span></td>
+          <td><span class="tag no">nie</span> <span class="verify">[nie testowane]</span></td>
+          <td><span class="tag mid">canary</span><br>między dwiema funkcjami w API gateway (pole <code>percentage</code>), nie rewizje <span class="verify">[nie testowane]</span></td>
+          <td><span class="tag na">nie dotyczy</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Budowanie obrazu</th>
+          <td>Twój Dockerfile i CI</td>
+          <td class="ours">Twój Dockerfile albo <code>func build</code> (<code>host</code> bez Dockera; <code>pack</code>, <code>s2i</code> z Dockerem/Podmanem)</td>
+          <td><code>faas-cli</code> z szablonu; sekrety w czasie budowania niedostępne</td>
+          <td><code>faas-cli</code>; sekrety w czasie budowania są</td>
+          <td>w klastrze, ze źródeł albo paczki <span class="verify">[nie testowane]</span></td>
+          <td>runtime w gotowym obrazie, kod dokładany przy starcie <span class="verify">[nie testowane]</span></td>
+          <td><code>nuctl</code> albo dashboard <span class="verify">[nie testowane]</span></td>
+          <td><span class="tag na">nie buduje</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Licencja i limity</th>
+          <td>bez limitów</td>
+          <td class="ours">open source, bez limitów</td>
+          <td>EULA CE: <b>15 funkcji, 1 namespace, 60 dni użycia komercyjnego</b>; sekrety w runtime i TLS przez ingress działają</td>
+          <td>licencja komercyjna; Standard: 500 funkcji, 1 namespace; Enterprise: namespace'y bez limitu. Cennik na stronie OpenFaaS</td>
+          <td>open source <span class="verify">[nie testowane]</span></td>
+          <td>Apache</td>
+          <td>open source <span class="verify">[nie testowane]</span></td>
+          <td>open source, bez limitów</td>
+        </tr>
+        <tr>
+          <th scope="row">Status projektu<br><small>stan na 29.10.2026</small></th>
+          <td>część Kubernetesa</td>
+          <td class="ours"><b>CNCF graduated</b> (8.10.2025); 1.23.0 z 29.07.2026, 1.24.0 z 26.10.2026</td>
+          <td>w CNCF Landscape, ale nie projekt CNCF</td>
+          <td>produkt komercyjny</td>
+          <td>aktywny, v1.27.0 (06.2026); dokumentacja projektu podaje „Active (CNCF)”, poziomu w CNCF nie potwierdziliśmy</td>
+          <td>v2.0.0 (04.2024), niska aktywność</td>
+          <td>aktywny, 1.17.11</td>
+          <td><b>CNCF graduated</b>, 2.21.0</td>
+        </tr>
+        <tr>
+          <th scope="row">Mocna strona</th>
+          <td>prostota, każdy zespół zna</td>
+          <td class="ours">ogólna platforma HTTP: zero, rewizje, ruch; Eventing do zdarzeń</td>
+          <td>najszybszy start: store, <code>faas-cli</code>, UI, REST API</td>
+          <td>produkcja z wsparciem producenta</td>
+          <td>szybki start funkcji dzięki puli warm podów</td>
+          <td>istniejące wdrożenia, badania</td>
+          <td>przetwarzanie danych i ML</td>
+          <td>workery kolejkowe, zadania wsadowe, istniejące Deploymenty</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cold prose"><b>Kubeless: ostrzeżenie.</b> Popularny framework FaaS na Kubernetesie, zarchiwizowany 15.12.2021 (repozytorium w <code>vmware-archive</code>). Kto na nim zbudował platformę, musiał migrować. Wybierając framework, wybierasz też ryzyko, że projekt zostanie porzucony. Patrz na ostatnie wydania, liczbę maintainerów i fundację, nie tylko na README.</div>
+  <p class="prose">Jeśli sam powtarzasz demo 02: funkcja w store OpenFaaS nazywa się <code>cows</code>, nie <code>cowsay</code>.</p>
+</section>
+
+<!-- ============ WYBÓR ============ -->
+<section id="wybor">
+  <h2 class="prose"><span class="num">4</span>Co kiedy użyć: wybieraczka</h2>
+  <p class="prose">Idź od góry i zatrzymaj się na pierwszym „tak”. Rozwiązania da się łączyć: typowo Knative dla HTTP i KEDA dla workerów w tym samym klastrze.</p>
+  <ol class="ladder">
+    <li>
+      <div class="qq">Czy ktoś czeka na odpowiedź HTTP?</div>
+      <div class="opts">
+        <div class="opt go"><div class="when">Nie: praca z kolejki, zadania wsadowe</div><div class="pick">KEDA + Deployment albo Job</div><p>Skaluje po długości kolejki, także do zera. Nie potrzebuje żądań HTTP.</p></div>
+        <div class="opt next"><div class="when">Tak</div><p>Idź do kroku 2.</p></div>
+      </div>
+    </li>
+    <li>
+      <div class="qq">Czy chodzi o rozsyłanie zdarzeń z wielu źródeł do wielu odbiorców?</div>
+      <div class="opts">
+        <div class="opt go"><div class="when">Tak</div><div class="pick">Knative Eventing (odbiorcy jako ksvc)</div><p>Broker i Trigger z filtrem zamiast własnego kodu do routingu. Kolejny komponent do utrzymania.</p></div>
+        <div class="opt next"><div class="when">Nie, zwykłe API</div><p>Idź do kroku 3.</p></div>
+      </div>
+    </li>
+    <li>
+      <div class="qq">Czy ruch jest stały przez całą dobę?</div>
+      <div class="opts">
+        <div class="opt go"><div class="when">Tak</div><div class="pick">Deployment + HPA</div><p>Zero i tak nie nastąpi, więc serverless dałby tylko złożoność. To nie porażka, to dobry wybór.</p></div>
+        <div class="opt next"><div class="when">Nie: noce puste, szczyty</div><p>Idź do kroku 4.</p></div>
+      </div>
+    </li>
+    <li>
+      <div class="qq">Chcesz zera w nocy, rewizji i traffic splitu?</div>
+      <div class="opts">
+        <div class="opt kn"><div class="when">Tak</div><div class="pick">Knative Serving</div><p>Wszystko z pudełka w jednym obiekcie. Płacisz cold startem i kilkoma kontrolerami. Na szczyt ustawiasz <code>min-scale</code>.</p></div>
+        <div class="opt next"><div class="when">Zespół nie chce pisać Dockerfile'a</div><p>Idź do kroku 5.</p></div>
+      </div>
+    </li>
+    <li>
+      <div class="qq">Chcesz pisać tylko handler?</div>
+      <div class="opts">
+        <div class="opt kn"><div class="when">Masz Knative</div><div class="pick"><code>func</code></div><p>Handler → obraz → ksvc. Zachowujesz wszystko z kroku 4.</p></div>
+        <div class="opt go"><div class="when">PoC, nauka, demo</div><div class="pick">OpenFaaS CE</div><p>Start w minuty. Ale bez zera, maks. 5 replik i 60 dni komercyjnie.</p></div>
+        <div class="opt go"><div class="when">Produkcja z wsparciem</div><div class="pick">OpenFaaS Pro</div><p>Zero i bogatsze autoskalowanie. Kosztuje licencję.</p></div>
+      </div>
+    </li>
+  </ol>
+
+  <h3 class="prose">Przypadki szczególne</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Sytuacja</th><th scope="col">Rozważ</th><th scope="col">Uczciwie: na co uważać</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Funkcje do przetwarzania danych i ML</th><td>Nuclio</td><td>Mniejsza społeczność niż Knative. Sprawdź tempo wydań i wsparcie.</td></tr>
+        <tr><th scope="row">Krótkie funkcje, liczy się szybki start</th><td>Fission (pula warm podów)</td><td>Pula to pody, które działają stale.</td></tr>
+        <tr><th scope="row">Masz już OpenWhisk</th><td>Zostań, planuj dalej</td><td>Ostatnie wydanie 04.2024, niska aktywność. Na nowe wdrożenia ryzykowne.</td></tr>
+        <tr><th scope="row">Masz Azure Functions i chcesz je na Kubernetesie</th><td>Runtime Functions w kontenerze + KEDA</td><td>Microsoft daje tu tylko wsparcie społeczności (best-effort). W pełni wspierana droga to Azure Container Apps. Triggery HTTP KEDA skaluje tylko pośrednio.</td></tr>
+        <tr><th scope="row">Nie chcesz utrzymywać platformy</th><td>Usługa zarządzana</td><td>Cloud Run implementuje API Knative Serving, więc wiedza z labów się przenosi. Nie każde pole jest obsługiwane <span class="verify">[nie testowane]</span>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="prose">Kiedy w ogóle nie serverless</h3>
+  <ul class="prose">
+    <li>Stały, przewidywalny ruch: HPA jest prostszy.</li>
+    <li>Twarde wymagania latencji bez tolerancji na cold start: i tak ustawisz <code>min-scale</code> &gt; 0, więc zostaje głównie złożoność.</li>
+    <li>Długie zadania i połączenia (strumienie, WebSockety, batch godzinami): Job albo KEDA.</li>
+    <li>Duży stan w pamięci procesu (cache, sesje): funkcja musi być bezstanowa.</li>
+    <li>Zespół bez ludzi do utrzymania platformy: rozważ usługę zarządzaną.</li>
+  </ul>
+</section>
+
+<!-- ============ MEMEOPS ============ -->
+<section id="memeops">
+  <h2 class="prose"><span class="num">5</span>Wybór dla MemeOps: Knative Serving</h2>
+  <p class="prose">Ruch MemeOps to konferencja: w nocy nic, po keynote nagły szczyt, potem znowu cisza. Kryterium nr 1 to skalowanie <b>0 → szczyt → 0</b>. Ono od razu odrzuca OpenFaaS CE i zwykłe HPA, bo żadne nie schodzi do zera.</p>
+  <div class="cards">
+    <div class="card pro">
+      <h3>Dlaczego Knative</h3>
+      <ul>
+        <li>Zero podów w nocy, bez dodatków.</li>
+        <li>Skalowanie po liczbie równoczesnych żądań, nie po CPU z opóźnieniem.</li>
+        <li>Rewizje i traffic split: canary i rollback to zmiana Route, nie nowe wdrożenie.</li>
+        <li>Bez limitów licencji. CNCF graduated, więc małe ryzyko porzucenia.</li>
+        <li>Wiedza przenosi się na Cloud Run.</li>
+      </ul>
+    </div>
+    <div class="card con">
+      <h3>Za co płacimy</h3>
+      <ul>
+        <li>Cold start. W próbie meme-api: 1,4 s cold, 7 ms warm.</li>
+        <li>Więcej komponentów: controller, activator, autoscaler, webhook, Kourier.</li>
+        <li>Monitoring trzeba włączyć: metryki są domyślnie wyłączone.</li>
+      </ul>
+    </div>
+    <div class="card fix">
+      <h3>Jak to łagodzimy</h3>
+      <ul>
+        <li><code>min-scale</code> na czas keynote: warm pody wtedy, gdy liczy się UX (LAB 5).</li>
+        <li><code>max-scale</code> jako bezpiecznik kosztów.</li>
+        <li>Mały obraz: krótszy cold start.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Alternatywa</th><th scope="col">Dlaczego nie dla MemeOps</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Deployment + HPA</th><td>Min. 1 replika, skalowanie po CPU z opóźnieniem. Przegrywa „zero w nocy”.</td></tr>
+        <tr><th scope="row">OpenFaaS CE</th><td>Brak zera, maks. 5 replik na funkcję (szczyt się zatnie), 60 dni użycia komercyjnego.</td></tr>
+        <tr><th scope="row">KEDA dla API</th><td>Przy zerze replik nikt nie przytrzyma żądania HTTP. Potrzebny HTTP Add-on (beta) albo min. 1 replika.</td></tr>
+        <tr><th scope="row">Fission, Nuclio</th><td>Aktywne, ale ich nie testowaliśmy na naszym klastrze, a Knative daje rewizje i ruch bez dodatkowej konfiguracji.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ SPRAWDŹ ============ -->
+<section id="sprawdz" class="prose">
+  <h2><span class="num">6</span>Sprawdź się</h2>
+  <details><summary>Wdrażasz handler przez <code>func deploy</code>. Co ląduje na klastrze?</summary><p>Zwykły kontener w zwykłym Knative Service. <code>func</code> zbudował obraz (z serwerem HTTP i probe'ami) i utworzył ksvc. Możesz go obsługiwać przez <code>kn</code> i <code>kubectl</code> jak każdą inną usługę.</p></details>
+  <details><summary>API firmy ma równy ruch 24/7. Knative czy Deployment + HPA?</summary><p>Deployment + HPA. Scale-to-zero nigdy się nie przyda, a Knative dołoży komponenty do utrzymania i cold start po wdrożeniu. Knative warto rozważyć dopiero, gdy potrzebujesz rewizji i traffic splitu.</p></details>
+  <details><summary>Zadania wpadają do kolejki, nikt nie czeka na odpowiedź HTTP. Co wybierasz?</summary><p>KEDA ze skalerem tej kolejki. Knative Serving skaluje po żądaniach HTTP, a tu żądań nie ma. KEDA odczyta długość kolejki i zejdzie do zera, gdy będzie pusta.</p></details>
+  <details><summary>Dlaczego OpenFaaS CE odpada dla MemeOps, choć ma świetny toolchain?</summary><p>Brak scale-to-zero (płacimy za pody w nocy), maks. 5 replik na funkcję (szczyt po keynote się zatnie) i limit 60 dni użycia komercyjnego. Sekrety i TLS nie są powodem: w CE działają.</p></details>
+  <details><summary>Czego uczy historia Kubeless?</summary><p>Że framework to też ryzyko projektu. Kubeless zarchiwizowano 15.12.2021 i użytkownicy musieli migrować. Przed wyborem sprawdź ostatnie wydania, liczbę maintainerów i fundację (np. status w CNCF).</p></details>
+</section>
+
+<!-- ============ ŹRÓDŁA ============ -->
+<section id="zrodla" class="prose">
+  <h2><span class="num">7</span>Źródła</h2>
+  <div class="src">
+    <p>Repozytorium szkolenia: demo 02 i 04 (próby 29.10 i 01.11.2026), <code>docs/08-autoskalowanie</code> (KEDA, HPA). Dopisane z dokumentacji projektów 03.11.2026:</p>
+    <ul>
+      <li>OpenFaaS CE vs Pro: https://docs.openfaas.com/openfaas-pro/comparison/</li>
+      <li>Fission, executory i autoskalowanie: https://fission.io/docs/architecture/executor/</li>
+      <li>Fission, canary: https://fission.io/docs/usage/function/canary-deployments</li>
+      <li>Nuclio, konfiguracja funkcji (<code>targetCPU</code>, <code>scaledToZero</code>): https://docs.nuclio.io/en/stable/reference/function-configuration/function-configuration-reference.html</li>
+      <li>Nuclio, API gateway i canary: https://docs.nuclio.io/en/stable/reference/api-gateway/http.html</li>
+      <li>OpenWhisk na Kubernetesie: https://github.com/apache/openwhisk-deploy-kube</li>
+      <li>KEDA, lista skalerów (wersja 2.21): https://keda.sh/docs/latest/scalers/</li>
+      <li>Azure Functions na Kubernetesie z KEDA: https://learn.microsoft.com/en-us/azure/azure-functions/functions-kubernetes-keda</li>
+      <li>Cloud Run a API Knative Serving: https://docs.cloud.google.com/kubernetes-engine/enterprise/knative-serving/docs/migrate/cloud-run</li>
+      <li>Knative graduated w CNCF: https://www.cncf.io/announcements/2025/10/08/cloud-native-computing-foundation-announces-knatives-graduation/</li>
+    </ul>
+    <p>Oznaczenie <span class="verify">[nie testowane]</span>: informacja z dokumentacji albo opisu projektu, niesprawdzona na klastrze szkoleniowym.</p>
+  </div>
+</section>
+</div>

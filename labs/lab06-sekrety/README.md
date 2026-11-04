@@ -1,8 +1,8 @@
 # lab06 — Sekrety, konfiguracja i logowanie
 
-| Dzień | Czas | Po bloku |
-|---|---|---|
-| 2 | 50 min | 2.2 Sekrety, TLS i uwierzytelnianie |
+| Dzień | Po bloku |
+|---|---|
+| 2 | 2.2 Sekrety, TLS i uwierzytelnianie |
 
 > **Zgłoszenie od PO:** „Ktoś wrzuca memy anonimowo. Od teraz tylko uczestnicy z tokenem konferencji tworzą memy, galeria zostaje publiczna. I chcemy znak wodny konferencji bez budowania nowego obrazu.”
 
@@ -12,14 +12,14 @@
 
 ## Kroki
 
-| # | Co robisz | Czas |
-|---|---|---|
-| 1 | Secret z kluczem JWT | 5 min |
-| 2 | ConfigMap + usługa z sekretem | 10 min |
-| 3 | Test: bez tokenu i z tokenem | 10 min |
-| 4 | Co widzi każdy, kto ma dostęp do namespace'u | 10 min |
-| 5 | Zmiana ConfigMap — pułapka | 10 min |
-| 6 | Dla chętnych: HTTPS | 15 min |
+| # | Co robisz |
+|---|---|
+| 1 | Secret z kluczem JWT |
+| 2 | ConfigMap + usługa z sekretem |
+| 3 | Test: bez tokenu i z tokenem |
+| 4 | Co widzi każdy, kto ma dostęp do namespace'u |
+| 5 | Zmiana ConfigMap — pułapka |
+| 6 | Dla chętnych: HTTPS |
 
 ### 1. Secret z kluczem JWT
 
@@ -106,7 +106,7 @@ kubectl patch cm config-network -n knative-serving --type merge \
 ## Dogoń grupę
 
 ```bash
-tools/dogon.sh lab06
+tools/start-lab.sh lab06            # tylko jeśli LAB 5 nie skończony (usuwa Twoje rewizje meme-api i meme-gen)
 ```
 
 **Cliffhanger:** „Każda zmiana szablonu to ręczny `kn service update`. Tak nie da się pracować.”

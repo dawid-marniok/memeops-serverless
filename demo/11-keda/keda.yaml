@@ -1,0 +1,66 @@
+# Demo 11: KEDA skaluje zwykły Deployment od zera według długości kolejki w Redisie.
+#   producent (redis-cli RPUSH) → lista „memy” w Redisie → worker (0..10 podów) zdejmuje zadania
+# Bez Knative: KEDA steruje HPA i sama zmienia replicas między 0 a 1.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis, namespace: demo}
+spec:
+  selector: {matchLabels: {app: redis}}
+  template:
+    metadata: {labels: {app: redis}}
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.2-alpine
+          ports: [{containerPort: 6379}]
+          resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {memory: 128Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis, namespace: demo}
+spec:
+  selector: {app: redis}
+  ports: [{port: 6379}]
+---
+# Worker: zdejmuje jedno zadanie z listy i „generuje mema” przez 1 s. Startuje z zerem replik.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: generator, namespace: demo}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: generator}}
+  template:
+    metadata: {labels: {app: generator}}
+    spec:
+      terminationGracePeriodSeconds: 2
+      containers:
+        - name: generator
+          image: redis:8.2-alpine          # ma redis-cli; prawdziwy worker byłby Twoją aplikacją
+          command: ["sh", "-c"]
+          args:
+            - |
+              while true; do
+                zadanie=$(redis-cli -h redis --raw BLPOP memy 5 | tail -1)
+                [ -n "$zadanie" ] && { echo "$(hostname): generuję mem nr $zadanie"; sleep 1; }
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: {name: generator, namespace: demo}
+spec:
+  scaleTargetRef: {name: generator}
+  minReplicaCount: 0                 # scale-to-zero, jak w Knative
+  maxReplicaCount: 10                # bezpiecznik kosztowy
+  pollingInterval: 5                 # co ile sekund KEDA sprawdza kolejkę (domyślnie 30)
+  cooldownPeriod: 20                 # ile sekund po opróżnieniu kolejki zejść z 1 do 0 (domyślnie 300)
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown: {stabilizationWindowSeconds: 15}   # HPA domyślnie czeka 300 s przed zmniejszeniem
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.demo:6379
+        listName: memy
+        listLength: "5"              # cel: 5 zadań w kolejce na jeden pod

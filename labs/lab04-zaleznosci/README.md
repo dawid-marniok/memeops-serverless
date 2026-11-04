@@ -1,8 +1,8 @@
 # lab04 — Zależności natywne: memy ze zdjęciami
 
-| Dzień | Czas | Po bloku |
-|---|---|---|
-| 1 | 40 min | 1.6 Zależności i rozszerzenia natywne |
+| Dzień | Po bloku |
+|---|---|
+| 1 | 1.6 Zależności i rozszerzenia natywne |
 
 > **Zgłoszenie od PO:** „SVG nie działa w komunikatorach. Chcemy prawdziwe obrazki PNG.”
 
@@ -12,13 +12,13 @@
 
 ## Kroki
 
-| # | Co robisz | Czas |
-|---|---|---|
-| 1 | Pillow w `requirements.txt` | 5 min |
-| 2 | Dwa obrazy: „na szybko” i multi-stage | 10 min |
-| 3 | Wdrożenie i czas do Ready | 10 min |
-| 4 | Cold start na „nowym węźle” | 10 min |
-| 5 | Wnioski | 5 min |
+| # | Co robisz |
+|---|---|
+| 1 | Pillow w `requirements.txt` |
+| 2 | Dwa obrazy: „na szybko” i multi-stage |
+| 3 | Wdrożenie i czas do Ready |
+| 4 | Cold start na „nowym węźle” |
+| 5 | Wnioski |
 
 ### 1. Pillow w `requirements.txt`
 
@@ -39,7 +39,7 @@ docker push localhost:5001/meme-gen:2.0.0-full && docker push localhost:5001/mem
 docker images localhost:5001/meme-gen
 ```
 
-Przeczytaj oba Dockerfile. Skąd różnica rozmiaru (`python:3.12` vs `python:3.12-slim`, etapy, `--no-cache-dir`)? Dlaczego Pillow instaluje się bez kompilatora (koła *manylinux*)?
+Przeczytaj oba Dockerfile. Skąd różnica rozmiaru (`python:3.12` vs `python:3.12-slim`, etapy, `--no-cache-dir`)? Dlaczego Pillow instaluje się bez kompilatora (wheele *manylinux*: paczki pip z już skompilowanym kodem C)?
 
 ### 3. Wdrożenie i czas do Ready
 
@@ -57,13 +57,13 @@ Wygeneruj mema w przeglądarce — teraz to PNG.
 Nowy węzeł nie ma obrazu w cache. `NOWY_WEZEL=1` symuluje to: gdy usługa zejdzie do zera, skrypt usuwa obraz z węzła kind (`crictl rmi`), więc pierwsze żądanie czeka też na pobranie obrazu.
 
 ```bash
-NOWY_WEZEL=1 tools/coldstart.sh meme-gen memeops /api/memes POST '{"top":"zimny","bottom":"start"}'
-tools/coldstart.sh meme-gen memeops /api/memes POST '{"top":"zimny","bottom":"start"}'   # obraz już w cache
+NOWY_WEZEL=1 tools/coldstart.sh meme-gen memeops /api/memes POST '{"top":"cold","bottom":"start"}'
+tools/coldstart.sh meme-gen memeops /api/memes POST '{"top":"cold","bottom":"start"}'   # obraz już w cache
 ```
 
 Powtórz dla obrazu `2.0.0-full` (`kn service update meme-gen -n memeops --image localhost:5001/meme-gen:2.0.0-full`, potem oba pomiary). Uzupełnij tabelę z LAB 2:
 
-| Pomiar | Rozmiar obrazu | Czas do Ready | Zimny, bez obrazu na węźle | Zimny, obraz w cache | Ciepły |
+| Pomiar | Rozmiar obrazu | Czas do Ready | Cold, bez obrazu na węźle | Cold, obraz w cache | Warm |
 |---|---|---|---|---|---|
 | meme-api v1 (lab02) | | — | — | | |
 | meme-gen 2.0.0-full | | | | | |
@@ -78,7 +78,7 @@ Z czego składa się cold start i który składnik zależy od rozmiaru obrazu? C
 ## SUKCES
 
 - [ ] `meme-gen` generuje PNG na obrazie `2.0.0`
-- [ ] tabela ma pomiary dla obu obrazów, w tym zimny start bez obrazu na węźle
+- [ ] tabela ma pomiary dla obu obrazów, w tym cold start bez obrazu na węźle
 - [ ] umiesz wskazać, ile cold startu „zjada” pobieranie obrazu
 
 ## Dla chętnych
@@ -89,7 +89,7 @@ Z czego składa się cold start i który składnik zależy od rozmiaru obrazu? C
 ## Dogoń grupę
 
 ```bash
-tools/dogon.sh lab04
+tools/start-lab.sh lab04            # tylko jeśli LAB 3 nie skończony (usuwa Twoje rewizje meme-api i meme-gen)
 ```
 
 **Koniec dnia 1 — cliffhanger:** „Jutro keynote. Przyjdzie 500 osób naraz. Wytrzymamy?”

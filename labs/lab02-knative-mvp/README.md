@@ -1,10 +1,10 @@
 # lab02 — MVP MemeOps na Knative
 
-| Dzień | Czas | Po bloku |
-|---|---|---|
-| 1 | 45 min | 1.4 Knative: CLI, API, rewizje, cold start |
+| Dzień | Po bloku |
+|---|---|
+| 1 | 1.4 Knative: CLI, API, rewizje, cold start |
 
-> **Zgłoszenie od PO:** „Wdrażamy MVP: mem tekstowy z adresu URL. Organizator chce nową wersję z emoji, ale tylko dla części ludzi, i chce móc wycofać ją w sekundę.”
+> **Zgłoszenie od PO:** „Wdrażamy MVP: mem tekstowy z adresu URL. Organizator chce nową wersję z emoji, ale tylko dla części ludzi, i chce móc zrobić rollback w sekundę.”
 
 **Cel:** wdrażasz usługę Knative z YAML i z `kn`, dzielisz ruch między rewizje, cofasz zmianę i mierzysz cold start.
 
@@ -12,13 +12,13 @@
 
 ## Kroki
 
-| # | Co robisz | Czas |
-|---|---|---|
-| 1 | Wdrożenie z YAML | 7 min |
-| 2 | Anatomia: co powstało | 8 min |
-| 3 | v2 z emoji dla 20% ruchu | 10 min |
-| 4 | Rollback i tag „kandydat” | 5 min |
-| 5 | Pomiar cold startu | 15 min |
+| # | Co robisz |
+|---|---|
+| 1 | Wdrożenie z YAML |
+| 2 | Anatomia: co powstało |
+| 3 | v2 z emoji dla 20% ruchu |
+| 4 | Rollback i tag „kandydat” |
+| 5 | Pomiar cold startu |
 
 ### 1. Wdrożenie z YAML
 
@@ -71,7 +71,7 @@ tools/coldstart.sh meme-api
 
 Skrypt czeka, aż usługa zejdzie do zera podów (ok. 1–2 min), i mierzy pierwsze żądanie oraz trzy kolejne. Wpisz wyniki do tabeli — porównamy je w LAB 4:
 
-| Pomiar | Zimny (ms) | Ciepły (ms) |
+| Pomiar | Cold (ms) | Warm (ms) |
 |---|---|---|
 | meme-api v1 (lab02) | | |
 
@@ -86,13 +86,14 @@ kn service update meme-api -n memeops --scale-min 0
 ## SUKCES
 
 - [ ] `kn revision list -n memeops` pokazuje `meme-api-v1` (100%) i `meme-api-v2` z tagiem `kandydat`
-- [ ] masz w tabeli zmierzony cold start i ciepłe żądania
+- [ ] masz w tabeli zmierzony cold start i warm requesty
 - [ ] umiesz wyjaśnić, kto odebrał pierwsze żądanie, gdy usługa miała zero podów
 
 ## Dla chętnych
 
 - Zmień tylko zmienną środowiskową: `kn service update meme-api -n memeops --env GREETING="Witaj na konferencji"`. Ile rewizji przybyło i komu poszedł ruch? (Podpowiedź: ruch jest przypięty do nazw rewizji.)
 - `kubectl get cm config-autoscaler -n knative-serving -o yaml | grep -A2 scale-to-zero` — które ustawienie skróci czekanie na zero?
+- Kroki 3–4 jeszcze raz, ale w YAML-u zamiast `kn` (tak, jak trzymasz to w repo przy GitOps): [`demo/01-serverless-60s/krok-po-kroku/`](../../demo/01-serverless-60s/krok-po-kroku/). Jest tam też ściąga ze wszystkimi ważniejszymi opcjami Knative Service.
 
 ## Dogoń grupę
 
@@ -105,3 +106,5 @@ Stan startowy labu = gotowa platforma z LAB 1 (`setup/check.sh`).
 | `curl: Could not resolve host` | brak DNS do sslip.io: `curl -H "Host: meme-api.memeops.127.0.0.1.sslip.io" http://127.0.0.1/` |
 | usługa `READY Unknown` dłużej niż minutę | `kubectl describe revision -n memeops` i `kubectl get pods -n memeops` |
 | `ErrImagePull` | czy `setup/platform.sh` zbudował obrazy: `curl localhost:5001/v2/meme-api/tags/list` |
+| drugi `kubectl apply -f …/meme-api.yaml` kończy się `denied the request: Saw the following changes without a name change` | usługa już jest, idź dalej. Knative dopisał do szablonu wartości domyślne (`name: user-container`, probe), a plik ich nie ma, więc dla webhooka to zmiana rewizji `meme-api-v1` bez zmiany nazwy. Od nowa: `kubectl delete ksvc meme-api -n memeops` i `apply` |
+| `kn service …` bez `-n memeops` | `kn` bierze namespace z bieżącego kontekstu `kubectl`, nie z pliku: zawsze podawaj `-n` |

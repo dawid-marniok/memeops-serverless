@@ -1,0 +1,17 @@
+# Demo 01: najmniejsza sensowna usługa Knative. Ustawienia przyspieszone, żeby zejście do zera było widać na żywo.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: pierwsza
+  namespace: demo
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/window: "10s"       # okno uśredniania ruchu (domyślnie 60 s): szybciej zauważy brak ruchu
+    spec:
+      timeoutSeconds: 15                            # = czas na dokończenie żądań przy wyłączaniu poda (domyślnie 300 s)
+      containers:
+        - image: localhost:5001/meme-api:v1
+          env:
+            - {name: GREETING, value: "Pierwsza funkcja na Knative"}

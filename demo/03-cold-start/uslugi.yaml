@@ -1,0 +1,34 @@
+# Demo 03: dwie identyczne usługi, różnią się tylko target-burst-capacity.
+#   przez-activator  — ustawienie domyślne: przy małym ruchu activator zostaje w ścieżce żądania (SKS w trybie Proxy)
+#   bezposrednio     — target-burst-capacity 0: gdy pod działa, Kourier wysyła ruch prosto do poda (tryb Serve)
+# Przy zerze podów obie są w trybie Proxy: ktoś musi przytrzymać żądanie, zanim pod wstanie. To robi activator.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: przez-activator
+  namespace: demo
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/window: "10s"
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - image: localhost:5001/meme-api:v2
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: bezposrednio
+  namespace: demo
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/window: "10s"
+        autoscaling.knative.dev/target-burst-capacity: "0"   # nie trzymaj zapasu na skoki ruchu w activatorze
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - image: localhost:5001/meme-api:v2

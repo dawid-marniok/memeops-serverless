@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knative a zwykły Kubernetes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Układ: jedna kolumna tekstu (~70 znaków), diagramy na pełną szerokość 1200 z przewijaniem w poziomie na telefonie.
+   Kolor = kto dostarcza element (Kubernetes / Knative / inny), kształt = obiekt w API (zaokrąglony) albo działający proces (kanciasty). */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --k8s: #2f5fa7;
+  --k8s-bg: #e7eef9;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --traffic: #0f6d6a;
+  --cold: #b0306a;
+  --ctrl: #6b675e;
+  --metric: #6d4bb0;
+  --zone: #efede6;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --traffic: #5cc4bd; --cold: #ee7fae; --ctrl: #a3a097; --metric: #b39cf0; --zone: #1a1d1c; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --traffic: #5cc4bd; --cold: #ee7fae; --ctrl: #a3a097; --metric: #b39cf0; --zone: #1a1d1c; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-block: 32px 96px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.prose { max-width: 760px; }
+header.hero { margin-bottom: 28px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+
+figure.diagram { margin: 18px 0 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.toolbar span { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.toolbar button {
+  font: inherit; font-size: 13px; cursor: pointer;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
+}
+.toolbar button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.toolbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.scroll svg { display: block; width: 100%; min-width: 980px; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; max-width: 900px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 13.5px; margin: 14px 0 4px; }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.sw { width: 30px; height: 18px; border-radius: 5px; flex: none; }
+.sw.k8s { background: var(--k8s-bg); border: 1.5px solid var(--k8s); }
+.sw.kn { background: var(--kn-bg); border: 1.5px solid var(--kn); }
+.sw.kni { background: var(--kni-bg); border: 1.5px dashed var(--kn); }
+.sw.proc { background: var(--surface); border: 2.5px solid var(--text); border-radius: 2px; }
+.ln { width: 34px; height: 0; flex: none; }
+.ln.traffic { border-top: 3px solid var(--traffic); }
+.ln.cold { border-top: 3px solid var(--cold); }
+.ln.ctrl { border-top: 2px dashed var(--ctrl); }
+.ln.metric { border-top: 2.5px dotted var(--metric); }
+
+/* SVG */
+svg text { font-family: var(--sans); }
+.zone rect { fill: var(--zone); stroke: var(--line); }
+.zone text { font-size: 11px; font-weight: 700; letter-spacing: .09em; fill: var(--muted); }
+.b .k { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.b .t { font-size: 13.5px; font-weight: 650; fill: var(--text); }
+.b .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.b.k8s rect { fill: var(--k8s-bg); stroke: var(--k8s); stroke-width: 1.3; }
+.b.k8s .k { fill: var(--k8s); }
+.b.kn rect { fill: var(--kn-bg); stroke: var(--kn); stroke-width: 1.3; }
+.b.kn .k, .b.kni .k { fill: var(--kn); }
+.b.kni rect { fill: var(--kni-bg); stroke: var(--kn); stroke-width: 1.3; stroke-dasharray: 5 3; }
+.b.proc rect { fill: var(--surface); stroke-width: 2.5; }
+.b.proc.p-k8s rect { stroke: var(--k8s); }
+.b.proc.p-k8s .k { fill: var(--k8s); }
+.b.proc.p-kn rect { stroke: var(--kn); }
+.b.proc.p-kn .k { fill: var(--kn); }
+.b.proc.p-ext rect { stroke: var(--muted); }
+.b.proc.p-ext .k { fill: var(--muted); }
+.b.ghost rect { fill: none; stroke: var(--muted); stroke-dasharray: 6 4; stroke-width: 1.5; }
+.b.ghost .k { fill: var(--muted); }
+.node rect.nb { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.node .nl { font-size: 12px; font-weight: 700; fill: var(--muted); font-family: var(--mono); }
+.chip rect { fill: var(--surface-2); stroke: var(--line); }
+.chip .t { font-size: 12.5px; font-weight: 650; fill: var(--text); }
+.strip rect { fill: var(--surface-2); stroke: none; }
+.strip text { font-size: 12px; fill: var(--muted); font-family: var(--mono); }
+.strip text b, .strip .em { fill: var(--text); font-weight: 650; }
+.note { font-size: 12px; fill: var(--muted); }
+.note.strong { fill: var(--text); font-weight: 650; }
+
+.a { fill: none; }
+.a.traffic { stroke: var(--traffic); stroke-width: 2.6; }
+.a.cold { stroke: var(--cold); stroke-width: 2.6; }
+.a.ctrl { stroke: var(--ctrl); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.a.metric { stroke: var(--metric); stroke-width: 2; stroke-dasharray: 1 5; stroke-linecap: round; }
+.mk-traffic { fill: var(--traffic); }
+.mk-cold { fill: var(--cold); }
+.mk-ctrl { fill: var(--ctrl); }
+.mk-metric { fill: var(--metric); }
+.lbl { font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.lbl.traffic { fill: var(--traffic); }
+.lbl.cold { fill: var(--cold); }
+.lbl.ctrl { fill: var(--ctrl); }
+.lbl.metric { fill: var(--metric); }
+.badge circle { stroke: var(--surface); stroke-width: 2; }
+.badge.traffic circle { fill: var(--traffic); }
+.badge.cold circle { fill: var(--cold); }
+.badge text { fill: var(--surface); font-size: 11px; font-weight: 800; }
+
+.lay-traffic, .lay-ctrl, .lay-metric { transition: opacity .2s; }
+figure[data-show="traffic"] .lay-ctrl, figure[data-show="traffic"] .lay-metric,
+figure[data-show="ctrl"] .lay-traffic, figure[data-show="ctrl"] .lay-metric,
+figure[data-show="metric"] .lay-traffic, figure[data-show="metric"] .lay-ctrl { opacity: .07; }
+@media (prefers-reduced-motion: reduce) { .lay-traffic, .lay-ctrl, .lay-metric { transition: none; } }
+
+/* Piętra abstrakcji */
+.floors { display: grid; grid-template-columns: 170px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-top: 16px; font-size: 14px; }
+.floors .h { font-weight: 700; font-size: 13px; color: var(--muted); padding: 4px 10px; }
+.floors .lvl { padding: 10px; color: var(--muted); font-size: 13px; line-height: 1.35; }
+.floors .lvl b { display: block; color: var(--text); font-size: 14px; }
+.cell { padding: 10px 12px; border-radius: 8px; line-height: 1.45; min-width: 0; }
+.cell.k8s { background: var(--k8s-bg); border: 1px solid var(--k8s); }
+.cell.kn { background: var(--kn-bg); border: 1px solid var(--kn); }
+.cell.same { background: var(--surface); border: 1px dashed var(--line); color: var(--muted); }
+.cell.none { background: transparent; border: 1px dashed var(--line); color: var(--muted); font-style: italic; }
+.cell code { font-size: 12.5px; }
+
+/* Tabela */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 760px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 22%; }
+table.t3 { min-width: 1000px; }
+table.t3 tbody th { width: 16%; }
+table.t3 td { width: 28%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+.flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-top: 12px; }
+.flow { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 6px; min-width: 0; }
+.flow h3 { margin: 0 0 8px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.flow h3 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.flow ol { padding-left: 20px; margin: 0 0 10px; font-size: 14.5px; }
+.flow li { margin-bottom: 6px; }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre .c { color: var(--code-comment); }
+
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+
+@media (max-width: 640px) {
+  .floors { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .floors .lvl { grid-column: 1 / -1; padding: 12px 0 0; }
+  .floors .h.corner { display: none; }
+}
+</style>
+
+<div class="wrap">
+<header class="hero prose">
+  <div class="eyebrow">Przygotowanie do ćwiczeń · Serverless na Kubernetes</div>
+  <h1>Knative a zwykły Kubernetes</h1>
+  <p class="lede">Dwa diagramy tego samego klastra: co steruje czym, którędy płynie żądanie i kto decyduje o liczbie podów. Knative nie zastępuje Kubernetesa. Dokłada nad nim dwa piętra obiektów i trzy procesy, a na dole dalej pracują Deployment, ReplicaSet, scheduler i kubelet.</p>
+  <div class="meta">
+    <span class="pill">Knative Serving 1.23.0</span>
+    <span class="pill">Kourier (Envoy)</span>
+    <span class="pill">klaster kind <code>memeops</code>, węzeł 1.35</span>
+    <span class="pill">stan na 30.10.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#k8s">Diagram 1: Kubernetes</a>
+    <a href="#knative">Diagram 2: Knative</a>
+    <a href="#pietra">Piętra abstrakcji</a>
+    <a href="#kto">Kto czym steruje</a>
+    <a href="#zadanie">Żądanie krok po kroku</a>
+    <a href="#skalowanie">Skalowanie: HPA i KPA</a>
+    <a href="#bez-zmian">Czego Knative nie rusza</a>
+    <a href="#klaster">Zobacz na klastrze</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Kto tworzy Pody?</div><p>W obu przypadkach <b>ReplicaSet</b>. W Knative Deployment nie piszesz ty: kontroler Knative tworzy go z obiektu <code>Revision</code> (jeden Deployment na rewizję).</p></div>
+    <div class="answer"><div class="q">Kto decyduje o liczbie podów?</div><p>Kubernetes: <b>HPA</b> po CPU/RAM. Knative: <b>autoscaler</b> Knative (KPA) po liczbie równoczesnych żądań. Wynik zapisuje w <code>PodAutoscaler</code>, a potem ustawia <code>replicas</code> w Deploymencie rewizji. HPA w ogóle nie bierze udziału.</p></div>
+    <div class="answer"><div class="q">Czy ruch idzie przez zwykłe Service’y?</div><p>Service’y są, ale służą głównie jako <b>książka adresowa</b> (Endpoints). Envoy (Kourier) i activator czytają z nich adresy IP i łączą się wprost z podem. ClusterIP i kube-proxy są tylko na wejściu do Envoya.</p></div>
+    <div class="answer"><div class="q">Co jest w ścieżce żądania?</div><p>Kourier (Envoy) → <b>activator</b>, ale tylko przy zerze podów albo za małym zapasie → <b>queue-proxy</b> w podzie → twój kontener. Warm ruch omija activator.</p></div>
+    <div class="answer"><div class="q">Na jakim poziomie działa Knative?</div><p>Nad Deploymentem. Ty piszesz jeden <code>Service</code> (ksvc). Knative rozkłada go na Configuration, Revision i Route, a te na zwykłe Deployment i Service. Węzłów, schedulera i sieci podów nie rusza.</p></div>
+    <div class="answer"><div class="q">Co ze skalowaniem węzłów?</div><p>Tak samo jak w zwykłym klastrze: <b>Cluster Autoscaler</b> (albo Karpenter) dokłada węzeł, gdy pod czeka w Pending. Knative nie ma własnego skalera węzłów.</p></div>
+  </div>
+</section>
+
+<section id="legenda">
+  <h2 class="prose"><span class="num">0</span>Jak czytać diagramy</h2>
+  <p class="prose">Kolor mówi, <b>kto dostarcza</b> element, kształt mówi, <b>czym on jest</b>. Zaokrąglony prostokąt to obiekt w API: wpis w etcd, który sam nic nie robi. Kanciasty prostokąt z grubą ramką to działający proces (pod), który obserwuje obiekty i wykonuje pracę. Przyciskami nad diagramem zostawisz tylko jeden rodzaj strzałek.</p>
+  <div class="legend">
+    <div class="item"><span class="sw k8s"></span>obiekt Kubernetesa</div>
+    <div class="item"><span class="sw kn"></span>obiekt Knative (publiczne API)</div>
+    <div class="item"><span class="sw kni"></span>obiekt wewnętrzny Knative (<code>*.internal.knative.dev</code>)</div>
+    <div class="item"><span class="sw proc"></span>proces / pod (kolor ramki = kto go dostarcza)</div>
+  </div>
+  <div class="legend">
+    <div class="item"><span class="ln traffic"></span>ruch HTTP</div>
+    <div class="item"><span class="ln cold"></span>ruch przez activator (cold start)</div>
+    <div class="item"><span class="ln ctrl"></span>sterowanie: tworzy, czyta, ustawia</div>
+    <div class="item"><span class="ln metric"></span>metryki do decyzji o skali</div>
+  </div>
+</section>
+
+<!-- ============ DIAGRAM 1 ============ -->
+<section id="k8s">
+  <h2 class="prose"><span class="num">1</span>Zwykły Kubernetes: Deployment + Service + Ingress + HPA</h2>
+  <p class="prose">Punkt odniesienia. Wszystko, co tu widzisz, działa też pod Knative. Zwróć uwagę na środkową kolumnę: Ingress, Deployment czy HPA to same opisy. Pracę wykonują procesy z prawej kolumny, a łączy je jeden kanał: kube-apiserver.</p>
+  <figure class="diagram" data-show="all">
+    <div class="toolbar" role="group" aria-label="Pokaż strzałki">
+      <span>Pokaż:</span>
+      <button type="button" data-f="all" aria-pressed="true">wszystko</button>
+      <button type="button" data-f="traffic" aria-pressed="false">ruch</button>
+      <button type="button" data-f="ctrl" aria-pressed="false">sterowanie</button>
+      <button type="button" data-f="metric" aria-pressed="false">metryki</button>
+    </div>
+    <div class="scroll">
+<svg viewBox="0 0 1200 790" role="img" aria-label="Zwykły Kubernetes. Ruch: klient, Service LoadBalancer, kontroler Ingress, Service ClusterIP my-app, trzy pody na dwóch węzłach. Sterowanie: HPA ustawia replicas w Deployment, Deployment tworzy ReplicaSet, ReplicaSet tworzy pody. Metryki: kubelet do metrics-server do kube-controller-manager.">
+  <defs>
+    <marker id="d1-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="d1-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-metric" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <!-- strefy -->
+  <g class="zone"><rect x="20" y="20" width="280" height="430" rx="12"/><text x="36" y="42">ŚCIEŻKA RUCHU</text></g>
+  <g class="zone"><rect x="320" y="20" width="480" height="430" rx="12"/><text x="336" y="42">OBIEKTY W API: SAME OPISY</text></g>
+  <g class="zone"><rect x="820" y="20" width="360" height="430" rx="12"/><text x="836" y="42">CONTROL PLANE I DODATKI</text></g>
+  <g class="zone"><rect x="20" y="470" width="1160" height="300" rx="12"/><text x="36" y="492">WĘZŁY ROBOCZE</text></g>
+
+  <!-- ścieżka ruchu -->
+  <g class="b proc p-ext"><rect x="40" y="58" width="240" height="44" rx="3"/><text class="t" x="52" y="78">Klient</text><text class="s" x="52" y="94">przeglądarka · curl · system</text></g>
+  <g class="b k8s"><rect x="40" y="128" width="240" height="56" rx="10"/><text class="k" x="52" y="145">Service · LoadBalancer / NodePort</text><text class="t" x="52" y="162">ingress-controller</text><text class="s" x="52" y="177">wejście do klastra</text></g>
+  <g class="b proc p-ext"><rect x="40" y="212" width="240" height="56" rx="3"/><text class="k" x="52" y="229">POD · KONTROLER INGRESS / GATEWAY</text><text class="t" x="52" y="246">Traefik, Envoy Gateway…</text><text class="s" x="52" y="261">proxy L7: host + ścieżka</text></g>
+  <g class="b k8s"><rect x="40" y="300" width="240" height="64" rx="10"/><text class="k" x="52" y="317">Service · ClusterIP</text><text class="t" x="52" y="334">my-app  10.96.41.7</text><text class="s" x="52" y="350">wirtualny IP, bez procesu</text></g>
+
+  <!-- obiekty -->
+  <g class="b k8s"><rect x="340" y="212" width="190" height="56" rx="10"/><text class="k" x="352" y="229">Ingress / HTTPRoute</text><text class="t" x="352" y="246">my-app</text><text class="s" x="352" y="261">app.example.com</text></g>
+  <g class="b k8s"><rect x="340" y="304" width="190" height="56" rx="10"/><text class="k" x="352" y="321">EndpointSlice</text><text class="t" x="352" y="338">my-app-x7k2p</text><text class="s" x="352" y="353">IP gotowych podów</text></g>
+  <g class="b k8s"><rect x="560" y="58" width="200" height="56" rx="10"/><text class="k" x="572" y="75">HorizontalPodAutoscaler</text><text class="t" x="572" y="92">my-app</text><text class="s" x="572" y="107">CPU 70% · 2–10 podów</text></g>
+  <g class="b k8s"><rect x="560" y="148" width="200" height="56" rx="10"/><text class="k" x="572" y="165">Deployment</text><text class="t" x="572" y="182">my-app</text><text class="s" x="572" y="197">replicas: 3 · szablon</text></g>
+  <g class="b k8s"><rect x="560" y="238" width="200" height="56" rx="10"/><text class="k" x="572" y="255">ReplicaSet</text><text class="t" x="572" y="272">my-app-7d9f8</text><text class="s" x="572" y="287">pilnuje liczby podów</text></g>
+  <text class="note" x="340" y="398">Obiekt nic nie robi. Pracuje kontroler,</text>
+  <text class="note" x="340" y="415">który go obserwuje i doprowadza świat do opisu.</text>
+
+  <!-- control plane -->
+  <g class="b proc p-k8s"><rect x="840" y="58" width="320" height="56" rx="3"/><text class="k" x="852" y="75">CONTROL PLANE</text><text class="t" x="852" y="92">kube-apiserver + etcd</text><text class="s" x="852" y="107">wszyscy czytają i piszą tylko tu</text></g>
+  <g class="b proc p-k8s"><rect x="840" y="134" width="320" height="70" rx="3"/><text class="k" x="852" y="151">CONTROL PLANE</text><text class="t" x="852" y="168">kube-controller-manager</text><text class="s" x="852" y="184">pętle: deployment · replicaset</text><text class="s" x="852" y="198">HPA · endpointslice · node</text></g>
+  <g class="b proc p-ext"><rect x="840" y="218" width="150" height="56" rx="3"/><text class="k" x="852" y="235">DODATEK</text><text class="t" x="852" y="252">Cluster Autoscaler</text><text class="s" x="852" y="267">dokłada węzły</text></g>
+  <g class="b proc p-ext"><rect x="1010" y="218" width="150" height="56" rx="3"/><text class="k" x="1022" y="235">DODATEK, OPCJA</text><text class="t" x="1022" y="252">VPA</text><text class="s" x="1022" y="267">zmienia requests</text></g>
+  <g class="b proc p-k8s"><rect x="840" y="300" width="150" height="56" rx="3"/><text class="k" x="852" y="317">CONTROL PLANE</text><text class="t" x="852" y="334">kube-scheduler</text><text class="s" x="852" y="349">wybiera węzeł</text></g>
+  <g class="b proc p-ext"><rect x="1010" y="300" width="150" height="56" rx="3"/><text class="k" x="1022" y="317">KUBE-SYSTEM</text><text class="t" x="1022" y="334">metrics-server</text><text class="s" x="1022" y="349">CPU/RAM podów</text></g>
+  <text class="note" x="840" y="396">Na memeops metrics-server nie jest</text>
+  <text class="note" x="840" y="413">zainstalowany, więc HPA nie miałby danych.</text>
+  <text class="note" x="840" y="430">KPA z Knative go nie potrzebuje.</text>
+
+  <!-- węzły -->
+  <g class="node"><rect class="nb" x="40" y="500" width="560" height="250" rx="10"/><text class="nl" x="56" y="520">node: worker-1</text></g>
+  <g class="node"><rect class="nb" x="620" y="500" width="540" height="250" rx="10"/><text class="nl" x="636" y="520">node: worker-2</text></g>
+
+  <g class="b k8s"><rect x="60" y="540" width="250" height="96" rx="10"/><text class="k" x="72" y="557">Pod</text><text class="t" x="72" y="574">my-app-7d9f8-abc12</text></g>
+  <g class="chip"><rect x="72" y="590" width="226" height="32" rx="6"/><text class="t" x="84" y="611">kontener app  :8080</text></g>
+  <g class="b k8s"><rect x="330" y="540" width="250" height="96" rx="10"/><text class="k" x="342" y="557">Pod</text><text class="t" x="342" y="574">my-app-7d9f8-def34</text></g>
+  <g class="chip"><rect x="342" y="590" width="226" height="32" rx="6"/><text class="t" x="354" y="611">kontener app  :8080</text></g>
+  <g class="b k8s"><rect x="640" y="540" width="250" height="96" rx="10"/><text class="k" x="652" y="557">Pod</text><text class="t" x="652" y="574">my-app-7d9f8-ghi56</text></g>
+  <g class="chip"><rect x="652" y="590" width="226" height="32" rx="6"/><text class="t" x="664" y="611">kontener app  :8080</text></g>
+  <g class="b ghost"><rect x="910" y="540" width="160" height="96" rx="10"/><text class="k" x="922" y="557">Pod · Pending</text><text class="t" x="922" y="574">my-app-…-q9z</text><text class="s" x="922" y="596">brak miejsca</text><text class="s" x="922" y="613">→ Cluster</text><text class="s" x="922" y="628">  Autoscaler</text></g>
+
+  <g class="strip"><rect x="60" y="652" width="520" height="82" rx="6"/>
+    <text x="74" y="674"><tspan class="em">kubelet</tspan> uruchamia kontenery przez containerd (CRI)</text>
+    <text x="74" y="694"><tspan class="em">kube-proxy</tspan> ClusterIP → IP podów (nftables/iptables)</text>
+    <text x="74" y="714"><tspan class="em">CNI</tspan> sieć podów, każdy pod ma własny IP</text>
+  </g>
+  <g class="strip"><rect x="640" y="652" width="500" height="82" rx="6"/>
+    <text x="654" y="674"><tspan class="em">kubelet</tspan> · containerd · <tspan class="em">kube-proxy</tspan> · <tspan class="em">CNI</tspan></text>
+    <text x="654" y="694">to samo na każdym węźle</text>
+    <text x="654" y="714">kubelet wystawia też CPU/RAM podów</text>
+  </g>
+
+  <!-- RUCH -->
+  <g class="lay-traffic">
+    <path class="a traffic" marker-end="url(#d1-t)" d="M160 102 V126"/>
+    <path class="a traffic" marker-end="url(#d1-t)" d="M160 184 V210"/>
+    <path class="a traffic" marker-end="url(#d1-t)" d="M160 268 V298"/>
+    <path class="a traffic" marker-end="url(#d1-t)" d="M160 364 V538"/>
+    <path class="a traffic" marker-end="url(#d1-t)" d="M160 456 H450 V538"/>
+    <path class="a traffic" marker-end="url(#d1-t)" d="M450 456 H720 V538"/>
+    <text class="lbl traffic" x="176" y="378">kube-proxy wybiera gotowy pod</text>
+  </g>
+
+  <!-- STEROWANIE -->
+  <g class="lay-ctrl">
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M340 240 H284"/>
+    <text class="lbl ctrl" x="312" y="232" text-anchor="middle">czyta</text>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M280 332 H337"/>
+    <text class="lbl ctrl" x="309" y="324" text-anchor="middle">selektor</text>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M660 114 V145"/>
+    <text class="lbl ctrl" x="668" y="135">ustawia replicas</text>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M660 204 V235"/>
+    <text class="lbl ctrl" x="668" y="225">tworzy (rollout)</text>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M680 294 V484 H270 V538"/>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M550 484 V538"/>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M680 484 H860 V538"/>
+    <text class="lbl ctrl" x="690" y="478">tworzy Pody (ownerReference)</text>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M840 166 H784"/>
+    <text class="lbl ctrl" x="811" y="158" text-anchor="middle">watch</text>
+    <path class="a ctrl" marker-end="url(#d1-c)" d="M915 356 V497"/>
+    <text class="lbl ctrl" x="923" y="420">nodeName</text>
+  </g>
+
+  <!-- METRYKI -->
+  <g class="lay-metric">
+    <path class="a metric" marker-end="url(#d1-m)" d="M1100 652 V359"/>
+    <text class="lbl metric" x="1108" y="430">CPU/RAM</text>
+    <path class="a metric" marker-end="url(#d1-m)" d="M1160 328 H1172 V180 H1163"/>
+    <text class="lbl metric" x="1100" y="208" text-anchor="middle">metrics.k8s.io → HPA</text>
+  </g>
+</svg>
+    </div>
+    <figcaption>HPA to tylko obiekt z celem. Liczy pętla HPA w kube-controller-manager: co 15 s pobiera CPU/RAM z metrics-server i zapisuje nowe <code>replicas</code> w Deploymencie. Kontroler Ingress zwykle też omija ClusterIP. Bierze adresy z EndpointSlice i łączy się wprost z podem, a ClusterIP obsługuje ruch między podami w klastrze. Ten wzorzec zobaczysz za chwilę w Knative.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ DIAGRAM 2 ============ -->
+<section id="knative">
+  <h2 class="prose"><span class="num">2</span>Knative Serving z Kourierem</h2>
+  <p class="prose">Ten sam klaster po <code>kn service create my-app</code>. Piszesz jeden obiekt (pomarańczowy na górze), a Knative rozkłada go na resztę. Dolna część zostaje taka sama jak na diagramie 1: Deployment rewizji tworzy ReplicaSet, a ten Pody. Zmienia się to, <b>kto ustawia replicas</b> i <b>którędy wchodzi ruch</b>.</p>
+  <figure class="diagram" data-show="all">
+    <div class="toolbar" role="group" aria-label="Pokaż strzałki">
+      <span>Pokaż:</span>
+      <button type="button" data-f="all" aria-pressed="true">wszystko</button>
+      <button type="button" data-f="traffic" aria-pressed="false">ruch</button>
+      <button type="button" data-f="ctrl" aria-pressed="false">sterowanie</button>
+      <button type="button" data-f="metric" aria-pressed="false">metryki</button>
+    </div>
+    <div class="scroll">
+<svg viewBox="0 0 1200 1012" role="img" aria-label="Knative Serving. Ruch: klient, Service kourier, gateway Envoy; ścieżka A przez activator przy zerze podów, ścieżka B prosto do podów. W podzie queue-proxy przekazuje do user-container. Sterowanie: ksvc tworzy Configuration i Route; Configuration tworzy Revision; Revision tworzy PodAutoscaler i Deployment; PodAutoscaler steruje SKS, który ustawia Endpoints usług rewizji; Route tworzy KIngress czytany przez net-kourier-controller. Metryki: queue-proxy i activator do autoscalera, autoscaler ustawia skalę w PodAutoscaler.">
+  <defs>
+    <marker id="d2-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="d2-x" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-cold" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="d2-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-metric" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <!-- strefy -->
+  <g class="zone"><rect x="20" y="20" width="280" height="620" rx="12"/><text x="36" y="42">ŚCIEŻKA RUCHU</text></g>
+  <g class="zone"><rect x="320" y="20" width="480" height="620" rx="12"/><text x="336" y="42">OBIEKTY W API</text></g>
+  <g class="zone"><rect x="820" y="20" width="360" height="620" rx="12"/><text x="836" y="42">PODY KNATIVE · knative-serving</text></g>
+  <g class="zone"><rect x="20" y="722" width="1160" height="200" rx="12"/><text x="36" y="744">WĘZŁY ROBOCZE</text></g>
+
+  <!-- ścieżka ruchu -->
+  <g class="b proc p-ext"><rect x="40" y="58" width="240" height="44" rx="3"/><text class="t" x="52" y="78">Klient</text><text class="s" x="52" y="94">my-app.memeops.127.0.0.1.sslip.io</text></g>
+  <g class="b k8s"><rect x="40" y="124" width="240" height="56" rx="10"/><text class="k" x="52" y="141">Service · NodePort (kind)</text><text class="t" x="52" y="158">kourier  80 → 31080</text><text class="s" x="52" y="173">kourier-system</text></g>
+  <g class="b proc p-kn"><rect x="40" y="204" width="240" height="60" rx="3"/><text class="k" x="52" y="221">POD · KOURIER-SYSTEM</text><text class="t" x="52" y="238">3scale-kourier-gateway</text><text class="s" x="52" y="254">Envoy: Host → rewizja, %</text></g>
+  <g class="b proc p-kn"><rect x="100" y="296" width="180" height="56" rx="3"/><text class="k" x="112" y="313">POD · KNATIVE-SERVING</text><text class="t" x="112" y="330">net-kourier-controller</text><text class="s" x="112" y="345">KIngress → Envoy</text></g>
+  <g class="b proc p-kn"><rect x="40" y="400" width="240" height="60" rx="3"/><text class="k" x="52" y="417">POD · KNATIVE-SERVING</text><text class="t" x="52" y="434">activator</text><text class="s" x="52" y="450">trzyma żądania przy 0 podów</text></g>
+  <text class="note strong" x="104" y="498">A: SKS w trybie Proxy</text>
+  <text class="note" x="104" y="514">0 podów / mały zapas</text>
+  <text class="note" x="104" y="530">idzie przez activator</text>
+  <text class="note strong" x="104" y="558">B: SKS w trybie Serve</text>
+  <text class="note" x="104" y="574">Envoy prosto na IP</text>
+  <text class="note" x="104" y="590">podów, bez kube-proxy</text>
+
+  <!-- obiekty: ksvc -->
+  <g class="b kn"><rect x="340" y="58" width="440" height="56" rx="10"/><text class="k" x="352" y="75">Service (ksvc) · serving.knative.dev/v1</text><text class="t" x="352" y="92">my-app: tylko ten obiekt piszesz ty</text><text class="s" x="352" y="107">kn service create / kubectl apply</text></g>
+  <!-- lewa kolumna: routing -->
+  <g class="b kn"><rect x="340" y="150" width="200" height="56" rx="10"/><text class="k" x="352" y="167">Route</text><text class="t" x="352" y="184">my-app</text><text class="s" x="352" y="199">URL + traffic split</text></g>
+  <g class="b kni"><rect x="340" y="236" width="200" height="56" rx="10"/><text class="k" x="352" y="253">Ingress (KIngress) · internal</text><text class="t" x="352" y="270">my-app</text><text class="s" x="352" y="285">dla wtyczki sieci</text></g>
+  <g class="b k8s"><rect x="340" y="322" width="200" height="56" rx="10"/><text class="k" x="352" y="339">Service · ExternalName</text><text class="t" x="352" y="356">my-app</text><text class="s" x="352" y="371">→ kourier-internal</text></g>
+  <g class="b kni"><rect x="340" y="408" width="200" height="56" rx="10"/><text class="k" x="352" y="425">ServerlessService · internal</text><text class="t" x="352" y="442">my-app-00001</text><text class="s" x="352" y="457">tryb: Serve | Proxy</text></g>
+  <g class="b k8s"><rect x="340" y="492" width="200" height="56" rx="10"/><text class="k" x="352" y="509">Service · bez selektora</text><text class="t" x="352" y="526">my-app-00001</text><text class="s" x="352" y="541">IP: activator | pody</text></g>
+  <g class="b k8s"><rect x="340" y="572" width="200" height="56" rx="10"/><text class="k" x="352" y="589">Service · z selektorem</text><text class="t" x="352" y="606">my-app-00001-private</text><text class="s" x="352" y="621">IP podów rewizji</text></g>
+  <!-- prawa kolumna: rewizja -->
+  <g class="b kn"><rect x="580" y="150" width="200" height="56" rx="10"/><text class="k" x="592" y="167">Configuration</text><text class="t" x="592" y="184">my-app</text><text class="s" x="592" y="199">aktualny szablon</text></g>
+  <g class="b kn"><rect x="580" y="236" width="200" height="56" rx="10"/><text class="k" x="592" y="253">Revision</text><text class="t" x="592" y="270">my-app-00001</text><text class="s" x="592" y="285">niezmienna migawka</text></g>
+  <g class="b kni"><rect x="580" y="336" width="200" height="56" rx="10"/><text class="k" x="592" y="353">PodAutoscaler (kpa) · internal</text><text class="t" x="592" y="370">my-app-00001</text><text class="s" x="592" y="385">desiredScale</text></g>
+  <g class="b k8s"><rect x="580" y="436" width="200" height="56" rx="10"/><text class="k" x="592" y="453">Deployment</text><text class="t" x="592" y="470">my-app-00001-deployment</text><text class="s" x="592" y="485">replicas ← KPA, nie HPA</text></g>
+  <g class="b k8s"><rect x="580" y="522" width="200" height="56" rx="10"/><text class="k" x="592" y="539">ReplicaSet</text><text class="t" x="592" y="556">…-deployment-5c8f</text><text class="s" x="592" y="571">jak w diagramie 1</text></g>
+
+  <!-- pody Knative -->
+  <g class="b proc p-kn"><rect x="840" y="58" width="320" height="72" rx="3"/><text class="k" x="852" y="75">POD · KNATIVE-SERVING</text><text class="t" x="852" y="92">controller</text><text class="s" x="852" y="108">ksvc, Configuration, Revision,</text><text class="s" x="852" y="123">Route, SKS → tworzy obiekty niżej</text></g>
+  <g class="b proc p-kn"><rect x="840" y="150" width="320" height="48" rx="3"/><text class="t" x="852" y="170">webhook</text><text class="s" x="852" y="187">walidacja + wartości domyślne</text></g>
+  <text class="note" x="840" y="238">Kontrolery Knative to zwykłe pody.</text>
+  <text class="note" x="840" y="255">Obserwują obiekty przez kube-apiserver,</text>
+  <text class="note" x="840" y="272">tak jak kube-controller-manager.</text>
+  <text class="note" x="840" y="296">CRD rejestrują nowe typy w API.</text>
+  <g class="b proc p-kn"><rect x="840" y="316" width="320" height="80" rx="3"/><text class="k" x="852" y="333">POD · KNATIVE-SERVING</text><text class="t" x="852" y="350">autoscaler (KPA)</text><text class="s" x="852" y="367">liczy pody ze concurrency</text><text class="s" x="852" y="383">reconciler KPA: Deployment, SKS</text></g>
+  <g class="b ghost"><rect x="990" y="424" width="170" height="196" rx="10"/>
+    <text class="k" x="1002" y="444">KPA W PIGUŁCE</text>
+    <text class="s" x="1002" y="466">metryka:</text>
+    <text class="s" x="1002" y="483">concurrency</text>
+    <text class="s" x="1002" y="500">albo RPS (nie CPU)</text>
+    <text class="s" x="1002" y="522">cel: 100 × 70%</text>
+    <text class="s" x="1002" y="544">okno 60 s</text>
+    <text class="s" x="1002" y="561">panic 6 s</text>
+    <text class="s" x="1002" y="583">min-scale 0 → zero</text>
+    <text class="s" x="1002" y="605">metrics-server: —</text>
+  </g>
+
+  <!-- węzły -->
+  <g class="node"><rect class="nb" x="40" y="752" width="560" height="156" rx="10"/><text class="nl" x="56" y="770">node: worker-1</text></g>
+  <g class="node"><rect class="nb" x="620" y="752" width="540" height="156" rx="10"/><text class="nl" x="636" y="770">node: worker-2</text></g>
+
+  <g class="b k8s"><rect x="56" y="782" width="260" height="114" rx="10"/><text class="k" x="68" y="798">Pod · my-app-00001-deployment-…</text></g>
+  <g class="chip"><rect x="66" y="808" width="112" height="50" rx="6"/><text class="t" x="76" y="829">queue-proxy</text><text class="s" x="76" y="846" style="font-size:11.5px;fill:var(--muted);font-family:var(--mono)">:8012</text></g>
+  <g class="chip"><rect x="194" y="808" width="112" height="50" rx="6"/><text class="t" x="204" y="829">user-</text><text class="t" x="204" y="846">container :8080</text></g>
+  <text class="note" x="68" y="884">sidecar dokłada Knative</text>
+
+  <g class="b k8s"><rect x="330" y="782" width="255" height="114" rx="10"/><text class="k" x="342" y="798">Pod · my-app-00001-deployment-…</text></g>
+  <g class="chip"><rect x="340" y="808" width="112" height="50" rx="6"/><text class="t" x="350" y="829">queue-proxy</text><text class="s" x="350" y="846" style="font-size:11.5px;fill:var(--muted);font-family:var(--mono)">:8012</text></g>
+  <g class="chip"><rect x="464" y="808" width="112" height="50" rx="6"/><text class="t" x="474" y="829">user-</text><text class="t" x="474" y="846">container :8080</text></g>
+
+  <g class="b ghost"><rect x="636" y="782" width="220" height="114" rx="10"/><text class="k" x="648" y="800">REWIZJA my-app-00002</text><text class="t" x="648" y="824">0 podów</text><text class="s" x="648" y="846">scale-to-zero:</text><text class="s" x="648" y="862">Deployment replicas: 0</text><text class="s" x="648" y="880">SKS w trybie Proxy</text></g>
+
+  <g class="b k8s"><rect x="872" y="782" width="272" height="114" rx="10"/><text class="k" x="884" y="798">Pod · my-app-00001-deployment-…</text></g>
+  <g class="chip"><rect x="882" y="808" width="112" height="50" rx="6"/><text class="t" x="892" y="829">queue-proxy</text><text class="s" x="892" y="846" style="font-size:11.5px;fill:var(--muted);font-family:var(--mono)">:8012 · :9090</text></g>
+  <g class="chip"><rect x="1010" y="808" width="124" height="50" rx="6"/><text class="t" x="1020" y="829">user-</text><text class="t" x="1020" y="846">container :8080</text></g>
+
+  <g class="strip"><rect x="20" y="936" width="1160" height="64" rx="10"/>
+    <text x="36" y="960"><tspan class="em">Pod spodem zwykły Kubernetes, bez zmian:</tspan> kube-apiserver · kube-controller-manager (Deployment → ReplicaSet → Pod) · kube-scheduler</text>
+    <text x="36" y="982">kubelet + containerd · kube-proxy + CNI · Cluster Autoscaler (gdy pod z cold startu wisi w Pending, czekasz też na nowy węzeł)</text>
+  </g>
+
+  <!-- RUCH -->
+  <g class="lay-traffic">
+    <path class="a traffic" marker-end="url(#d2-t)" d="M160 102 V122"/>
+    <path class="a traffic" marker-end="url(#d2-t)" d="M160 180 V202"/>
+    <path class="a traffic" marker-end="url(#d2-t)" d="M280 234 H303 V690 H250 V780"/>
+    <path class="a traffic" marker-end="url(#d2-t)" d="M303 690 H520 V780"/>
+    <path class="a traffic" marker-end="url(#d2-t)" d="M520 690 H940 V780"/>
+    <path class="a traffic" marker-end="url(#d2-t)" d="M180 833 H192"/>
+    <path class="a traffic" marker-end="url(#d2-t)" d="M454 833 H462"/>
+    <path class="a traffic" marker-end="url(#d2-t)" d="M996 833 H1008"/>
+    <g class="badge traffic"><circle cx="303" cy="600" r="10"/><text x="303" y="604" text-anchor="middle">B</text></g>
+    <text class="lbl traffic" x="700" y="684" text-anchor="middle">B: Envoy → IP poda z Endpoints usługi my-app-00001</text>
+    <!-- cold path -->
+    <path class="a cold" marker-end="url(#d2-x)" d="M70 264 V398"/>
+    <path class="a cold" marker-end="url(#d2-x)" d="M90 460 V780"/>
+    <path class="a cold" marker-end="url(#d2-x)" d="M90 672 H400 V780"/>
+    <g class="badge cold"><circle cx="70" cy="378" r="10"/><text x="70" y="382" text-anchor="middle">A</text></g>
+    <text class="lbl cold" x="200" y="667" text-anchor="middle">A: activator → pod (z -private)</text>
+  </g>
+
+  <!-- STEROWANIE -->
+  <g class="lay-ctrl">
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M840 92 H783"/>
+    <text class="lbl ctrl" x="811" y="84" text-anchor="middle">watch</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M440 114 V148"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M680 114 V148"/>
+    <text class="lbl ctrl" x="560" y="136" text-anchor="middle">tworzy</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M440 206 V234"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M540 178 C562 178 558 264 578 264"/>
+    <text class="lbl ctrl" x="560" y="224" text-anchor="middle">% ruchu</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M680 206 V234"/>
+    <text class="lbl ctrl" x="688" y="224">zmiana szablonu</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M340 178 H328 V350 H338"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M680 292 V334"/>
+    <text class="lbl ctrl" x="688" y="318">tworzy</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M780 264 H794 V464 H783"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M680 392 V434"/>
+    <text class="lbl ctrl" x="688" y="418">replicas</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M680 492 V520"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M580 364 C560 364 562 436 543 436"/>
+    <text class="lbl ctrl" x="562" y="404" text-anchor="middle">tryb</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M440 464 V490"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M340 436 H328 V600 H338"/>
+    <text class="lbl ctrl" x="448" y="482">Endpoints</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M340 264 H316 V324 H283"/>
+    <text class="lbl ctrl" x="318" y="316" text-anchor="middle">czyta</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M190 296 V267"/>
+    <text class="lbl ctrl" x="198" y="286">xDS</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M680 578 V708 H180 V780"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M560 708 V780"/>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M680 708 H1060 V780"/>
+    <text class="lbl ctrl" x="770" y="702">ReplicaSet tworzy Pody</text>
+    <path class="a ctrl" marker-end="url(#d2-c)" d="M840 364 H783"/>
+    <text class="lbl ctrl" x="811" y="356" text-anchor="middle">skala</text>
+  </g>
+
+  <!-- METRYKI -->
+  <g class="lay-metric">
+    <path class="a metric" marker-end="url(#d2-m)" d="M975 808 V399"/>
+    <text class="lbl metric" x="963" y="530" transform="rotate(-90 963 530)" text-anchor="middle">concurrency z queue-proxy</text>
+    <path class="a metric" marker-end="url(#d2-m)" d="M260 460 V654 H900 V399"/>
+    <text class="lbl metric" x="888" y="530" transform="rotate(-90 888 530)" text-anchor="middle">activator: ruch + „obudź”</text>
+  </g>
+</svg>
+    </div>
+    <figcaption>Ruch wewnątrz klastra (pod woła <code>my-app.memeops.svc.cluster.local</code>) trafia na Service typu ExternalName. DNS zamienia go na <code>kourier-internal</code>, czyli ClusterIP tych samych podów Envoya, i dalej jest jak z zewnątrz. Na rysunku jest jedna rewizja z podami. Druga (<code>my-app-00002</code>) leży z zerem podów i czeka na ruch albo rollback.</figcaption>
+  </figure>
+
+  <div class="callout prose"><b>Odpowiedź na pytanie „czy przez zwykłe Service’y?”</b> Każda rewizja ma dwa zwykłe obiekty Service. <code>my-app-00001-private</code> ma selektor, więc Kubernetes sam wpisuje do niego IP podów. <code>my-app-00001</code> nie ma selektora, a jego Endpoints wypełnia Knative (przez ServerlessService): IP activatora w trybie Proxy, IP podów w trybie Serve. Envoy kieruje ruch na adresy z tej drugiej usługi, więc przełączenie „przez activator / prosto” to podmiana listy adresów, bez ruszania Envoya. Ruch nie przechodzi przez ClusterIP tych usług, więc kube-proxy nie jest w ścieżce między Envoyem a podem.</div>
+</section>
+
+<!-- ============ PIĘTRA ============ -->
+<section id="pietra">
+  <h2 class="prose"><span class="num">3</span>Piętra abstrakcji</h2>
+  <p class="prose">Ten sam stos czytany od góry. Knative dokłada dwa górne piętra. Od piętra „obciążenie i sieć” w dół zostaje to samo, tylko obiekty tworzy kontroler Knative zamiast ciebie.</p>
+  <div class="floors" role="table" aria-label="Piętra abstrakcji: Kubernetes i Knative">
+    <div class="h corner" role="columnheader"></div>
+    <div class="h" role="columnheader">Zwykły Kubernetes</div>
+    <div class="h" role="columnheader">Knative</div>
+
+    <div class="lvl" role="rowheader"><b>Intencja</b>„uruchom tę aplikację pod tym adresem”</div>
+    <div class="cell none" role="cell">brak; składasz z klocków niżej</div>
+    <div class="cell kn" role="cell"><code>Service</code> (ksvc). Jedyny obiekt, który piszesz</div>
+
+    <div class="lvl" role="rowheader"><b>Wersje i ruch</b>historia, podział %, adres</div>
+    <div class="cell k8s" role="cell">rollout w Deploymencie (bez historii z adresami), Ingress / HTTPRoute ręcznie</div>
+    <div class="cell kn" role="cell"><code>Configuration</code> → <code>Revision</code> (niezmienne), <code>Route</code> (%, tagi, URL), <code>DomainMapping</code></div>
+
+    <div class="lvl" role="rowheader"><b>Mechanika serverless</b>skala do zera, przełączanie ścieżki</div>
+    <div class="cell none" role="cell">brak (HPA nie schodzi do 0)</div>
+    <div class="cell kn" role="cell"><code>PodAutoscaler</code>, <code>ServerlessService</code>, <code>KIngress</code>, <code>Metric</code>, <code>Certificate</code></div>
+
+    <div class="lvl" role="rowheader"><b>Obciążenie i sieć</b>obiekty Kubernetesa</div>
+    <div class="cell k8s" role="cell"><code>Deployment</code> → <code>ReplicaSet</code>, <code>Service</code>, <code>EndpointSlice</code>, <code>HPA</code>. Piszesz sam</div>
+    <div class="cell same" role="cell">te same typy, tworzy je Knative: Deployment na rewizję, 2 Service’y na rewizję, ExternalName na ksvc. HPA tylko przy klasie <code>hpa</code></div>
+
+    <div class="lvl" role="rowheader"><b>Pod</b>kontenery</div>
+    <div class="cell k8s" role="cell">twoje kontenery</div>
+    <div class="cell same" role="cell"><code>user-container</code> + wstrzyknięty <code>queue-proxy</code></div>
+
+    <div class="lvl" role="rowheader"><b>Węzeł i klaster</b>infrastruktura</div>
+    <div class="cell k8s" role="cell">kubelet, containerd, kube-proxy, CNI, scheduler, Cluster Autoscaler</div>
+    <div class="cell same" role="cell">identycznie</div>
+  </div>
+</section>
+
+<!-- ============ KTO CZYM ============ -->
+<section id="kto">
+  <h2 class="prose"><span class="num">4</span>Kto czym steruje</h2>
+  <p class="prose">Środkowa kolumna to droga pośrednia, o którą często padają pytania: zwykły Deployment, KEDA do skalowania (także do zera) i Gateway API do canary. Funkcje są podobne jak w Knative, ale każdą część składasz i konfigurujesz sam.</p>
+  <div class="table-wrap">
+    <table class="t3">
+      <thead><tr><th scope="col">Pytanie</th><th scope="col">Zwykły Kubernetes</th><th scope="col">KEDA + Deployment + Gateway API</th><th scope="col">Knative</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Co piszesz</th><td>Deployment, Service, Ingress, HPA (4+ obiekty)</td><td>2× Deployment (v1, v2), 2× Service, HTTPRoute z wagami, 2× ScaledObject (dla HTTP do zera jeszcze HTTPScaledObject)</td><td>jeden <code>Service</code> (ksvc)</td></tr>
+        <tr><th scope="row">Kto tworzy Deployment</th><td>ty</td><td>ty, osobny na każdą wersję</td><td><code>controller</code> Knative z <code>Revision</code>, nazwa <code>&lt;rewizja&gt;-deployment</code></td></tr>
+        <tr><th scope="row">Kto tworzy Pody</th><td>ReplicaSet (deployment controller tworzy ReplicaSet)</td><td>ReplicaSet</td><td>to samo: ReplicaSet z Deploymentu rewizji</td></tr>
+        <tr><th scope="row">Kto liczy, ile ma być podów</th><td>pętla HPA w kube-controller-manager</td><td>1↔N: zwykły HPA, którego KEDA tworzy z ScaledObject. 0↔1: sam operator KEDA</td><td>proces <code>autoscaler</code> w knative-serving; wynik w <code>PodAutoscaler.status.desiredScale</code></td></tr>
+        <tr><th scope="row">Kto zapisuje <code>replicas</code></th><td>HPA przez subresource <code>/scale</code></td><td>HPA przez <code>/scale</code>; przy przejściu 0↔1 operator KEDA</td><td>reconciler KPA (w procesie autoscaler) przez <code>/scale</code> Deploymentu</td></tr>
+        <tr><th scope="row">Skąd metryki</th><td>metrics-server ← kubelet (CPU, RAM); custom metrics przez adapter (np. Prometheus Adapter)</td><td>scalery KEDA: kolejka, lag Kafki, zapytanie do Prometheusa, cron… Do HPA trafiają przez <code>keda-operator-metrics-apiserver</code> (<code>external.metrics.k8s.io</code>)</td><td>queue-proxy w każdym podzie (port 9090) i activator. Bez Prometheusa i metrics-server</td></tr>
+        <tr><th scope="row">Kiedy skaluje</th><td>co 15 s; w dół z 5-minutową stabilizacją</td><td>odpytanie co 30 s (<code>pollingInterval</code>) + HPA co 15 s; do zera po <code>cooldownPeriod</code> (300 s)</td><td>stable window 60 s; panic 6 s przy skoku ruchu (tylko w górę)</td></tr>
+        <tr><th scope="row">Zero podów</th><td>nie (minReplicas ≥ 1; HPAScaleToZero to feature gate alfa)</td><td>tak. Dla HTTP tylko z KEDA HTTP Add-on, bo bez niego nikt nie przytrzyma żądania i Gateway zwraca 503</td><td>tak, domyślnie. Koszt: cold start</td></tr>
+        <tr><th scope="row">Ruch z zewnątrz</th><td>LB → kontroler Ingress/Gateway → pod</td><td>LB → implementacja Gateway (np. Envoy Gateway) → pod; z HTTP Add-on: → interceptor → pod</td><td>LB/NodePort → Kourier (Envoy) → [activator] → queue-proxy → kontener</td></tr>
+        <tr><th scope="row">Czy przez ClusterIP</th><td>między podami tak; kontrolery Ingress zwykle idą wprost na IP z EndpointSlice</td><td>zależy od implementacji Gateway; większość idzie wprost na IP z EndpointSlice</td><td>tylko do Envoya (<code>kourier</code>, <code>kourier-internal</code>). Envoy i activator idą wprost na IP</td></tr>
+        <tr><th scope="row">Kto konfiguruje proxy</th><td>kontroler Ingress czyta Ingress/HTTPRoute</td><td>kontroler implementacji Gateway API czyta Gateway + HTTPRoute</td><td><code>net-kourier-controller</code> czyta KIngress (z Route) i wysyła konfigurację do Envoya po xDS</td></tr>
+        <tr><th scope="row">Wersje i rollback</th><td>nowy ReplicaSet; rollback = <code>rollout undo</code>, czyli nowy rollout</td><td>wersja = twój Deployment; canary = wagi w <code>backendRefs</code>; automatyzacja z analizą metryk: Argo Rollouts / Flagger</td><td>stara rewizja istnieje dalej; rollback = zmiana % w Route, sekundy. Stopniowy rollout tylko według czasu (<code>rollout-duration</code>)</td></tr>
+        <tr><th scope="row">Canary przy zerze podów</th><td>nie dotyczy</td><td>10% ruchu na v2 z 0 podów kończy się błędami, chyba że jest HTTP Add-on albo <code>minReplicaCount: 1</code></td><td>działa: rewizja ma własny PodAutoscaler, activator przytrzymuje żądanie (cold start)</td></tr>
+        <tr><th scope="row">Co może skalować</th><td>Deployment, StatefulSet</td><td>wszystko z <code>/scale</code> + Joby (<code>ScaledJob</code>), także obciążenia bez HTTP</td><td>tylko własne rewizje: bezstanowe kontenery HTTP</td></tr>
+        <tr><th scope="row">Węzły</th><td>Cluster Autoscaler / Karpenter</td><td>to samo</td><td>to samo; Knative nie ma własnego</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout prose"><b>W jednym zdaniu:</b> Knative to w praktyce KEDA HTTP Add-on, rewizje i routing spięte w jeden obiekt, skalujące po concurrency zamiast po zewnętrznej metryce. Za tę wygodę płacisz elastycznością: tylko HTTP i tylko bezstanowe kontenery. Konsumenci kolejek → KEDA. Małe API z ruchem „czasem nic, czasem skok” → Knative. Stały ruch HTTP z porządnym canary → Deployment + HPA/KEDA + Gateway API + Argo Rollouts lub Flagger.</div>
+</section>
+
+<!-- ============ ŻĄDANIE ============ -->
+<section id="zadanie">
+  <h2 class="prose"><span class="num">5</span>Jedno żądanie krok po kroku</h2>
+  <div class="flows">
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--k8s)"></span>Zwykły Kubernetes</h3>
+      <ol>
+        <li>DNS <code>app.example.com</code> → IP load balancera.</li>
+        <li>Service LoadBalancer/NodePort → kube-proxy → pod kontrolera Ingress.</li>
+        <li>Kontroler dopasowuje host i ścieżkę z obiektu Ingress (albo HTTPRoute).</li>
+        <li>Wybiera pod z EndpointSlice usługi <code>my-app</code> i łączy się z jego IP.</li>
+        <li>Pakiet idzie siecią CNI do poda; aplikacja odpowiada.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--traffic)"></span>Knative, warm (ścieżka B)</h3>
+      <ol>
+        <li><code>my-app.memeops.127.0.0.1.sslip.io</code> → 127.0.0.1:80 → NodePort 31080 → kube-proxy → Envoy.</li>
+        <li>Envoy dopasowuje nagłówek Host do trasy z KIngress i losuje rewizję według % z Route.</li>
+        <li>SKS jest w trybie Serve: Endpoints usługi <code>my-app-00001</code> to IP podów. Envoy łączy się z podem na :8012.</li>
+        <li>queue-proxy liczy żądanie do concurrency, pilnuje <code>containerConcurrency</code> i przekazuje na <code>localhost:8080</code>.</li>
+        <li>user-container odpowiada.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--cold)"></span>Knative, cold start (ścieżka A)</h3>
+      <ol>
+        <li>Kroki 1–2 jak obok.</li>
+        <li>SKS jest w trybie Proxy: Endpoints usługi <code>my-app-00001</code> to IP activatora.</li>
+        <li>Activator trzyma żądanie i zgłasza autoskalerowi ruch.</li>
+        <li>Autoscaler: <code>desiredScale</code> 0 → 1; reconciler KPA ustawia <code>replicas: 1</code> w Deploymencie.</li>
+        <li>Dalej zwykły Kubernetes: ReplicaSet → Pod → scheduler → kubelet pobiera obraz, start, readiness.</li>
+        <li>Activator widzi gotowy pod (Endpoints <code>-private</code>) i oddaje wstrzymane żądanie do queue-proxy.</li>
+        <li>Gdy zapas pojemności przekroczy <code>target-burst-capacity</code> (domyślnie 211), SKS przechodzi w Serve i activator wypada ze ścieżki.</li>
+      </ol>
+    </div>
+  </div>
+  <p class="prose">Powrót do zera to ta sama droga od tyłu. Po stable window bez ruchu autoscaler ustawia <code>desiredScale: 0</code>. Najpierw SKS wraca w tryb Proxy, żeby activator przejął ewentualne nowe żądania. Dopiero potem Deployment dostaje <code>replicas: 0</code>. W praktyce pod znika ok. 60–90 s po ostatnim żądaniu.</p>
+</section>
+
+<!-- ============ SKALOWANIE ============ -->
+<section id="skalowanie">
+  <h2 class="prose"><span class="num">6</span>Skalowanie: HPA i KPA obok siebie</h2>
+  <div class="flows">
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--k8s)"></span>Pętla HPA</h3>
+      <ol>
+        <li>kubelet (cAdvisor) mierzy CPU/RAM kontenerów.</li>
+        <li>metrics-server zbiera to z kubeletów i wystawia jako API <code>metrics.k8s.io</code>.</li>
+        <li>Pętla HPA w kube-controller-manager co 15 s liczy <code>ceil(pody × obecne / cel)</code>.</li>
+        <li>Zapisuje wynik w <code>Deployment /scale</code>; deployment i replicaset controller robią resztę.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--kn)"></span>Pętla KPA</h3>
+      <ol>
+        <li>queue-proxy w każdym podzie liczy żądania w locie (concurrency) i RPS.</li>
+        <li>autoscaler pobiera te liczby z queue-proxy (przy wielu podach z próbki). Gdy activator jest w ścieżce, dostaje też dane od niego.</li>
+        <li>Liczy pody = concurrency / (cel × 70%), osobno dla okna 60 s i 6 s.</li>
+        <li>Zapisuje <code>desiredScale</code> w PodAutoscaler. Reconciler KPA ustawia <code>replicas</code> w Deploymencie i tryb SKS.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="callout prose"><b>Pułapka:</b> nie zakładaj własnego HPA na <code>my-app-00001-deployment</code>. KPA i HPA zaczną się przepychać o <code>replicas</code>. Jeśli chcesz skalować po CPU, ustaw w szablonie adnotację <code>autoscaling.knative.dev/class: hpa.autoscaling.knative.dev</code>. Knative sam utworzy wtedy obiekt HPA (wymaga <code>serving-hpa.yaml</code> i metrics-server), ale stracisz scale-to-zero.</div>
+</section>
+
+<!-- ============ BEZ ZMIAN ============ -->
+<section id="bez-zmian" class="prose">
+  <h2><span class="num">7</span>Czego Knative nie rusza</h2>
+  <ul>
+    <li><b>Scheduler, kubelet, containerd.</b> Pod rewizji to zwykły pod. Cold start to w dużej części czas pobrania obrazu i startu procesu, a na to Knative nie ma wpływu.</li>
+    <li><b>CNI i kube-proxy.</b> Sieć podów działa jak wcześniej. kube-proxy obsługuje Service’y Kouriera i ruch między podami, ale nie odcinek Envoy → pod.</li>
+    <li><b>Cluster Autoscaler.</b> Jeśli nowy pod nie mieści się na węzłach, czeka w Pending, aż przyjdzie węzeł. Cold start rośnie wtedy z sekund do minut. Stąd <code>min-scale</code> na usługach wrażliwych na opóźnienie.</li>
+    <li><b>VPA.</b> Rewizja jest niezmienna, więc zmiana <code>requests</code> to nowa rewizja przez ksvc. Integracji VPA z Knative nie testowaliśmy, na szkoleniu VPA nie używamy.</li>
+    <li><b>StatefulSet.</b> Knative Serving nie ma odpowiednika. Rewizje są bezstanowe, a stan trzymasz poza funkcją (MinIO, Redis, baza).</li>
+    <li><b>Eventing</b> jest osobnym modułem: w labach go nie ma, pokazuje go demo 04 (<a href="../06-eventing/index.html">Eventing</a>). Źródło → Broker → Trigger → ksvc. Dostarczenie zdarzenia to zwykły HTTP POST z CloudEventem na adres ksvc, więc wchodzi tą samą ścieżką co na diagramie 2.</li>
+  </ul>
+</section>
+
+<!-- ============ KLASTER ============ -->
+<section id="klaster" class="prose">
+  <h2><span class="num">8</span>Zobacz to na klastrze (tylko odczyt)</h2>
+  <p>Po wdrożeniu dowolnej usługi w <code>memeops</code> każdy prostokąt z diagramu 2 da się znaleźć poleceniem:</p>
+<pre><span class="c"># piętro Knative: publiczne API</span>
+kubectl get ksvc,configuration,revision,route -n memeops
+
+<span class="c"># piętro wewnętrzne: PodAutoscaler, ServerlessService (kolumna MODE: Serve/Proxy), KIngress</span>
+kubectl get kpa,sks,kingress -n memeops
+
+<span class="c"># zwykłe obiekty utworzone przez Knative: Deployment na rewizję, dwa Service'y na rewizję + ExternalName</span>
+kubectl get deploy,rs,svc -n memeops
+kubectl get endpointslices -n memeops -o wide   <span class="c"># porównaj IP z: kubectl get pods -o wide (pody i activator)</span>
+
+<span class="c"># kto jest czyim właścicielem</span>
+kubectl get deploy -n memeops -o custom-columns=NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind
+
+<span class="c"># dwa kontenery w podzie rewizji</span>
+kubectl get pods -n memeops -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.containers[*].name}{"\n"}{end}'
+
+<span class="c"># przełączenie Serve → Proxy na żywo: zostaw usługę bez ruchu na ~90 s</span>
+kubectl get sks -n memeops -w
+
+<span class="c"># CRD, które dokłada Knative</span>
+kubectl get crd | grep knative.dev</pre>
+</section>
+
+<!-- ============ SPRAWDŹ SIĘ ============ -->
+<section id="sprawdz" class="prose">
+  <h2><span class="num">9</span>Sprawdź się</h2>
+  <details><summary>Activator ma 0 replik. Które usługi dalej odpowiadają?</summary><p>Te, których SKS jest w trybie Serve: mają pody i wystarczający zapas, więc Envoy idzie prosto do nich. Usługi przy zerze (i te z activatorem na stałe w ścieżce) nie wstaną, bo nikt nie przytrzyma żądania i nie obudzi autoskalera. Dlatego na produkcji activator ma 2+ repliki i PDB.</p></details>
+  <details><summary>Dlaczego <code>kubectl get svc</code> pokazuje dwie usługi na każdą rewizję?</summary><p><code>-private</code> ma selektor i zawsze zna IP podów (korzysta z niej activator). Usługa bez sufiksu nie ma selektora; jej Endpoints Knative przełącza między activatorem a podami. To jest mechanizm wpinania activatora w ścieżkę.</p></details>
+  <details><summary>Robisz <code>kubectl scale deploy my-app-00001-deployment --replicas=5</code>. Co się stanie?</summary><p>Po chwili reconciler KPA nadpisze replicas wartością z <code>desiredScale</code>. Właścicielem tej liczby jest PodAutoscaler. Liczbę podów zmieniasz adnotacjami <code>min-scale</code> / <code>max-scale</code> w ksvc.</p></details>
+  <details><summary>Gdzie w Knative jest kube-proxy na drodze żądania?</summary><p>Na wejściu do Envoya: NodePort/LoadBalancer <code>kourier</code> z zewnątrz albo ClusterIP <code>kourier-internal</code> z wnętrza klastra. Między Envoyem (albo activatorem) a podem już go nie ma, bo oba łączą się bezpośrednio z IP z Endpoints.</p></details>
+  <details><summary>Zmieniasz ConfigMap, z której usługa czyta zmienne. Powstanie nowa rewizja?</summary><p>Nie. Rewizja powstaje tylko przy zmianie <code>spec.template</code> w ksvc. Pody dostaną nowe wartości dopiero przy restarcie (np. po scale-to-zero i cold starcie).</p></details>
+</section>
+</div>
+
+<script>
+document.querySelectorAll('figure.diagram').forEach(function (fig) {
+  var buttons = fig.querySelectorAll('.toolbar button');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      fig.setAttribute('data-show', btn.dataset.f);
+      buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+    });
+  });
+});
+</script>

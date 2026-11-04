@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knative Eventing w pigułce</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Ten sam system co knative-vs-k8s: jedna kolumna tekstu, diagramy na pełną szerokość z przewijaniem w poziomie na telefonie.
+   Kolor = kto dostarcza element (Knative Eventing / Knative Serving / Kubernetes / inny), kształt = obiekt w API (zaokrąglony) albo działający proces (kanciasty). */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --k8s: #2f5fa7;
+  --k8s-bg: #e7eef9;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --ev: #6d4bb0;
+  --ev-bg: #efe9fa;
+  --traffic: #0f6d6a;
+  --cold: #b0306a;
+  --ctrl: #6b675e;
+  --zone: #efede6;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --ev: #b39cf0; --ev-bg: #241d36;
+    --traffic: #5cc4bd; --cold: #ee7fae; --ctrl: #a3a097; --zone: #1a1d1c; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --ev: #b39cf0; --ev-bg: #241d36;
+  --traffic: #5cc4bd; --cold: #ee7fae; --ctrl: #a3a097; --zone: #1a1d1c; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-block: 32px 96px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.prose { max-width: 760px; }
+header.hero { margin-bottom: 28px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+
+figure.diagram { margin: 18px 0 0; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.scroll svg { display: block; width: 100%; min-width: 980px; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; max-width: 900px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 13.5px; margin: 14px 0 4px; }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.sw { width: 30px; height: 18px; border-radius: 5px; flex: none; }
+.sw.ev { background: var(--ev-bg); border: 1.5px solid var(--ev); }
+.sw.kn { background: var(--kn-bg); border: 1.5px solid var(--kn); }
+.sw.k8s { background: var(--k8s-bg); border: 1.5px solid var(--k8s); }
+.sw.proc { background: var(--surface); border: 2.5px solid var(--text); border-radius: 2px; }
+.sw.ghost { background: none; border: 1.5px dashed var(--muted); }
+.ln { width: 34px; height: 0; flex: none; }
+.ln.traffic { border-top: 3px solid var(--traffic); }
+.ln.ctrl { border-top: 2px dashed var(--ctrl); }
+
+/* SVG */
+svg text { font-family: var(--sans); }
+.zone rect { fill: var(--zone); stroke: var(--line); }
+.zone text { font-size: 11px; font-weight: 700; letter-spacing: .09em; fill: var(--muted); }
+.b .k { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.b .t { font-size: 13.5px; font-weight: 650; fill: var(--text); }
+.b .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.b.ev rect { fill: var(--ev-bg); stroke: var(--ev); stroke-width: 1.3; }
+.b.ev .k { fill: var(--ev); }
+.b.kn rect { fill: var(--kn-bg); stroke: var(--kn); stroke-width: 1.3; }
+.b.kn .k { fill: var(--kn); }
+.b.k8s rect { fill: var(--k8s-bg); stroke: var(--k8s); stroke-width: 1.3; }
+.b.k8s .k { fill: var(--k8s); }
+.b.proc rect { fill: var(--surface); stroke-width: 2.5; }
+.b.proc.p-ev rect { stroke: var(--ev); }
+.b.proc.p-ev .k { fill: var(--ev); }
+.b.proc.p-kn rect { stroke: var(--kn); }
+.b.proc.p-kn .k { fill: var(--kn); }
+.b.proc.p-ext rect { stroke: var(--muted); }
+.b.proc.p-ext .k { fill: var(--muted); }
+.b.ghost rect { fill: none; stroke: var(--muted); stroke-dasharray: 6 4; stroke-width: 1.5; }
+.b.ghost .k { fill: var(--muted); }
+.b.ext rect { fill: var(--surface-2); stroke: var(--muted); stroke-width: 1.3; }
+.b.ext .k { fill: var(--muted); }
+.b .s.cold { fill: var(--cold); }
+.sw.ext { background: var(--surface-2); border: 1.5px solid var(--muted); }
+.envelope { fill: var(--surface); stroke: var(--ev); stroke-width: 1.5; }
+.divider { stroke: var(--ev); stroke-dasharray: 4 4; }
+.env { font-family: var(--mono); font-size: 12.5px; fill: var(--text); }
+.env-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; fill: var(--ev); }
+.note { font-size: 12px; fill: var(--muted); }
+.note.strong { fill: var(--text); font-weight: 650; }
+.note.cold { fill: var(--cold); }
+.note.cold.strong { fill: var(--cold); }
+
+.a { fill: none; }
+.a.traffic { stroke: var(--traffic); stroke-width: 2.6; }
+.a.ctrl { stroke: var(--ctrl); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.a.dash { stroke-dasharray: 7 5; stroke-width: 2; opacity: .75; }
+.mk-traffic { fill: var(--traffic); }
+.mk-ctrl { fill: var(--ctrl); }
+.lbl { font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.lbl.traffic { fill: var(--traffic); }
+.lbl.ctrl { fill: var(--ctrl); }
+.badge circle { stroke: var(--surface); stroke-width: 2; fill: var(--traffic); }
+.badge text { fill: var(--surface); font-size: 11px; font-weight: 800; }
+
+/* Tabela */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 760px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 20%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, summary code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+.flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-top: 12px; }
+.flow { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 6px; min-width: 0; }
+.flow h3 { margin: 0 0 8px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.flow h3 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.flow ol, .flow ul { padding-left: 20px; margin: 0 0 10px; font-size: 14.5px; }
+.flow li { margin-bottom: 6px; }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre .c { color: var(--code-comment); }
+
+.nt { font-size: .82em; font-weight: 600; color: var(--cold); white-space: nowrap; }
+.callout { border-left: 3px solid var(--ev); background: var(--ev-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.sources { font-size: 14px; color: var(--muted); }
+.sources li { margin-bottom: 4px; overflow-wrap: anywhere; }
+</style>
+
+<div class="wrap">
+<header class="hero prose">
+  <div class="eyebrow">Serverless na Kubernetes · demo 04</div>
+  <h1>Knative Eventing w pigułce</h1>
+  <p class="lede">Co to jest Broker, kto może do niego wysyłać zdarzenia, jak powstaje i działa Trigger, gdzie w tym wszystkim jest Kafka i co się dzieje z jednym zdarzeniem w demo 04. Krótko: funkcję budzi zdarzenie wysłane przez jakiś system, a nie żądanie od użytkownika. Nadawca nie wie, kto to zdarzenie odbierze.</p>
+  <div class="meta">
+    <span class="pill">Knative Eventing 1.23.0</span>
+    <span class="pill">MTChannelBasedBroker + InMemoryChannel</span>
+    <span class="pill">namespace <code>demo</code> na klastrze kind <code>memeops</code></span>
+    <span class="pill">dzień 1 · demo 04</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#serving-eventing">Serving a Eventing</a>
+    <a href="#problem">Jaki problem rozwiązuje</a>
+    <a href="#obraz">Pełny obraz</a>
+    <a href="#zrodla-zdarzen">Kto wysyła zdarzenia</a>
+    <a href="#klocki">Klocki</a>
+    <a href="#cloudevent">CloudEvent</a>
+    <a href="#dostarczanie">Ponowienia</a>
+    <a href="#trigger">Jak powstaje Trigger</a>
+    <a href="#demo">Demo 04 krok po kroku</a>
+    <a href="#kafka">Kafka a Eventing</a>
+    <a href="#wybor">Eventing, KEDA czy HTTP</a>
+    <a href="#klaster">Zobacz na klastrze</a>
+    <a href="#sprawdz">Sprawdź się</a>
+    <a href="#zrodla">Źródła</a>
+  </nav>
+</header>
+
+<!-- ============ W SKRÓCIE ============ -->
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Co to jest Broker?</div><p>Skrzynka na zdarzenia w namespace. Ma <b>jeden adres HTTP</b>, na który każdy może wysłać zdarzenie (POST). Sam Broker nie wie, komu je oddać. Decydują o tym Triggery.</p></div>
+    <div class="answer"><div class="q">Co to jest Trigger?</div><p>Subskrypcja: „z Brokera <code>default</code> chcę zdarzenia o <code>type = X</code>, wysyłaj je do usługi Y”. Jeden Trigger = jeden filtr + jeden odbiorca.</p></div>
+    <div class="answer"><div class="q">O co chodzi w tym podejściu?</div><p>O <b>publikuj / subskrybuj</b>. Nadawca zna tylko adres Brokera. Nowy odbiorca to nowy Trigger, a kodu nadawcy nie zmieniasz.</p></div>
+    <div class="answer"><div class="q">Czy to już jest Knative Eventing?</div><p>Tak. Broker, Trigger i PingSource to obiekty Knative Eventing (API <code>eventing.knative.dev</code> i <code>sources.knative.dev</code>). Odbiorca <code>mem-dnia</code> to zwykła usługa Knative Serving.</p></div>
+    <div class="answer"><div class="q">Kto budzi funkcję od zera?</div><p><b>Serving, nie Eventing.</b> Eventing tylko wysyła HTTP POST na adres usługi. Przy zerze podów żądanie przytrzymuje activator Servingu, jak każde inne.</p></div>
+    <div class="answer"><div class="q">Co znaczy 202 od Brokera?</div><p>„Przyjąłem”, a nie „dostarczyłem”. W demo Broker odpowiada 202 także na zdarzenie, którego nikt nie subskrybuje. Takie zdarzenie do nikogo nie trafia.</p></div>
+    <div class="answer"><div class="q">Kto może wysłać zdarzenie do Brokera?</div><p>Każdy, kto zrobi HTTP POST z nagłówkami <code>Ce-*</code> na adres Brokera. Źródła Knative (PingSource, ApiServerSource, KafkaSource…) to po prostu gotowi nadawcy. Może nim też być Twoja aplikacja albo <code>curl</code>.</p></div>
+    <div class="answer"><div class="q">Co uruchamia Trigger?</div><p>Nic, bo Trigger się nie „uruchamia”. To stała reguła. <b>Każde</b> zdarzenie, które trafi do Brokera, jest sprawdzane z filtrami <b>wszystkich</b> jego Triggerów. Pasuje, to idzie do odbiorcy. Nie pasuje, to nie idzie.</p></div>
+    <div class="answer"><div class="q">Czy Eventing zastępuje Kafkę?</div><p>Nie. Kafka może być <b>źródłem</b> zdarzeń (KafkaSource) albo <b>magazynem pod Brokerem</b> (Kafka Broker). Eventing zastępuje kod klienta Kafki w odbiorcach, a nie samą Kafkę.</p></div>
+  </div>
+</section>
+
+<!-- ============ SERVING / EVENTING ============ -->
+<section id="serving-eventing" class="prose">
+  <h2><span class="num">1</span>Serving a Eventing</h2>
+  <p>Knative ma dwa główne moduły. Prawie całe szkolenie to pierwszy z nich. Drugi pojawia się tylko w demo 04.</p>
+  <ul>
+    <li><b>Serving</b> uruchamia usługi HTTP: <code>ksvc</code>, rewizje, traffic split, skalowanie od zera. Dokumentacja: „HTTP-triggered autoscaling container runtime”.</li>
+    <li><b>Eventing</b> dostarcza zdarzenia: przyjmuje je od źródeł i rozsyła do odbiorców. Dokumentacja: „CloudEvents-over-HTTP asynchronous routing layer”.</li>
+  </ul>
+  <p><b>Eventing instaluje się osobno.</b> <code>platform.sh</code> go nie instaluje. Eventing dokłada dopiero <code>demo/04-eventing/prepare.sh</code>: CRD, rdzeń, InMemoryChannel i broker (cztery pliki z wydania <code>knative-v1.23.0</code>). Dokumentacja mówi wprost, że moduły można używać razem albo osobno.</p>
+  <p><b>Zdarzenie to po prostu HTTP POST.</b> Atrybuty zdarzenia (id, typ, źródło) jadą w nagłówkach <code>Ce-*</code>, a dane w treści. Taki format to CloudEvents (standard CNCF). Dlatego odbiorcą może być każda usługa HTTP, także zwykły Service Kubernetesa, a nie tylko ksvc.</p>
+</section>
+
+<!-- ============ PROBLEM ============ -->
+<section id="problem">
+  <h2 class="prose"><span class="num">2</span>Jaki problem rozwiązuje</h2>
+  <p class="prose">Wyobraź sobie, że po dodaniu mema trzy systemy mają coś zrobić. Bez Brokera <code>meme-api</code> musi znać adres każdego z nich, czekać na każdego i obsłużyć błąd każdego. Z Brokerem wysyła jedno zdarzenie w jedno miejsce i nie obchodzi go, kto słucha.</p>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 400" role="img" aria-label="Po lewej: bez brokera meme-api woła bezpośrednio trzy usługi: mem-dnia, powiadomienia i statystyki; nowy odbiorca wymaga zmiany meme-api. Po prawej: meme-api wysyła zdarzenie do Brokera default, a trzy Triggery przekazują je do odbiorców; nowy odbiorca to nowy Trigger, nadawca bez zmian.">
+  <defs>
+    <marker id="p-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="p-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <g class="zone"><rect x="20" y="20" width="560" height="360" rx="12"/><text x="36" y="42">BEZ BROKERA: NADAWCA WOŁA KAŻDEGO</text></g>
+  <g class="zone"><rect x="620" y="20" width="560" height="360" rx="12"/><text x="636" y="42">Z BROKEREM: NADAWCA ZNA JEDEN ADRES</text></g>
+
+  <!-- lewa strona -->
+  <g class="b proc p-ext"><rect x="40" y="160" width="180" height="64" rx="3"/><text class="k" x="52" y="177">POD · NADAWCA</text><text class="t" x="52" y="194">meme-api</text><text class="s" x="52" y="210">zna 3 adresy</text></g>
+  <text class="note" x="40" y="256">Czeka na każdego odbiorcę</text>
+  <text class="note" x="40" y="273">i sam obsługuje ich błędy.</text>
+
+  <g class="b kn"><rect x="340" y="64" width="220" height="52" rx="10"/><text class="k" x="352" y="81">ksvc</text><text class="t" x="352" y="102">mem-dnia</text></g>
+  <g class="b kn"><rect x="340" y="136" width="220" height="52" rx="10"/><text class="k" x="352" y="153">ksvc</text><text class="t" x="352" y="174">powiadomienia (przykład)</text></g>
+  <g class="b kn"><rect x="340" y="208" width="220" height="52" rx="10"/><text class="k" x="352" y="225">ksvc</text><text class="t" x="352" y="246">statystyki (przykład)</text></g>
+  <g class="b ghost"><rect x="340" y="290" width="220" height="64" rx="10"/><text class="k" x="352" y="307">NOWY ODBIORCA</text><text class="t" x="352" y="324">= zmiana w meme-api</text><text class="s" x="352" y="340">i nowe wdrożenie</text></g>
+
+  <path class="a traffic" marker-end="url(#p-t)" d="M220 192 H280 V90 H337"/>
+  <path class="a traffic" marker-end="url(#p-t)" d="M280 162 H337"/>
+  <path class="a traffic" marker-end="url(#p-t)" d="M280 192 V234 H337"/>
+  <path class="a ctrl" marker-end="url(#p-c)" d="M280 234 V322 H337"/>
+
+  <!-- prawa strona -->
+  <g class="b proc p-ext"><rect x="640" y="160" width="150" height="64" rx="3"/><text class="k" x="652" y="177">POD · NADAWCA</text><text class="t" x="652" y="194">meme-api</text><text class="s" x="652" y="210">zna 1 adres</text></g>
+  <text class="note" x="640" y="256">Wysyła i nie czeka</text>
+  <text class="note" x="640" y="273">na odbiorców (202).</text>
+
+  <g class="b ev"><rect x="820" y="160" width="110" height="64" rx="10"/><text class="k" x="832" y="177">Broker</text><text class="t" x="832" y="194">default</text><text class="s" x="832" y="210">jeden adres</text></g>
+
+  <g class="b ev"><rect x="960" y="64" width="200" height="52" rx="10"/><text class="k" x="972" y="81">TRIGGER → ODBIORCA</text><text class="t" x="972" y="102">mem-dnia</text></g>
+  <g class="b ev"><rect x="960" y="136" width="200" height="52" rx="10"/><text class="k" x="972" y="153">TRIGGER → ODBIORCA</text><text class="t" x="972" y="174">powiadomienia</text></g>
+  <g class="b ev"><rect x="960" y="208" width="200" height="52" rx="10"/><text class="k" x="972" y="225">TRIGGER → ODBIORCA</text><text class="t" x="972" y="246">statystyki</text></g>
+  <g class="b ghost"><rect x="960" y="290" width="200" height="64" rx="10"/><text class="k" x="972" y="307">NOWY TRIGGER</text><text class="t" x="972" y="324">nowy odbiorca</text><text class="s" x="972" y="340">nadawca bez zmian</text></g>
+
+  <path class="a traffic" marker-end="url(#p-t)" d="M790 192 H817"/>
+  <path class="a traffic" marker-end="url(#p-t)" d="M930 192 H945 V90 H957"/>
+  <path class="a traffic" marker-end="url(#p-t)" d="M945 162 H957"/>
+  <path class="a traffic" marker-end="url(#p-t)" d="M945 192 V234 H957"/>
+  <path class="a ctrl" marker-end="url(#p-c)" d="M945 234 V322 H957"/>
+</svg>
+    </div>
+    <figcaption><code>powiadomienia</code> i <code>statystyki</code> to tylko przykład, w demo ich nie ma. W demo jest jeden odbiorca (<code>mem-dnia</code>) i dwa Triggery, które kierują do niego dwa różne typy zdarzeń. Cena podejścia: nadawca nie dostaje odpowiedzi od odbiorców, tylko potwierdzenie przyjęcia przez Broker.</figcaption>
+  </figure>
+  <div class="legend">
+    <div class="item"><span class="sw ev"></span>obiekt Knative Eventing</div>
+    <div class="item"><span class="sw kn"></span>obiekt Knative Serving</div>
+    <div class="item"><span class="sw k8s"></span>obiekt Kubernetesa</div>
+    <div class="item"><span class="sw proc"></span>proces / pod</div>
+    <div class="item"><span class="sw ghost"></span>czego jeszcze nie ma</div>
+    <div class="item"><span class="ln traffic"></span>zdarzenie / żądanie HTTP</div>
+    <div class="item"><span class="ln ctrl"></span>sterowanie, konfiguracja</div>
+  </div>
+</section>
+
+<!-- ============ PEŁNY OBRAZ ============ -->
+<section id="obraz">
+  <h2 class="prose"><span class="num">3</span>Pełny obraz: od źródła do funkcji</h2>
+  <div class="prose">
+    <p>Ten rysunek to rozbudowana wersja slajdu „Zdarzenie trafia do funkcji przez Broker i Trigger”. Czytaj go od lewej do prawej. Po lewej <b>kto wysyła</b>, w środku <b>co robi Broker</b>, po prawej <b>według jakich reguł i do kogo trafia zdarzenie</b>. W prawym górnym rogu widać, co właściwie płynie strzałkami.</p>
+    <h3>Broker po ludzku</h3>
+    <p>Pomyśl o sortowni poczty z jednym adresem. Każdy nadawca wrzuca przesyłkę pod ten sam adres i dostaje pokwitowanie (<b>202</b>). Nadawca nie wie, kto przesyłkę odbierze. W sortowni leży lista zleceń typu „przesyłki z napisem <code>memeops.mem.nowy</code> dostarczajcie do <code>mem-dnia</code>”. Każde takie zlecenie to <b>Trigger</b>. Sortownia czyta tylko napisy na kopercie (atrybuty CloudEvent). Do środka nie zagląda.</p>
+    <p>W Kubernetesie <b>Broker to obiekt w API</b> (<code>kind: Broker</code>) z jednym adresem HTTP. Sam niczego nie przenosi. To, kto fizycznie przyjmuje, przechowuje i rozsyła zdarzenia, zależy od <b>klasy Brokera</b>. W demo jest to <code>MTChannelBasedBroker</code> z kanałem w pamięci, a na produkcji na przykład Broker na Kafce (sekcja 8).</p>
+  </div>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 720" role="img" aria-label="Pełny przepływ Knative Eventing. Po lewej źródła: PingSource mem-co-minute z demo, przykładowe ApiServerSource, KafkaSource i SinkBinding oraz dwa wywołania curl z typami memeops.mem.nowy i memeops.mem.usuniety. Wszystkie wysyłają HTTP POST do poda broker-ingress Brokera default, który odpowiada 202. Wejście przekazuje zdarzenie do kanału InMemoryChannel default-kne-trigger obsługiwanego przez imc-dispatcher. Kanał ma dwie Subscription utworzone automatycznie z Triggerów i wysyła po jednej kopii zdarzenia do broker-filter dla każdego Triggera. broker-filter porównuje atrybuty z filtrem Triggera: harmonogram dla typu dev.knative.sources.ping i nowy-mem dla typu memeops.mem.nowy, oba kierują do ksvc mem-dnia. Przykładowy trzeci Trigger powiadomienia kieruje do drugiej usługi. Zdarzenie memeops.mem.usuniety nie pasuje do żadnego Triggera i jest odrzucane. W prawym górnym rogu koperta CloudEvent: nagłówki Ce-Id, Ce-Source, Ce-Type, Ce-Specversion oraz treść JSON.">
+  <defs>
+    <marker id="f-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="f-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <g class="zone"><rect x="20" y="20" width="250" height="680" rx="12"/><text x="36" y="42">ŹRÓDŁA · KTO WYSYŁA</text></g>
+  <g class="zone"><rect x="290" y="20" width="420" height="680" rx="12"/><text x="306" y="42">BROKER DEFAULT · PODY W KNATIVE-EVENTING</text></g>
+  <g class="zone"><rect x="730" y="20" width="450" height="340" rx="12"/><text x="746" y="42">CLOUDEVENT · CO PŁYNIE STRZAŁKAMI</text></g>
+  <g class="zone"><rect x="730" y="380" width="450" height="320" rx="12"/><text x="746" y="402">TRIGGERY (REGUŁY) → ODBIORCY</text></g>
+
+  <!-- źródła -->
+  <g class="b ev"><rect x="40" y="60" width="210" height="78" rx="10"/><text class="k" x="52" y="77">PingSource · w demo</text><text class="t" x="52" y="96">mem-co-minute</text><text class="s" x="52" y="113">co minutę (cron)</text><text class="s" x="52" y="129">dev.knative.sources.ping</text></g>
+  <g class="b ghost"><rect x="40" y="150" width="210" height="78" rx="10"/><text class="k" x="52" y="167">ApiServerSource · przykład</text><text class="t" x="52" y="186">zmiana obiektu w K8s</text><text class="s" x="52" y="203">np. powstał nowy Pod</text><text class="s" x="52" y="219">dev.knative.apiserver.*</text></g>
+  <g class="b ghost"><rect x="40" y="240" width="210" height="78" rx="10"/><text class="k" x="52" y="257">KafkaSource · przykład</text><text class="t" x="52" y="276">wiadomość w Kafce</text><text class="s" x="52" y="293">temat, np. zamowienia</text><text class="s" x="52" y="309">dev.knative.kafka.event</text></g>
+  <g class="b ghost"><rect x="40" y="330" width="210" height="78" rx="10"/><text class="k" x="52" y="347">SinkBinding · przykład</text><text class="t" x="52" y="366">Twój Deployment</text><text class="s" x="52" y="383">adres Brokera w K_SINK</text><text class="s" x="52" y="399">type: jaki ustawisz</text></g>
+  <g class="b proc p-ext"><rect x="40" y="420" width="210" height="78" rx="3"/><text class="k" x="52" y="437">POD Z CURL · KROK 3 DEMO</text><text class="t" x="52" y="456">nadawca</text><text class="s" x="52" y="473">POST + nagłówki Ce-*</text><text class="s" x="52" y="489">memeops.mem.nowy</text></g>
+  <g class="b proc p-ext"><rect x="40" y="510" width="210" height="78" rx="3"/><text class="k" x="52" y="527">POD Z CURL · KROK 3 DEMO</text><text class="t" x="52" y="546">nadawca</text><text class="s" x="52" y="563">ten sam POST, inny type</text><text class="s cold" x="52" y="579">memeops.mem.usuniety</text></g>
+  <text class="note strong" x="40" y="620">Każde źródło robi to samo:</text>
+  <text class="note" x="40" y="638">HTTP POST z CloudEventem</text>
+  <text class="note" x="40" y="656">na adres Brokera.</text>
+  <text class="note" x="40" y="680">Przerywana ramka = nie ma w demo.</text>
+
+  <!-- szyna od źródeł do wejścia -->
+  <path class="a traffic" d="M250 99 H278"/>
+  <path class="a traffic dash" d="M250 189 H278"/>
+  <path class="a traffic dash" d="M250 279 H278"/>
+  <path class="a traffic dash" d="M250 369 H278"/>
+  <path class="a traffic" d="M250 459 H278"/>
+  <path class="a traffic" d="M250 549 H278"/>
+  <path class="a traffic" d="M278 99 V549"/>
+  <path class="a traffic" marker-end="url(#f-t)" d="M278 219 H307"/>
+
+  <!-- broker -->
+  <g class="b ev"><rect x="310" y="60" width="380" height="78" rx="10"/><text class="k" x="322" y="77">BROKER · OBIEKT W API</text><text class="t" x="322" y="96">default (namespace demo)</text><text class="s" x="322" y="113">adres: broker-ingress.knative-eventing</text><text class="s" x="322" y="129">       .svc.cluster.local/demo/default</text></g>
+  <path class="a ctrl" marker-end="url(#f-c)" d="M395 138 V177"/>
+  <path class="a ctrl" marker-end="url(#f-c)" d="M605 138 V177"/>
+  <text class="lbl ctrl" x="401" y="162">adres prowadzi tu</text>
+  <text class="lbl ctrl" x="611" y="162">kanał Brokera</text>
+
+  <g class="b proc p-ev"><rect x="310" y="180" width="170" height="78" rx="3"/><text class="k" x="322" y="197">POD · WEJŚCIE</text><text class="t" x="322" y="216">broker-ingress</text><text class="s" x="322" y="233">sprawdza CloudEvent</text><text class="s" x="322" y="249">odpowiada 202</text></g>
+  <g class="b proc p-ev"><rect x="520" y="180" width="170" height="78" rx="3"/><text class="k" x="532" y="197">POD · KANAŁ</text><text class="t" x="532" y="216">imc-dispatcher</text><text class="s" x="532" y="233">InMemoryChannel</text><text class="s" x="532" y="249">default-kne-trigger</text></g>
+  <path class="a traffic" marker-end="url(#f-t)" d="M480 219 H517"/>
+
+  <g class="b ev"><rect x="310" y="300" width="170" height="58" rx="10"/><text class="k" x="322" y="317">SUBSCRIPTION · AUTO</text><text class="t" x="322" y="336">harmonogram</text><text class="s" x="322" y="351">→ broker-filter</text></g>
+  <g class="b ev"><rect x="310" y="370" width="170" height="58" rx="10"/><text class="k" x="322" y="387">SUBSCRIPTION · AUTO</text><text class="t" x="322" y="406">nowy-mem</text><text class="s" x="322" y="421">→ broker-filter</text></g>
+  <path class="a ctrl" marker-end="url(#f-c)" d="M480 329 H560 V261"/>
+  <path class="a ctrl" d="M480 399 H560 V329"/>
+
+  <path class="a traffic" marker-end="url(#f-t)" d="M615 258 V417"/>
+  <path class="a traffic" marker-end="url(#f-t)" d="M665 258 V417"/>
+  <text class="lbl traffic" x="615" y="372" text-anchor="middle">kopia 1</text>
+  <text class="lbl traffic" x="665" y="396" text-anchor="middle">kopia 2</text>
+
+  <g class="b proc p-ev"><rect x="520" y="420" width="170" height="200" rx="3"/><text class="k" x="532" y="437">POD · FILTR</text><text class="t" x="532" y="456">broker-filter</text><text class="s" x="532" y="478">każda kopia ma adres</text><text class="s" x="532" y="494">/triggers/demo/&lt;nazwa&gt;</text><text class="s" x="532" y="516">porównuje Ce-*</text><text class="s" x="532" y="532">z filtrem Triggera</text><text class="s" x="532" y="556">pasuje → POST dalej</text><text class="s cold" x="532" y="574">nie pasuje → odrzuca</text></g>
+
+  <text class="note strong" x="310" y="452">Subscription = „przysyłaj kopię”.</text>
+  <text class="note" x="310" y="469">Kontroler tworzy ją sam,</text>
+  <text class="note" x="310" y="486">po jednej na każdy Trigger.</text>
+  <text class="note strong" x="310" y="518">Broker to tylko obiekt w API.</text>
+  <text class="note" x="310" y="535">Zdarzenia przenoszą 3 pody,</text>
+  <text class="note" x="310" y="552">wspólne dla wszystkich</text>
+  <text class="note" x="310" y="569">brokerów tej klasy w klastrze.</text>
+  <text class="note cold strong" x="310" y="610">memeops.mem.usuniety:</text>
+  <text class="note cold" x="310" y="627">wejście → 202, kopie dochodzą</text>
+  <text class="note cold" x="310" y="644">do filtra, ale nie pasują do</text>
+  <text class="note cold" x="310" y="661">żadnego Triggera. Filtr je</text>
+  <text class="note cold" x="310" y="678">odrzuca, funkcja nic nie dostaje.</text>
+
+  <!-- koperta CloudEvent -->
+  <rect class="envelope" x="750" y="56" width="410" height="220" rx="10"/>
+  <text class="env-k" x="766" y="78">KOPERTA = NAGŁÓWKI HTTP Ce-* · CZYTAJĄ JE TRIGGERY</text>
+  <text class="env" x="766" y="102">Ce-Id: 1</text>
+  <text class="env" x="766" y="122">Ce-Source: /uczestnik/ja</text>
+  <text class="env" x="766" y="142">Ce-Type: memeops.mem.nowy</text>
+  <text class="note cold strong" x="1000" y="142">← po tym filtrujemy</text>
+  <text class="env" x="766" y="162">Ce-Specversion: 1.0</text>
+  <line class="divider" x1="750" y1="178" x2="1160" y2="178"/>
+  <text class="env-k" x="766" y="198">TREŚĆ = BODY · BROKER DO NIEJ NIE ZAGLĄDA</text>
+  <text class="env" x="766" y="222">{"top":"wyslalem zdarzenie",</text>
+  <text class="env" x="766" y="240"> "bottom":"a funkcja wstala"}</text>
+  <text class="note" x="766" y="264">Content-Type: application/json</text>
+  <text class="note strong" x="750" y="302">Ta sama koperta jedzie przez wszystkie zielone strzałki.</text>
+  <text class="note" x="750" y="320">Każdy krok to zwykły HTTP POST. Filtr Triggera patrzy</text>
+  <text class="note" x="750" y="338">na atrybuty (type, source…), nigdy na treść.</text>
+
+  <!-- triggery i odbiorcy -->
+  <path class="a traffic" marker-end="url(#f-t)" d="M690 442 H747"/>
+  <path class="a traffic" marker-end="url(#f-t)" d="M690 522 H747"/>
+  <path class="a traffic dash" marker-end="url(#f-t)" d="M690 602 H747"/>
+
+  <g class="b ev"><rect x="750" y="410" width="190" height="64" rx="10"/><text class="k" x="762" y="427">TRIGGER · FILTR type =</text><text class="t" x="762" y="446">harmonogram</text><text class="s" x="762" y="463">dev.knative.sources.ping</text></g>
+  <g class="b ev"><rect x="750" y="490" width="190" height="64" rx="10"/><text class="k" x="762" y="507">TRIGGER · FILTR type =</text><text class="t" x="762" y="526">nowy-mem</text><text class="s" x="762" y="543">memeops.mem.nowy</text></g>
+  <g class="b ghost"><rect x="750" y="570" width="190" height="64" rx="10"/><text class="k" x="762" y="587">NOWY TRIGGER · PRZYKŁAD</text><text class="t" x="762" y="606">powiadomienia</text><text class="s" x="762" y="623">memeops.mem.nowy</text></g>
+
+  <g class="b kn"><rect x="970" y="410" width="190" height="144" rx="10"/><text class="k" x="982" y="427">KSVC · KNATIVE SERVING</text><text class="t" x="982" y="446">mem-dnia</text><text class="s" x="982" y="466">0 podów bez zdarzeń</text><text class="s" x="982" y="484">przy zerze activator</text><text class="s" x="982" y="500">trzyma POST, pod wstaje</text><text class="s" x="982" y="518">event_display wypisuje</text><text class="s" x="982" y="534">zdarzenie w logach</text></g>
+  <g class="b ghost"><rect x="970" y="570" width="190" height="64" rx="10"/><text class="k" x="982" y="587">KSVC · PRZYKŁAD</text><text class="t" x="982" y="606">powiadomienia</text><text class="s" x="982" y="623">drugi odbiorca</text></g>
+  <path class="a traffic" marker-end="url(#f-t)" d="M940 442 H967"/>
+  <path class="a traffic" marker-end="url(#f-t)" d="M940 522 H967"/>
+  <path class="a traffic dash" marker-end="url(#f-t)" d="M940 602 H967"/>
+
+  <text class="note strong" x="750" y="664">Nowy odbiorca = nowy Trigger. Nadawców nie ruszasz.</text>
+  <text class="note" x="750" y="682">Jedna usługa może mieć wiele Triggerów (tu: dwa).</text>
+
+  <g class="badge"><circle cx="278" cy="219" r="10"/><text x="278" y="223" text-anchor="middle">1</text></g>
+  <g class="badge"><circle cx="499" cy="219" r="10"/><text x="499" y="223" text-anchor="middle">2</text></g>
+  <g class="badge"><circle cx="640" cy="290" r="10"/><text x="640" y="294" text-anchor="middle">3</text></g>
+  <g class="badge"><circle cx="605" cy="600" r="10"/><text x="605" y="604" text-anchor="middle">4</text></g>
+  <g class="badge"><circle cx="716" cy="442" r="10"/><text x="716" y="446" text-anchor="middle">5</text></g>
+  <g class="badge"><circle cx="1140" cy="446" r="10"/><text x="1140" y="450" text-anchor="middle">6</text></g>
+</svg>
+    </div>
+    <figcaption>Elementy z demo (PingSource <code>mem-co-minute</code>, Broker <code>default</code>, Triggery <code>harmonogram</code> i <code>nowy-mem</code>, ksvc <code>mem-dnia</code>, kanał <code>default-kne-trigger</code>, dwie Subscription) sprawdzone na klastrze kind <code>memeops</code> 3 listopada 2026. Przerywane ramki to przykłady spoza demo.</figcaption>
+  </figure>
+  <div class="legend">
+    <div class="item"><span class="sw ev"></span>obiekt Knative Eventing</div>
+    <div class="item"><span class="sw kn"></span>obiekt Knative Serving</div>
+    <div class="item"><span class="sw proc"></span>proces / pod</div>
+    <div class="item"><span class="sw ghost"></span>przykład, nie ma w demo</div>
+    <div class="item"><span class="ln traffic"></span>zdarzenie (HTTP POST)</div>
+    <div class="item"><span class="ln ctrl"></span>sterowanie, konfiguracja</div>
+  </div>
+
+  <div class="flows">
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--traffic)"></span>Numery na rysunku</h3>
+      <ol>
+        <li><b>Wysłanie.</b> Źródło robi POST na adres Brokera. Adres zna z <code>sink.ref</code> (źródła Knative), ze zmiennej <code>K_SINK</code> (SinkBinding) albo z konfiguracji (Twoja aplikacja, <code>curl</code>).</li>
+        <li><b>Przyjęcie.</b> <code>broker-ingress</code> sprawdza, czy to poprawny CloudEvent, i odpowiada <b>202</b>. Dla nadawcy sprawa jest zamknięta. Zdarzenie idzie do kanału Brokera.</li>
+        <li><b>Rozesłanie kopii.</b> Kanał (<code>imc-dispatcher</code>) ma listę subskrybentów, czyli po jednej Subscription na każdy Trigger. Każdej wysyła kopię zdarzenia na adres <code>broker-filter</code> z nazwą Triggera w ścieżce.</li>
+        <li><b>Filtr.</b> <code>broker-filter</code> wie z adresu, dla którego Triggera jest ta kopia. Porównuje atrybuty z filtrem tego Triggera. Nie pasuje? Kopia jest odrzucana i to koniec drogi.</li>
+        <li><b>Dostarczenie.</b> Pasuje? Filtr wysyła POST z tym samym CloudEventem na adres odbiorcy z Triggera (<code>subscriber</code>). Gdy odbiorca odpowie błędem, filtr ponawia (sekcja „Ponowienia”).</li>
+        <li><b>Funkcja.</b> Od tego miejsca to już Serving. Przy zerze podów żądanie trzyma activator, a autoscaler podnosi pod. Eventing nie wie, że odbiorca spał.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--ev)"></span>Trzy rzeczy, które często się mylą</h3>
+      <ul>
+        <li><b>Broker nie wybiera odbiorcy.</b> Tę decyzję podejmują Triggery, każdy osobno. Dwa Triggery z pasującym filtrem oznaczają dwie dostawy, a nie jedną.</li>
+        <li><b>Trigger to reguła, a nie proces.</b> Nie ma „poda Triggera”. Z Triggera kontroler robi Subscription w kanale (sekcja 6), a zdarzenie przenoszą wspólne pody Brokera.</li>
+        <li><b>Odpowiedź odbiorcy może być nowym zdarzeniem.</b> Jeśli odbiorca odpowie CloudEventem, filtr wyśle go z powrotem do Brokera (<code>reply</code> w Subscription wskazuje Broker). Tak buduje się łańcuchy kroków. <code>event_display</code> w demo niczego nie odsyła.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ŹRÓDŁA ZDARZEŃ ============ -->
+<section id="zrodla-zdarzen">
+  <h2 class="prose"><span class="num">4</span>Kto może wysłać zdarzenie do Brokera</h2>
+  <div class="prose">
+    <p>Broker przyjmuje POST od każdego, kto ma do niego dostęp w sieci. <b>Źródło (Source)</b> to gotowy nadawca: obiekt w API, za którym stoi pod Knative. Pod pobiera coś ze świata (harmonogram, zmianę w Kubernetesie, wiadomość z Kafki), pakuje to w CloudEvent i wysyła na adres z pola <code>sink</code>. Źródło nie jest obowiązkowe. Twoja aplikacja może sama wysłać POST.</p>
+    <div class="callout"><b>„Co uruchamia Trigger?”</b> Nic. To częste nieporozumienie. Trigger nie nasłuchuje na Kafkę, cron ani kolejkę. To robi <b>źródło</b>, które wysyła zdarzenie do Brokera. Trigger tylko mówi, które zdarzenia z Brokera mają trafić do danego odbiorcy. Łańcuch wygląda tak: <b>źródło → Broker → (filtr Triggera) → odbiorca</b>.</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Nadawca</th><th scope="col">Kiedy wysyła zdarzenie</th><th scope="col">Typ zdarzenia (<code>type</code>)</th><th scope="col">Skąd się bierze</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">PingSource (w demo)</th><td>Według harmonogramu cron (<code>schedule</code>). Treść jest stała, z <code>spec.data</code>.</td><td><code>dev.knative.sources.ping</code></td><td>Rdzeń Eventingu. Pod <code>pingsource-mt-adapter</code>: w manifeście ma 0 replik, a na klastrze z PingSource jest 1.</td></tr>
+        <tr><th scope="row">ApiServerSource</th><td>Gdy w Kubernetesie powstaje, zmienia się albo znika obiekt (np. Pod, ConfigMap)</td><td><code>dev.knative.apiserver.ref.*</code> (tryb domyślny <code>Reference</code>) albo <code>dev.knative.apiserver.resource.*</code> (tryb <code>Resource</code>, cały obiekt w treści)</td><td>Rdzeń Eventingu</td></tr>
+        <tr><th scope="row">KafkaSource</th><td>Przy każdej wiadomości w wybranym temacie Kafki</td><td><code>dev.knative.kafka.event</code></td><td>Osobna instalacja (<code>eventing-kafka-broker</code>, komponent źródła). Więcej w sekcji 8.</td></tr>
+        <tr><th scope="row">RabbitmqSource</th><td>Przy każdej wiadomości w kolejce RabbitMQ</td><td>nadaje własne typy</td><td>Osobna instalacja (<code>eventing-rabbitmq</code>)</td></tr>
+        <tr><th scope="row">SinkBinding</th><td>Kiedy Twój kod zdecyduje. SinkBinding wstrzykuje do istniejącego Deploymentu, Joba albo CronJoba zmienną <code>K_SINK</code> z adresem Brokera.</td><td>dowolny, ustawia Twój kod</td><td>Rdzeń Eventingu</td></tr>
+        <tr><th scope="row">ContainerSource</th><td>Jak wyżej, ale Knative sam uruchamia Twój kontener-nadawcę i daje mu <code>K_SINK</code></td><td>dowolny</td><td>Rdzeń Eventingu</td></tr>
+        <tr><th scope="row">Twoja aplikacja, <code>curl</code> (w demo)</th><td>Kiedy chcesz. Zwykły POST z nagłówkami <code>Ce-*</code>.</td><td>dowolny, np. <code>memeops.mem.nowy</code></td><td>Wystarczy adres Brokera. Jest widoczny tylko wewnątrz klastra (<code>*.svc.cluster.local</code>).</td></tr>
+        <tr><th scope="row">Odbiorca, który odpowiada</th><td>Gdy odbiorca odpowie na zdarzenie nowym CloudEventem</td><td>nadaje odbiorca</td><td>Działa automatycznie: <code>reply</code> w Subscription wskazuje Broker.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose">Na klastrze wszystkie źródła w namespace pokaże <code>kubectl get sources -n demo</code>, bo CRD źródeł należą do wspólnej kategorii <code>sources</code>. W demo to tylko PingSource <code>mem-co-minute</code>, z kolumną <code>SINK</code> wskazującą adres Brokera.</p>
+</section>
+
+<!-- ============ KLOCKI ============ -->
+<section id="klocki">
+  <h2 class="prose"><span class="num">5</span>Klocki</h2>
+  <p class="prose">Wszystkie poniższe to obiekty w API (CRD). Pracę wykonują pody w namespace <code>knative-eventing</code>.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Klocek</th><th scope="col">Co robi</th><th scope="col">W demo 04</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Źródło (Source)</th><td>Łączy producenta zdarzeń z odbiorcą (<code>sink</code>). Przykłady: <b>PingSource</b> (zdarzenie ze stałą treścią według harmonogramu cron), <b>ApiServerSource</b> (zdarzenie przy każdym utworzeniu, zmianie lub usunięciu obiektu w Kubernetesie), <b>KafkaSource</b> (czyta wiadomości z tematu Kafki, osobna instalacja z <code>eventing-kafka-broker</code>), <b>SinkBinding</b> (wstrzykuje do Twojego poda zmienną <code>K_SINK</code> z adresem odbiorcy). Źródło nie jest obowiązkowe: własna aplikacja może sama wysłać POST na adres Brokera.</td><td>PingSource <code>mem-co-minute</code>, <code>* * * * *</code>, sink = Broker <code>default</code>. Plus ręczny <code>curl</code> z poda.</td></tr>
+        <tr><th scope="row">Broker</th><td>Jeden adres wejściowy na zbiór zdarzeń. Przyjmuje POST i oddaje zdarzenia Triggerom. Działanie zależy od klasy Brokera. Domyślna klasa w 1.23 to <code>MTChannelBasedBroker</code> (MT = jeden zestaw podów dla wszystkich brokerów w klastrze).</td><td><code>default</code> w <code>demo</code>. Adres: <code>http://broker-ingress.knative-eventing.svc.cluster.local/demo/default</code></td></tr>
+        <tr><th scope="row">Trigger</th><td>„Chcę zdarzenia z tego Brokera, które pasują do filtra”. <code>filter.attributes</code> to dokładne dopasowanie atrybutów CloudEvent. Trigger bez filtra dostaje wszystko. Nowsze pole <code>filters</code> (dialekty <code>exact</code>, <code>prefix</code>, <code>suffix</code>, <code>all</code>, <code>any</code>, <code>not</code>, <code>cesql</code>) działa w MTChannelBasedBroker i brokerze Kafki. Gdy ustawisz oba pola, wygrywa <code>filters</code>. Po treści (<code>data</code>) filtrować się nie da.</td><td><code>harmonogram</code>: <code>type = dev.knative.sources.ping</code><br><code>nowy-mem</code>: <code>type = memeops.mem.nowy</code><br>oba → <code>mem-dnia</code></td></tr>
+        <tr><th scope="row">Odbiorca (subscriber, sink)</th><td>Cokolwiek z adresem HTTP: ksvc, zwykły Service, kolejny Broker. Jeśli to ksvc, przy zerze podów budzi go Serving.</td><td>ksvc <code>mem-dnia</code>, obraz <code>event_display</code> (wypisuje zdarzenia w logach), <code>window: 10s</code>, czyli szybko wraca do zera.</td></tr>
+        <tr><th scope="row">Kanał (Channel) pod Brokerem</th><td>MTChannelBasedBroker przenosi zdarzenia przez kanał. Domyślny kanał w 1.23 to <b>InMemoryChannel</b> (ConfigMap <code>config-br-default-channel</code>). Dokumentacja: „best effort”, <b>nie do produkcji</b>, do developmentu. Na produkcję dokumentacja poleca brokery natywne, np. Kafka albo RabbitMQ.</td><td>InMemoryChannel, pody <code>imc-controller</code> i <code>imc-dispatcher</code>.</td></tr>
+        <tr><th scope="row">Dostarczanie (<code>delivery</code>)</th><td>Ile razy ponawiać, z jaką przerwą i dokąd wysłać zdarzenie, którego nie da się dostarczyć (<code>deadLetterSink</code>). Ustawiasz na Brokerze (dla wszystkich jego Triggerów) albo na konkretnym Triggerze. Szczegóły niżej.</td><td>Nie ustawione w YAML, więc obowiązują wartości domyślne klastra.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ CLOUDEVENT ============ -->
+<section id="cloudevent" class="prose">
+  <h3>Anatomia CloudEventu</h3>
+  <p>To jest całe zdarzenie z kroku 3 demo. Zwykły POST, nic więcej:</p>
+<pre>POST /demo/default HTTP/1.1
+Host: broker-ingress.knative-eventing.svc.cluster.local
+<b>Ce-Id:</b> 1                        <span class="c"># identyfikator; para source + id ma być unikalna</span>
+<b>Ce-Source:</b> /uczestnik/ja         <span class="c"># kto / w jakim kontekście wysłał</span>
+<b>Ce-Type:</b> memeops.mem.nowy        <span class="c"># co się stało; po tym filtrują nasze Triggery</span>
+<b>Ce-Specversion:</b> 1.0              <span class="c"># wersja standardu CloudEvents</span>
+Content-Type: application/json
+
+{"top":"wyslalem zdarzenie","bottom":"a funkcja wstala"}   <span class="c"># dane, Broker do nich nie zagląda</span></pre>
+  <p>Cztery atrybuty <code>id</code>, <code>source</code>, <code>specversion</code>, <code>type</code> są w CloudEvents obowiązkowe. Opcjonalne to m.in. <code>datacontenttype</code>, <code>subject</code>, <code>time</code>, <code>dataschema</code>. Taki zapis (atrybuty w nagłówkach, dane w treści) to tryb <b>binary</b>. Jest też tryb <b>structured</b>: całe zdarzenie jako jeden JSON w treści. Specyfikacja Knative wymaga, żeby nadawcy i odbiorcy obsługiwali oba (z drobnym wyjątkiem dla nadawców).</p>
+  <p>Zdarzenie z PingSource wygląda w logach <code>mem-dnia</code> tak (wynik z próby):</p>
+<pre>☁️  cloudevents.Event
+Context Attributes,
+  specversion: 1.0
+  type: dev.knative.sources.ping
+  source: /apis/v1/namespaces/demo/pingsources/mem-co-minute
+Data,
+  { "top": "mem dnia", "bottom": "z harmonogramu" }</pre>
+</section>
+
+<!-- ============ DOSTARCZANIE ============ -->
+<section id="dostarczanie" class="prose">
+  <h3>Ponowienia i dead letter sink</h3>
+  <ul>
+    <li><b>Dostarczone</b> = odbiorca odpowiedział kodem 2xx. Specyfikacja Knative każe ponawiać przy 404, 408, 409, 429 i 5xx. Pozostałe 4xx nie są ponawiane.</li>
+    <li><b>Wartości domyślne w 1.23</b> (ConfigMap <code>config-br-defaults</code> z wydania): <code>retry: 10</code>, <code>backoffPolicy: exponential</code>, <code>backoffDelay: PT0.2S</code>. Pierwsza próba nie wlicza się do <code>retry</code>.</li>
+    <li><b><code>deadLetterSink</code></b>: dokąd trafia zdarzenie po wyczerpaniu prób. Domyślnie nie jest ustawiony. W demo też nie, więc takie zdarzenie nigdzie nie trafi <span class="nt">[nie testowane]</span>.</li>
+    <li>Zdarzenie w dead letter sinku może mieć dopisane atrybuty <code>knativeerrordest</code>, <code>knativeerrorcode</code>, <code>knativeerrordata</code> (zależnie od implementacji kanału).</li>
+  </ul>
+  <div class="callout"><b>Najważniejsze:</b> Broker nie czeka na odbiorcę, tylko od razu odpowiada 202. Ponowienia i dead letter sink to jego odpowiedź na pytanie „a co, jeśli odbiorca leży?”. Nadawca się o tym nie dowie.</div>
+</section>
+
+<!-- ============ TRIGGER ============ -->
+<section id="trigger">
+  <h2 class="prose"><span class="num">6</span>Jak powstaje i jak działa Trigger</h2>
+  <div class="prose">
+    <h3>Tworzysz go jak każdy obiekt w Kubernetesie</h3>
+    <p>Trigger z demo (<code>eventing.yaml</code>) z opisem każdej linii:</p>
+<pre>apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: nowy-mem
+  namespace: demo              <span class="c"># domyślnie ten sam namespace co Broker</span>
+spec:
+  broker: default              <span class="c"># z którego Brokera brać zdarzenia</span>
+  filter:
+    attributes:                <span class="c"># dokładne dopasowanie; kilka atrybutów = wszystkie muszą pasować (AND)</span>
+      type: memeops.mem.nowy   <span class="c"># bez filtra Trigger dostaje WSZYSTKIE zdarzenia z Brokera</span>
+  subscriber:                  <span class="c"># dokąd wysyłać pasujące zdarzenia</span>
+    ref: {apiVersion: serving.knative.dev/v1, kind: Service, name: mem-dnia}
+  <span class="c"># opcjonalnie: delivery: {retry: 3, deadLetterSink: {...}} tylko dla tego Triggera</span></pre>
+    <p>To samo z <code>kn</code> (flagi sprawdzone w <code>kn trigger create --help</code>):</p>
+<pre>kn trigger create nowy-mem -n demo --broker default \
+  --filter type=memeops.mem.nowy --sink ksvc:mem-dnia</pre>
+    <p>Filtrować możesz po każdym atrybucie koperty, np. <code>type</code> i <code>source</code> naraz. Nowsze pole <code>filters</code> pozwala na prefiksy, sufiksy, negację i wyrażenia CESQL (sekcja 5). Po treści filtrować się nie da.</p>
+
+    <h3>Co się dzieje po <code>kubectl apply</code></h3>
+    <p>Trigger to tylko zapis w API. Działać zaczyna dopiero wtedy, gdy kontroler zamieni go na coś, co rozumie kanał:</p>
+  </div>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 450" role="img" aria-label="Tworzenie Triggera. 1: użytkownik robi kubectl apply albo kn trigger create. 2: API Kubernetesa zapisuje Trigger, eventing-webhook sprawdza pola. 3: mt-broker-controller sprawdza, czy Broker jest gotowy, ustala adres odbiorcy i tworzy Subscription default-nowy-mem z adresem broker-filter/triggers/demo/nowy-mem i reply na Broker, a w statusie Triggera ustawia warunki BrokerReady, SubscriberResolved, SubscriptionReady i Ready. 4: eventing-controller dopisuje Subscription do listy subskrybentów kanału InMemoryChannel default-kne-trigger. 5: imc-dispatcher czyta tę listę i od teraz wysyła kopię każdego zdarzenia także do filtra tego Triggera.">
+  <defs>
+    <marker id="t-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <g class="b proc p-ext"><rect x="20" y="40" width="200" height="110" rx="3"/><text class="k" x="32" y="57">TY · RAZ</text><text class="t" x="32" y="77">kubectl apply</text><text class="s" x="32" y="96">-f eventing.yaml</text><text class="s" x="32" y="114">albo</text><text class="s" x="32" y="131">kn trigger create</text></g>
+  <g class="b k8s"><rect x="260" y="40" width="200" height="110" rx="10"/><text class="k" x="272" y="57">API KUBERNETESA</text><text class="t" x="272" y="77">zapisuje Trigger</text><text class="s" x="272" y="96">eventing-webhook</text><text class="s" x="272" y="114">sprawdza pola</text><text class="s" x="272" y="131">(broker, subscriber…)</text></g>
+  <g class="b proc p-ev"><rect x="500" y="40" width="200" height="110" rx="3"/><text class="k" x="512" y="57">POD · KNATIVE-EVENTING</text><text class="t" x="512" y="77">mt-broker-controller</text><text class="s" x="512" y="96">1. Broker gotowy?</text><text class="s" x="512" y="114">2. adres odbiorcy</text><text class="s" x="512" y="131">3. tworzy Subscription</text></g>
+  <g class="b proc p-ev"><rect x="740" y="40" width="200" height="110" rx="3"/><text class="k" x="752" y="57">POD · KNATIVE-EVENTING</text><text class="t" x="752" y="77">eventing-controller</text><text class="s" x="752" y="96">dopisuje Subscription</text><text class="s" x="752" y="114">do listy odbiorców</text><text class="s" x="752" y="131">kanału</text></g>
+  <g class="b proc p-ev"><rect x="980" y="40" width="200" height="110" rx="3"/><text class="k" x="992" y="57">POD · PRZENOSI DANE</text><text class="t" x="992" y="77">imc-dispatcher</text><text class="s" x="992" y="96">od teraz każde</text><text class="s" x="992" y="114">zdarzenie kopiuje też</text><text class="s" x="992" y="131">do tego Triggera</text></g>
+
+  <path class="a ctrl" marker-end="url(#t-c)" d="M220 95 H257"/>
+  <path class="a ctrl" marker-end="url(#t-c)" d="M460 95 H497"/>
+  <path class="a ctrl" marker-end="url(#t-c)" d="M700 95 H737"/>
+  <path class="a ctrl" marker-end="url(#t-c)" d="M940 95 H977"/>
+
+  <g class="b ev"><rect x="20" y="230" width="380" height="150" rx="10"/><text class="k" x="32" y="247">STATUS TRIGGERA nowy-mem · Z KLASTRA</text><text class="s" x="32" y="270">BrokerReady            = True</text><text class="s" x="32" y="288">SubscriberResolved     = True</text><text class="s" x="32" y="306">  → http://mem-dnia.demo.svc.cluster.local</text><text class="s" x="32" y="324">SubscriptionReady      = True</text><text class="s" x="32" y="342">DeadLetterSinkResolved = True (brak DLS)</text><text class="s" x="32" y="364">Ready                  = True</text></g>
+  <g class="b ev"><rect x="430" y="230" width="300" height="150" rx="10"/><text class="k" x="442" y="247">SUBSCRIPTION · TWORZY JĄ KONTROLER</text><text class="t" x="442" y="267">default-nowy-mem-&lt;uid&gt;</text><text class="s" x="442" y="288">kanał: default-kne-trigger</text><text class="s" x="442" y="306">subscriber: broker-filter</text><text class="s" x="442" y="324">  /triggers/demo/nowy-mem/&lt;uid&gt;</text><text class="s" x="442" y="342">reply: Broker default</text><text class="s" x="442" y="364">właściciel: Trigger nowy-mem</text></g>
+  <g class="b ev"><rect x="760" y="230" width="420" height="150" rx="10"/><text class="k" x="772" y="247">INMEMORYCHANNEL default-kne-trigger · WŁAŚCICIEL: BROKER</text><text class="t" x="772" y="267">spec.subscribers</text><text class="s" x="772" y="288">1. broker-filter/triggers/demo/harmonogram/…</text><text class="s" x="772" y="306">2. broker-filter/triggers/demo/nowy-mem/…</text><text class="s" x="772" y="324">delivery: retry 10, exponential, PT0.2S</text><text class="s" x="772" y="342">  (domyślne z config-br-defaults)</text><text class="s" x="772" y="364">adres: default-kne-trigger-kn-channel…</text></g>
+
+  <path class="a ctrl" marker-end="url(#t-c)" d="M620 150 V227"/>
+  <path class="a ctrl" marker-end="url(#t-c)" d="M560 150 V190 H210 V227"/>
+  <text class="lbl ctrl" x="380" y="184">ustawia status</text>
+  <text class="lbl ctrl" x="626" y="196">tworzy</text>
+  <path class="a ctrl" marker-end="url(#t-c)" d="M840 150 V227"/>
+  <text class="lbl ctrl" x="846" y="196">dopisuje</text>
+  <path class="a ctrl" marker-end="url(#t-c)" d="M1080 230 V153"/>
+  <text class="lbl ctrl" x="1086" y="196">czyta listę</text>
+
+  <g class="badge"><circle cx="120" cy="40" r="10"/><text x="120" y="44" text-anchor="middle">1</text></g>
+  <g class="badge"><circle cx="360" cy="40" r="10"/><text x="360" y="44" text-anchor="middle">2</text></g>
+  <g class="badge"><circle cx="600" cy="40" r="10"/><text x="600" y="44" text-anchor="middle">3</text></g>
+  <g class="badge"><circle cx="840" cy="40" r="10"/><text x="840" y="44" text-anchor="middle">4</text></g>
+  <g class="badge"><circle cx="1080" cy="40" r="10"/><text x="1080" y="44" text-anchor="middle">5</text></g>
+
+  <text class="note strong" x="20" y="412">Trigger sam niczego nie przenosi.</text>
+  <text class="note" x="20" y="430">To reguła. Kontroler zamienia ją na Subscription w kanale Brokera, a zdarzenia przenoszą pody. Usunięcie Triggera usuwa też jego Subscription, bo Trigger jest jej właścicielem (ownerReference).</text>
+</svg>
+    </div>
+    <figcaption>Nazwy, adresy, warunki statusu i właściciele obiektów odczytane z klastra kind <code>memeops</code> 3 listopada 2026 (<code>kubectl get trigger,subscription,imc -n demo -o yaml</code>). Z logów kontrolerów: <code>mt-broker-controller</code> zawiera reconcilery Brokera i Triggera, a <code>eventing-controller</code> m.in. reconcilery Subscription, kanałów i PingSource.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <h3>Co widać na klastrze (wynik z 3.11.2026)</h3>
+<pre>$ kubectl get broker,trigger,pingsource -n demo
+NAME                                  URL                                                                     READY
+broker.eventing.knative.dev/default   http://broker-ingress.knative-eventing.svc.cluster.local/demo/default   True
+
+NAME                                       BROKER    SUBSCRIBER_URI                           READY
+trigger.eventing.knative.dev/harmonogram   default   http://mem-dnia.demo.svc.cluster.local   True
+trigger.eventing.knative.dev/nowy-mem      default   http://mem-dnia.demo.svc.cluster.local   True
+
+NAME                                           SINK                                                                    SCHEDULE    READY
+pingsource.sources.knative.dev/mem-co-minute   http://broker-ingress.knative-eventing.svc.cluster.local/demo/default   * * * * *   True
+
+$ kubectl get inmemorychannels,subscriptions -n demo       <span class="c"># tego nie tworzyliśmy, powstało samo</span>
+NAME                                                        URL
+inmemorychannel.messaging.knative.dev/default-kne-trigger   http://default-kne-trigger-kn-channel.demo.svc.cluster.local
+
+NAME                                                                                          READY
+subscription.messaging.knative.dev/default-harmonogram-8825aad2-1e08-42fc-abc3-77423725483b   True
+subscription.messaging.knative.dev/default-nowy-mem-60acc3ba-e785-4724-afef-5fe489466ffb      True</pre>
+    <p>Kolumny <code>AGE</code> i <code>REASON</code> zostały wycięte, żeby wynik się zmieścił. Zwróć uwagę na trzy rzeczy:</p>
+    <ul>
+      <li><code>SUBSCRIBER_URI</code> to adres usługi <code>mem-dnia</code>. Kontroler sam ustalił go z <code>ref</code> (warunek <code>SubscriberResolved</code>).</li>
+      <li>Kanał i Subscriptions powstały same. Kanał należy do Brokera, a każda Subscription do swojego Triggera.</li>
+      <li><code>SINK</code> w PingSource to dokładnie adres Brokera. Tak źródło wie, dokąd wysyłać.</li>
+    </ul>
+
+    <h3>Kiedy Trigger nie jest gotowy</h3>
+    <p>Warunki w statusie mówią, który etap nie wyszedł. <code>BrokerReady=False</code> oznacza, że nie ma Brokera albo nie wstał. <code>SubscriberResolved=False</code> oznacza, że nie da się ustalić adresu odbiorcy (np. literówka w nazwie ksvc). <code>SubscriptionReady=False</code> oznacza problem z kanałem. Sprawdzisz to tak:</p>
+<pre>kubectl get trigger nowy-mem -n demo -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.message}{"\n"}{end}'</pre>
+  </div>
+</section>
+
+<!-- ============ DEMO 04 ============ -->
+<section id="demo">
+  <h2 class="prose"><span class="num">7</span>Jedno zdarzenie w demo 04 krok po kroku</h2>
+  <p class="prose">Rysunek pokazuje, co jest pod spodem Brokera. Do zrozumienia dema wystarczy górny rząd obiektów (PingSource, Broker, Triggery, ksvc). Dolne pody odpowiadają na pytanie „a kto to właściwie przenosi?”.</p>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 500" role="img" aria-label="Demo 04. Źródła: PingSource mem-co-minute obsługiwany przez pod pingsource-mt-adapter oraz ręczny pod z curl. Oba wysyłają do poda broker-ingress, który odpowiada 202. Dalej imc-dispatcher kanału InMemoryChannel, potem broker-filter, który czyta filtry dwóch Triggerów: harmonogram dla typu dev.knative.sources.ping i nowy-mem dla typu memeops.mem.nowy. Pasujące zdarzenie idzie jako POST na adres ksvc mem-dnia; przy zerze podów przez activator do poda event_display. Zdarzenie memeops.mem.usuniety dostaje 202, ale żaden Trigger nie pasuje.">
+  <defs>
+    <marker id="d-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="d-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <g class="zone"><rect x="20" y="20" width="240" height="460" rx="12"/><text x="36" y="42">ŹRÓDŁA</text></g>
+  <g class="zone"><rect x="280" y="20" width="620" height="460" rx="12"/><text x="296" y="42">BROKER DEFAULT · PODY W KNATIVE-EVENTING</text></g>
+  <g class="zone"><rect x="920" y="20" width="260" height="460" rx="12"/><text x="936" y="42">ODBIORCA · KNATIVE SERVING</text></g>
+
+  <!-- źródła -->
+  <g class="b ev"><rect x="40" y="60" width="200" height="64" rx="10"/><text class="k" x="52" y="77">PingSource</text><text class="t" x="52" y="94">mem-co-minute</text><text class="s" x="52" y="110">schedule: * * * * *</text></g>
+  <g class="b proc p-ev"><rect x="40" y="150" width="200" height="64" rx="3"/><text class="k" x="52" y="167">POD · KNATIVE-EVENTING</text><text class="t" x="52" y="184">pingsource-mt-adapter</text><text class="s" x="52" y="200">wysyła co minutę</text></g>
+  <g class="b proc p-ext"><rect x="40" y="330" width="200" height="64" rx="3"/><text class="k" x="52" y="347">POD W DEMO · KROK 3</text><text class="t" x="52" y="364">nadawca (curl)</text><text class="s" x="52" y="380">POST + nagłówki Ce-*</text></g>
+
+  <!-- broker -->
+  <g class="b ev"><rect x="300" y="60" width="190" height="64" rx="10"/><text class="k" x="312" y="77">Broker</text><text class="t" x="312" y="94">default</text><text class="s" x="312" y="110">namespace demo</text></g>
+  <g class="b proc p-ev"><rect x="300" y="150" width="190" height="64" rx="3"/><text class="k" x="312" y="167">POD · WEJŚCIE</text><text class="t" x="312" y="184">broker-ingress</text><text class="s" x="312" y="200">odpowiada 202</text></g>
+  <g class="b proc p-ev"><rect x="510" y="150" width="170" height="64" rx="3"/><text class="k" x="522" y="167">POD · KANAŁ</text><text class="t" x="522" y="184">imc-dispatcher</text><text class="s" x="522" y="200">InMemoryChannel</text></g>
+  <g class="b proc p-ev"><rect x="700" y="150" width="180" height="64" rx="3"/><text class="k" x="712" y="167">POD · FILTR</text><text class="t" x="712" y="184">broker-filter</text><text class="s" x="712" y="200">sprawdza Triggery</text></g>
+
+  <g class="b ev"><rect x="520" y="270" width="360" height="52" rx="10"/><text class="t" x="532" y="291">Trigger harmonogram</text><text class="s" x="532" y="309">type = dev.knative.sources.ping</text></g>
+  <g class="b ev"><rect x="520" y="334" width="360" height="52" rx="10"/><text class="t" x="532" y="355">Trigger nowy-mem</text><text class="s" x="532" y="373">type = memeops.mem.nowy</text></g>
+
+  <text class="note cold strong" x="300" y="290">memeops.mem.usuniety:</text>
+  <text class="note cold" x="300" y="308">wejście daje 202,</text>
+  <text class="note cold" x="300" y="326">kanał podaje dalej,</text>
+  <text class="note cold" x="300" y="344">ale żaden Trigger</text>
+  <text class="note cold" x="300" y="362">nie pasuje: filtr</text>
+  <text class="note cold" x="300" y="380">nikomu go nie wysyła.</text>
+
+  <text class="note" x="300" y="430">Broker to tylko obiekt w API. Zdarzenia przenoszą trzy pody z knative-eventing,</text>
+  <text class="note" x="300" y="448">wspólne dla wszystkich brokerów klasy MTChannelBasedBroker w klastrze.</text>
+
+  <!-- odbiorca -->
+  <g class="b kn"><rect x="940" y="150" width="220" height="64" rx="10"/><text class="k" x="952" y="167">Service (ksvc)</text><text class="t" x="952" y="184">mem-dnia</text><text class="s" x="952" y="200">0 podów bez zdarzeń</text></g>
+  <g class="b proc p-kn"><rect x="940" y="250" width="220" height="56" rx="3"/><text class="k" x="952" y="267">POD · KNATIVE-SERVING</text><text class="t" x="952" y="284">activator</text><text class="s" x="952" y="299">trzyma żądanie przy 0</text></g>
+  <g class="b k8s"><rect x="940" y="340" width="220" height="80" rx="10"/><text class="k" x="952" y="357">Pod mem-dnia</text><text class="t" x="952" y="376">event_display</text><text class="s" x="952" y="394">wypisuje zdarzenie</text><text class="s" x="952" y="410">w logach</text></g>
+
+  <!-- sterowanie -->
+  <path class="a ctrl" marker-end="url(#d-c)" d="M140 124 V147"/>
+  <path class="a ctrl" marker-end="url(#d-c)" d="M395 124 V147"/>
+  <path class="a ctrl" marker-end="url(#d-c)" d="M840 270 V217"/>
+  <text class="lbl ctrl" x="856" y="262">filtry</text>
+
+  <!-- ruch -->
+  <path class="a traffic" marker-end="url(#d-t)" d="M240 182 H297"/>
+  <path class="a traffic" marker-end="url(#d-t)" d="M240 362 H264 V200 H297"/>
+  <path class="a traffic" marker-end="url(#d-t)" d="M490 182 H507"/>
+  <path class="a traffic" marker-end="url(#d-t)" d="M680 182 H697"/>
+  <path class="a traffic" marker-end="url(#d-t)" d="M880 182 H937"/>
+  <text class="lbl traffic" x="910" y="164" text-anchor="middle">POST</text>
+  <path class="a traffic" marker-end="url(#d-t)" d="M1050 214 V247"/>
+  <path class="a traffic" marker-end="url(#d-t)" d="M1050 306 V337"/>
+
+  <g class="badge"><circle cx="280" cy="182" r="10"/><text x="280" y="186" text-anchor="middle">1</text></g>
+  <g class="badge"><circle cx="499" cy="182" r="9"/><text x="499" y="186" text-anchor="middle">2</text></g>
+  <g class="badge"><circle cx="689" cy="182" r="9"/><text x="689" y="186" text-anchor="middle">3</text></g>
+  <g class="badge"><circle cx="840" cy="243" r="10"/><text x="840" y="247" text-anchor="middle">4</text></g>
+  <g class="badge"><circle cx="910" cy="182" r="10"/><text x="910" y="186" text-anchor="middle">5</text></g>
+  <g class="badge"><circle cx="1050" cy="322" r="10"/><text x="1050" y="326" text-anchor="middle">6</text></g>
+</svg>
+    </div>
+    <figcaption>Nazwy podów i usług pochodzą z manifestów wydania <code>knative-v1.23.0</code> (<code>eventing-core.yaml</code>, <code>in-memory-channel.yaml</code>, <code>mt-channel-broker.yaml</code>). Na rysunku <code>broker-ingress</code> i <code>broker-filter</code> to nazwy Service’ów; Deploymenty nazywają się <code>mt-broker-ingress</code> i <code>mt-broker-filter</code>.</figcaption>
+  </figure>
+
+  <div class="flows">
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--traffic)"></span>Zdarzenie z harmonogramu</h3>
+      <ol>
+        <li>O pełnej minucie adapter PingSource wysyła CloudEvent: <code>type: dev.knative.sources.ping</code>, <code>source: /apis/v1/namespaces/demo/pingsources/mem-co-minute</code>, dane z <code>spec.data</code>. Adres bierze z <code>sink.ref</code>, czyli z Brokera <code>default</code>.</li>
+        <li><code>broker-ingress</code> przyjmuje zdarzenie i odpowiada <b>202</b>. Dla nadawcy sprawa zamknięta.</li>
+        <li>Wejście oddaje zdarzenie do kanału (InMemoryChannel, pod <code>imc-dispatcher</code>), a kanał do <code>broker-filter</code>.</li>
+        <li><code>broker-filter</code> porównuje atrybuty z filtrami Triggerów. <code>type</code> pasuje do Triggera <code>harmonogram</code>.</li>
+        <li>Filtr wysyła HTTP POST z tym samym CloudEventem na adres <code>mem-dnia</code>. Usługa ma 0 podów, więc dalej działa zwykły Serving: activator trzyma żądanie, autoscaler podnosi pod.</li>
+        <li><code>event_display</code> wypisuje blok <code>☁️ cloudevents.Event</code> i odpowiada. Po chwili bez zdarzeń pod znika (<code>window: 10s</code>). W próbie pod pojawiał się co minutę i znikał.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--cold)"></span>Zdarzenia z <code>curl</code> (krok 3 demo)</h3>
+      <ul>
+        <li><b><code>memeops.mem.nowy</code></b>: ta sama droga, w kroku 4 pasuje Trigger <code>nowy-mem</code>. Wynik z próby: <b>202</b>, w logach blok z <code>source: /uczestnik/ja</code>.</li>
+        <li><b><code>memeops.mem.usuniety</code></b>: kroki 1–3 bez zmian, Broker też odpowiada <b>202</b>. W kroku 4 żaden Trigger nie pasuje, więc kroków 5–6 nie ma. Wynik z próby: <b>202, w logach nic</b>.</li>
+        <li>Broker nie przechowuje takiego zdarzenia na później. Trigger dodany po fakcie go nie dostanie <span class="nt">[nie testowane]</span>.</li>
+        <li><code>curl</code> idzie z poda, bo adres Brokera (<code>*.svc.cluster.local</code>) jest widoczny tylko wewnątrz klastra.</li>
+      </ul>
+      <p style="font-size:14.5px;margin:0 0 10px">❓ Pytanie kontrolne: „202 w obu przypadkach, dlaczego funkcja dostała tylko pierwsze?” Odpowiedź: 202 znaczy „przyjąłem”. O dostarczeniu decyduje filtr Triggera, a dla <code>memeops.mem.usuniety</code> nie ma żadnego.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ KAFKA ============ -->
+<section id="kafka">
+  <h2 class="prose"><span class="num">8</span>Kafka a Eventing: źródło czy magazyn Brokera?</h2>
+  <div class="prose">
+    <p>Na slajdzie „Kafka, kolejka (produkcja)” stoi po stronie źródeł. Kafka może jednak grać w Eventingu <b>dwie różne role</b> i łatwo je pomylić. Eventing nie zastępuje Kafki. Zastępuje kod klienta Kafki w odbiorcach: odbiorca dostaje zwykły POST, a nie musi sam czytać tematu.</p>
+  </div>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 430" role="img" aria-label="Dwie role Kafki. Rola 1, KafkaSource: system producent zapisuje wiadomość do istniejącego tematu Kafki, KafkaSource czyta temat i zamienia każdą wiadomość na CloudEvent typu dev.knative.kafka.event, wysyła go do Brokera dowolnej klasy albo od razu do ksvc, a Trigger dostarcza odbiorcy POST bez klienta Kafki. Rola 2, Kafka Broker: dowolny nadawca wysyła POST na adres Brokera klasy Kafka, pod kafka-broker-receiver zapisuje zdarzenie jako rekord w wewnętrznym temacie Kafki, pod kafka-broker-dispatcher czyta temat, filtruje według Triggerów i wysyła POST do odbiorców.">
+  <defs>
+    <marker id="k-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <g class="zone"><rect x="20" y="20" width="1160" height="185" rx="12"/><text x="36" y="42">ROLA 1 · KAFKASOURCE: KAFKA JAKO ŹRÓDŁO ZDARZEŃ (KAFKA STOI OBOK)</text></g>
+  <g class="zone"><rect x="20" y="225" width="1160" height="185" rx="12"/><text x="36" y="247">ROLA 2 · KAFKA BROKER: KAFKA JAKO MAGAZYN BROKERA (KAFKA POD SPODEM)</text></g>
+
+  <g class="b proc p-ext"><rect x="40" y="66" width="190" height="96" rx="3"/><text class="k" x="52" y="83">SYSTEM · PRODUCENT</text><text class="t" x="52" y="102">np. sklep</text><text class="s" x="52" y="122">zapisuje wiadomość</text><text class="s" x="52" y="139">klientem Kafki</text></g>
+  <g class="b ext"><rect x="270" y="66" width="200" height="96" rx="10"/><text class="k" x="282" y="83">KAFKA · TEMAT</text><text class="t" x="282" y="102">zamowienia</text><text class="s" x="282" y="122">Wasz istniejący temat;</text><text class="s" x="282" y="139">inni też go czytają</text></g>
+  <g class="b ev"><rect x="510" y="66" width="210" height="96" rx="10"/><text class="k" x="522" y="83">KafkaSource</text><text class="t" x="522" y="102">czyta temat</text><text class="s" x="522" y="122">wiadomość → CloudEvent</text><text class="s" x="522" y="139">dev.knative.kafka.event</text></g>
+  <g class="b ev"><rect x="760" y="66" width="180" height="96" rx="10"/><text class="k" x="772" y="83">SINK</text><text class="t" x="772" y="102">Broker</text><text class="s" x="772" y="122">dowolnej klasy,</text><text class="s" x="772" y="139">albo od razu ksvc</text></g>
+  <g class="b kn"><rect x="980" y="66" width="180" height="96" rx="10"/><text class="k" x="992" y="83">TRIGGER → KSVC</text><text class="t" x="992" y="102">odbiorca</text><text class="s" x="992" y="122">dostaje POST,</text><text class="s" x="992" y="139">bez klienta Kafki</text></g>
+  <path class="a traffic" marker-end="url(#k-t)" d="M230 114 H267"/>
+  <path class="a traffic" marker-end="url(#k-t)" d="M470 114 H507"/>
+  <path class="a traffic" marker-end="url(#k-t)" d="M720 114 H757"/>
+  <path class="a traffic" marker-end="url(#k-t)" d="M940 114 H977"/>
+  <text class="lbl traffic" x="489" y="104" text-anchor="middle">czyta</text>
+  <text class="lbl traffic" x="739" y="104" text-anchor="middle">POST</text>
+  <text class="lbl traffic" x="959" y="104" text-anchor="middle">POST</text>
+  <text class="note" x="40" y="190">Kafka to Wasz system, który już istnieje. Knative tylko z niej czyta i przenosi wiadomości do świata HTTP i CloudEvents.</text>
+
+  <g class="b proc p-ext"><rect x="40" y="271" width="190" height="96" rx="3"/><text class="k" x="52" y="288">NADAWCA</text><text class="t" x="52" y="307">dowolne źródło</text><text class="s" x="52" y="327">PingSource, curl…</text><text class="s" x="52" y="344">POST na adres Brokera</text></g>
+  <g class="b proc p-ev"><rect x="270" y="271" width="200" height="96" rx="3"/><text class="k" x="282" y="288">POD · WEJŚCIE</text><text class="t" x="282" y="307">receiver</text><text class="s" x="282" y="327">kafka-broker-receiver</text><text class="s" x="282" y="344">zapisuje rekord Kafki</text></g>
+  <g class="b ext"><rect x="510" y="271" width="210" height="96" rx="10"/><text class="k" x="522" y="288">KAFKA · TEMAT BROKERA</text><text class="t" x="522" y="307">temat wewnętrzny</text><text class="s" x="522" y="327">Broker tworzy go sam;</text><text class="s" x="522" y="344">zdarzenia leżą w Kafce</text></g>
+  <g class="b proc p-ev"><rect x="760" y="271" width="180" height="96" rx="3"/><text class="k" x="772" y="288">POD · WYSYŁKA</text><text class="t" x="772" y="307">dispatcher</text><text class="s" x="772" y="327">kafka-broker-</text><text class="s" x="772" y="344">  dispatcher</text></g>
+  <g class="b kn"><rect x="980" y="271" width="180" height="96" rx="10"/><text class="k" x="992" y="288">KSVC</text><text class="t" x="992" y="307">odbiorca</text><text class="s" x="992" y="327">dostaje POST,</text><text class="s" x="992" y="344">jak w demo</text></g>
+  <path class="a traffic" marker-end="url(#k-t)" d="M230 319 H267"/>
+  <path class="a traffic" marker-end="url(#k-t)" d="M470 319 H507"/>
+  <path class="a traffic" marker-end="url(#k-t)" d="M720 319 H757"/>
+  <path class="a traffic" marker-end="url(#k-t)" d="M940 319 H977"/>
+  <text class="lbl traffic" x="249" y="309" text-anchor="middle">POST</text>
+  <text class="lbl traffic" x="739" y="309" text-anchor="middle">czyta</text>
+  <text class="lbl traffic" x="959" y="309" text-anchor="middle">POST</text>
+  <text class="note" x="40" y="395">Ten sam Broker, Triggery i odbiorcy co w demo. Zmienia się tylko klasa Brokera: zamiast kanału w pamięci zdarzenia trafiają do Kafki.</text>
+</svg>
+    </div>
+    <figcaption>Na naszym klastrze Kafki nie ma. Nazwy podów, adnotacje i typ zdarzenia pochodzą z dokumentacji Knative (Kafka Broker, KafkaSource) <span class="nt">[nie testowane]</span>.</figcaption>
+  </figure>
+  <div class="legend">
+    <div class="item"><span class="sw ev"></span>obiekt Knative Eventing</div>
+    <div class="item"><span class="sw kn"></span>obiekt Knative Serving</div>
+    <div class="item"><span class="sw ext"></span>Kafka (system spoza Knative)</div>
+    <div class="item"><span class="sw proc"></span>proces / pod</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col"></th><th scope="col">InMemoryChannel (demo)</th><th scope="col">KafkaSource</th><th scope="col">Kafka Broker</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Rola</th><td>Kanał pod Brokerem <code>MTChannelBasedBroker</code></td><td><b>Źródło</b>: wpuszcza wiadomości z Kafki do Eventingu</td><td><b>Implementacja Brokera</b>: Kafka przechowuje zdarzenia Brokera</td></tr>
+        <tr><th scope="row">Jak włączyć</th><td>Domyślnie po instalacji z demo</td><td>Obiekt <code>KafkaSource</code> z listą tematów i <code>sink</code></td><td>Adnotacja na Brokerze <code>eventing.knative.dev/broker.class: Kafka</code> i <code>spec.config</code> → ConfigMap <code>kafka-broker-config</code> (<code>bootstrap.servers</code>, <code>default.topic.partitions</code>, <code>default.topic.replication.factor</code>)</td></tr>
+        <tr><th scope="row">Gdzie leżą zdarzenia</th><td>W pamięci poda <code>imc-dispatcher</code>. Dokumentacja: „best effort”, nie na produkcję.</td><td>W Waszym temacie Kafki (to Wasze dane)</td><td>We wewnętrznym temacie Kafki, który Broker tworzy sam. Dokumentacja: zdarzenia zapisywane jako rekordy Kafki.</td></tr>
+        <tr><th scope="row">Kolejność</th><td>Brak gwarancji (best effort)</td><td>Patrz dokumentacja KafkaSource</td><td>Domyślnie <code>unordered</code>. Adnotacja na Triggerze <code>kafka.eventing.knative.dev/delivery.order: ordered</code> daje kolejność w obrębie partycji.</td></tr>
+        <tr><th scope="row">Kiedy</th><td>Demo, development</td><td>Macie już Kafkę z danymi i chcecie, żeby budziły funkcje</td><td>Produkcja: Broker ma przetrwać restart podów i nie gubić zdarzeń</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Oba warianty można łączyć: KafkaSource wysyła do Brokera klasy Kafka. Dla RabbitMQ jest analogiczna para, czyli RabbitMQ Broker i RabbitmqSource (osobny projekt <code>eventing-rabbitmq</code>). Gdy worker ma <b>sam pobierać</b> zadania z kolejki, a nie dostawać POST, lepiej pasuje KEDA (następna sekcja).</p>
+  </div>
+</section>
+
+<!-- ============ WYBÓR ============ -->
+<section id="wybor">
+  <h2 class="prose"><span class="num">9</span>Eventing, KEDA czy zwykłe wywołanie HTTP</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Sytuacja</th><th scope="col">Wybierz</th><th scope="col">Dlaczego</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Nadawca potrzebuje odpowiedzi teraz (np. wygeneruj mema i oddaj obrazek)</th><td>Zwykłe HTTP do ksvc (Serving)</td><td>Synchronicznie: pytanie i odpowiedź. Broker dałby tylko 202 bez wyniku.</td></tr>
+        <tr><th scope="row">„Coś się stało” i może to obchodzić kilka usług, a lista się zmienia</th><td>Knative Eventing (Broker + Triggery)</td><td>Nadawca zna jeden adres. Odbiorców dodajesz Triggerami. Zdarzenie przychodzi do odbiorcy jako POST (push), odbiorca w ksvc śpi na zerze.</td></tr>
+        <tr><th scope="row">Praca czeka w kolejce lub strumieniu (Redis, Kafka) i worker sam ją pobiera</th><td>KEDA + Deployment (demo 11, dzień 2)</td><td>Worker sam pobiera zadania (pull). KEDA skaluje go po długości kolejki lub lagu, także do zera. Nie potrzebuje HTTP.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose">Granica nie jest ostra. Wiadomości z Kafki da się wepchnąć do ksvc przez KafkaSource (Eventing), a ten sam temat może czytać worker skalowany przez KEDA. Pytanie pomocnicze: czy odbiorca ma dostać zdarzenie jako żądanie HTTP, czy sam je pobierać?</p>
+</section>
+
+<!-- ============ KLASTER ============ -->
+<section id="klaster" class="prose">
+  <h2><span class="num">10</span>Zobacz na klastrze (tylko odczyt)</h2>
+  <p>Działa dopiero po <code>demo/04-eventing/prepare.sh</code>. Bez Eventingu <code>kubectl</code> odpowie, że nie zna typu <code>broker</code> (brak CRD).</p>
+<pre><span class="c"># czy Eventing w ogóle jest zainstalowany</span>
+kubectl get crd | grep eventing.knative.dev
+
+<span class="c"># obiekty z demo: Broker (READY, URL), Triggery (BROKER, SUBSCRIBER_URI), PingSource</span>
+kubectl get broker,trigger,pingsource -n demo
+kubectl get ksvc mem-dnia -n demo
+
+<span class="c"># adres Brokera, ten sam, na który strzela curl w kroku 3</span>
+kubectl get broker default -n demo -o jsonpath='{.status.address.url}{"\n"}'
+
+<span class="c"># co Trigger filtruje i dokąd wysyła</span>
+kubectl get trigger nowy-mem -n demo -o yaml
+
+<span class="c"># kanał pod Brokerem i subskrypcje utworzone dla Triggerów</span>
+kubectl get inmemorychannels,subscriptions -n demo
+
+<span class="c"># pody, które przenoszą zdarzenia</span>
+kubectl get deploy -n knative-eventing
+
+<span class="c"># domyślna klasa Brokera, kanał i ponowienia</span>
+kubectl get cm config-br-defaults config-br-default-channel -n knative-eventing -o yaml
+
+<span class="c"># pod mem-dnia pojawia się co minutę; logi zdarzeń</span>
+kubectl get pods -n demo -l serving.knative.dev/service=mem-dnia -w
+kubectl logs -n demo -l serving.knative.dev/service=mem-dnia -c user-container --tail=20</pre>
+  <p>Polecenia sprawdzone na klastrze kind <code>memeops</code> 3 listopada 2026, wyniki w sekcji 6. Dodatkowo: <code>kubectl get sources -n demo</code> pokazuje wszystkie źródła naraz, a <code>kubectl get trigger nowy-mem -n demo -o jsonpath='{.status.subscriberUri}'</code> podaje adres, pod który Trigger wysyła.</p>
+</section>
+
+<!-- ============ SPRAWDŹ SIĘ ============ -->
+<section id="sprawdz" class="prose">
+  <h2><span class="num">11</span>Sprawdź się</h2>
+  <details><summary>Broker odpowiedział 202 na <code>memeops.mem.usuniety</code>. Czy <code>mem-dnia</code> dostała zdarzenie?</summary><p>Nie. 202 znaczy „przyjąłem”. Zdarzenie dociera tylko do Triggerów z pasującym filtrem, a żaden nie filtruje <code>memeops.mem.usuniety</code>. W próbie: 202, w logach nic.</p></details>
+  <details><summary>Chcesz, żeby zdarzenia <code>memeops.mem.nowy</code> dostawała też druga usługa. Co zmieniasz?</summary><p>Dodajesz drugi Trigger z tym samym filtrem i nowym <code>subscriber</code>. Nadawcy (<code>curl</code>, aplikacja) i istniejących Triggerów nie ruszasz.</p></details>
+  <details><summary>Co w demo 04 jest z Eventingu, a co z Servingu?</summary><p>Eventing: Broker, Triggery, PingSource i pody w <code>knative-eventing</code>. Serving: ksvc <code>mem-dnia</code> oraz budzenie od zera (activator, autoscaler). Eventing dostarcza zdarzenie zwykłym POST-em i nie wie, że odbiorca spał.</p></details>
+  <details><summary>Dlaczego to demo nie nadaje się na produkcję?</summary><p>InMemoryChannel według dokumentacji to kanał „best effort”, nie do produkcji, do developmentu. Zdarzenia trzyma w pamięci, więc restart <code>imc-dispatcher</code> może je zgubić <span class="nt">[nie testowane]</span>. Na produkcję dokumentacja poleca brokery natywne, np. Kafka albo RabbitMQ.</p></details>
+  <details><summary>Kto „uruchamia” Trigger <code>harmonogram</code> co minutę?</summary><p>Nikt. Co minutę PingSource (pod <code>pingsource-mt-adapter</code>) wysyła zdarzenie do Brokera. Trigger to stała reguła. Broker sprawdza z nią każde zdarzenie, a to z PingSource pasuje do filtra <code>type = dev.knative.sources.ping</code>.</p></details>
+  <details><summary>Usuwasz Trigger <code>nowy-mem</code>. Co jeszcze znika?</summary><p>Jego Subscription <code>default-nowy-mem-…</code>, bo Trigger jest jej właścicielem (ownerReference). Kanał zostaje, bo należy do Brokera. Na liście subskrybentów kanału zostaje tylko <code>harmonogram</code>.</p></details>
+  <details><summary>Macie Kafkę z tematem <code>zamowienia</code>. Funkcja ma się budzić przy każdym zamówieniu. KafkaSource czy Kafka Broker?</summary><p>KafkaSource, bo wiadomości już leżą w Waszym temacie i trzeba je wpuścić do Eventingu. Kafka Broker decyduje o czym innym: gdzie Broker przechowuje zdarzenia. Te rozwiązania się nie wykluczają: KafkaSource może wysyłać do Brokera klasy Kafka.</p></details>
+  <details><summary>Ile podów z <code>knative-eventing</code> dotyka jedno zdarzenie z <code>curl</code> w demo, zanim dojdzie do <code>mem-dnia</code>?</summary><p>Trzy: <code>broker-ingress</code> → <code>imc-dispatcher</code> → <code>broker-filter</code>. Potem jest już Serving (activator przy zerze podów).</p></details>
+  <details><summary><code>mem-dnia</code> zaczyna zwracać 500. Co zrobi Broker?</summary><p>5xx to błąd do ponowienia. Domyślnie w 1.23: do 10 ponowień z wykładniczo rosnącą przerwą od 0,2 s. Bez <code>deadLetterSink</code> zdarzenie po ostatniej próbie nigdzie nie trafi <span class="nt">[nie testowane]</span>.</p></details>
+</section>
+
+<!-- ============ ŹRÓDŁA ============ -->
+<section id="zrodla" class="prose">
+  <h2><span class="num">12</span>Źródła</h2>
+  <p class="sources">Wyniki z próby: <code>demo/04-eventing/README.md</code>. Wartości domyślne i nazwy podów: manifesty wydania <code>knative-v1.23.0</code>. Strony knative.dev pokazują najnowszą wersję dokumentacji.</p>
+  <ul class="sources">
+    <li><a href="https://knative.dev/docs/">knative.dev/docs</a>: opis Serving i Eventing, moduły razem albo osobno</li>
+    <li><a href="https://knative.dev/docs/install/yaml-install/eventing/install-eventing-with-yaml/">Instalacja Eventing z YAML</a>: cztery pliki, InMemoryChannel „not suitable for production”</li>
+    <li><a href="https://knative.dev/docs/eventing/brokers/">Brokers</a></li>
+    <li><a href="https://knative.dev/docs/eventing/brokers/broker-types/channel-based-broker/">Channel based Broker</a>: MTChannelBasedBroker, zalecenie brokerów natywnych</li>
+    <li><a href="https://knative.dev/docs/eventing/triggers/">Triggers</a>: <code>filter</code>, <code>filters</code>, dialekty</li>
+    <li><a href="https://knative.dev/docs/eventing/channels/channels-crds/">Available Channels</a>: InMemoryChannel „best effort”, „should NOT be used in Production”</li>
+    <li><a href="https://knative.dev/docs/eventing/sources/">Event sources</a>, <a href="https://knative.dev/docs/eventing/sources/ping-source/">PingSource</a>, <a href="https://knative.dev/docs/eventing/sources/kafka-source/">KafkaSource</a>, <a href="https://knative.dev/docs/eventing/custom-event-source/sinkbinding/">SinkBinding</a></li>
+    <li><a href="https://knative.dev/docs/eventing/brokers/broker-types/kafka-broker/">Knative Broker for Apache Kafka</a>: <code>broker.class: Kafka</code>, <code>kafka-broker-config</code>, pody <code>kafka-broker-receiver</code> i <code>kafka-broker-dispatcher</code>, adnotacja <code>delivery.order</code></li>
+    <li><a href="https://knative.dev/docs/eventing/sources/apiserversource/">ApiServerSource</a>, tryby <code>Reference</code> i <code>Resource</code> (<code>kubectl explain apiserversource.spec.mode</code>)</li>
+    <li><a href="https://knative.dev/docs/eventing/event-delivery/">Handling delivery failure</a>: <code>retry</code>, <code>backoffPolicy</code>, <code>deadLetterSink</code>, atrybuty <code>knativeerror*</code></li>
+    <li><a href="https://knative.dev/docs/eventing/reference/eventing-api/">Eventing API</a>: pole <code>delivery</code> w Broker i Trigger</li>
+    <li><a href="https://github.com/knative/specs/blob/main/specs/eventing/data-plane.md">Knative Eventing data plane spec</a>: POST, kody odpowiedzi i ponowienia, tryby binary/structured</li>
+    <li><a href="https://github.com/knative/eventing/tree/main/docs/mt-channel-based-broker">knative/eventing: mt-channel-based-broker</a>: ingress → dispatcher kanału → filter</li>
+    <li><a href="https://github.com/knative/eventing/releases/tag/knative-v1.23.0">Wydanie knative-v1.23.0</a>: <code>eventing-core.yaml</code> (<code>config-br-defaults</code>, <code>config-br-default-channel</code>)</li>
+    <li><a href="https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md">CloudEvents 1.0.2</a>: atrybuty obowiązkowe i opcjonalne</li>
+  </ul>
+</section>
+</div>

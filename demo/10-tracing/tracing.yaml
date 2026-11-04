@@ -1,0 +1,129 @@
+# Demo 10: Knative → OTel Collector → Tempo → Grafana (kube-prometheus-stack).
+# Wersja „na laptopa”: Tempo single binary bez metrics-generatora, dane w emptyDir (znikają z podem).
+apiVersion: v1
+kind: Namespace
+metadata: {name: observability}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: tempo, namespace: observability}
+data:
+  tempo.yaml: |
+    stream_over_http_enabled: true
+    server: {http_listen_port: 3200, log_level: warn}
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc: {endpoint: "0.0.0.0:4317"}
+    storage:
+      trace:
+        backend: local
+        wal: {path: /var/tempo/wal}
+        local: {path: /var/tempo/blocks}
+    usage_report: {reporting_enabled: false}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: tempo, namespace: observability}
+spec:
+  selector: {matchLabels: {app: tempo}}
+  template:
+    metadata: {labels: {app: tempo}}
+    spec:
+      containers:
+        - name: tempo
+          image: grafana/tempo:3.1.1
+          args: ["-config.file=/etc/tempo/tempo.yaml"]
+          ports:
+            - {name: http, containerPort: 3200}
+            - {name: otlp-grpc, containerPort: 4317}
+          readinessProbe: {httpGet: {path: /ready, port: http}, initialDelaySeconds: 5}
+          resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 512Mi}}
+          volumeMounts:
+            - {name: config, mountPath: /etc/tempo}
+            - {name: data, mountPath: /var/tempo}
+      volumes:
+        - {name: config, configMap: {name: tempo}}
+        - {name: data, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: tempo, namespace: observability}
+spec:
+  selector: {app: tempo}
+  ports:
+    - {name: http, port: 3200}
+    - {name: otlp-grpc, port: 4317}
+---
+# Collector to jedyny adres, który zna Knative. Backend (Tempo, Jaeger, Datadog…) zmieniasz tutaj, nie w Knative.
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: otel-collector, namespace: observability}
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc: {endpoint: "0.0.0.0:4317"}
+          http: {endpoint: "0.0.0.0:4318"}
+    processors:
+      batch: {}
+    exporters:
+      otlp:
+        endpoint: tempo.observability:4317
+        tls: {insecure: true}
+      debug: {verbosity: basic}   # kubectl logs deploy/otel-collector — widać, że spany dochodzą
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp, debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: otel-collector, namespace: observability}
+spec:
+  selector: {matchLabels: {app: otel-collector}}
+  template:
+    metadata: {labels: {app: otel-collector}}
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector:0.164.0
+          args: ["--config=/etc/otelcol/config.yaml"]
+          ports:
+            - {name: otlp-grpc, containerPort: 4317}
+            - {name: otlp-http, containerPort: 4318}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts:
+            - {name: config, mountPath: /etc/otelcol}
+      volumes:
+        - {name: config, configMap: {name: otel-collector}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: otel-collector, namespace: observability}
+spec:
+  selector: {app: otel-collector}
+  ports:
+    - {name: otlp-grpc, port: 4317}
+    - {name: otlp-http, port: 4318}
+---
+# Źródło danych Tempo w Grafanie z kube-prometheus-stack (sidecar ładuje ConfigMapy z etykietą grafana_datasource)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-tempo
+  namespace: monitoring
+  labels: {grafana_datasource: "1"}
+data:
+  tempo.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        access: proxy
+        url: http://tempo.observability:3200

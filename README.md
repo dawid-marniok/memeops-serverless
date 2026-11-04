@@ -17,16 +17,16 @@ Szczegóły i problemy: [`setup/README.md`](setup/README.md).
 
 ## Plan
 
-| Dzień | Lab | Zgłoszenie od PO | Czas |
-|---|---|---|---|
-| 1 | [lab01 — Platforma](labs/lab01-platforma/) | „Postawcie platformę pod MemeOps” | 30 min |
-| 1 | [lab02 — MVP na Knative](labs/lab02-knative-mvp/) | „Wdrażamy MVP, bez przestojów przy zmianach” | 45 min |
-| 1 | [lab03 — Funkcja w Pythonie](labs/lab03-funkcja-python/) | „Chcemy własny kod i porządek w wersjach” | 55 min |
-| 1 | [lab04 — Zależności natywne](labs/lab04-zaleznosci/) | „Memy ze zdjęciami, nie z tekstu!” | 40 min |
-| 2 | [lab05 — Symulacja keynote](labs/lab05-keynote/) | „Po keynote przyjdzie 500 osób naraz. Wytrzymamy?” | 50 min |
-| 2 | [lab06 — Sekrety i logowanie](labs/lab06-sekrety/) | „Tylko zalogowani mogą tworzyć memy” | 50 min |
-| 2 | [lab07 — CI/CD i canary](labs/lab07-cicd/) | „Nowy szablon dark mode — bezpiecznie” | 45 min |
-| 2 | [lab08 — Awaria w piątek 16:55](labs/lab08-awaria/) | „Memy przestały działać!” | 40 min |
+| Dzień | Lab | Zgłoszenie od PO |
+|---|---|---|
+| 1 | [lab01 — Platforma](labs/lab01-platforma/) | „Postawcie platformę pod MemeOps” |
+| 1 | [lab02 — MVP na Knative](labs/lab02-knative-mvp/) | „Wdrażamy MVP, bez przestojów przy zmianach” |
+| 1 | [lab03 — Funkcja w Pythonie](labs/lab03-funkcja-python/) | „Chcemy własny kod i porządek w wersjach” |
+| 1 | [lab04 — Zależności natywne](labs/lab04-zaleznosci/) | „Memy ze zdjęciami, nie z tekstu!” |
+| 2 | [lab05 — Symulacja keynote](labs/lab05-keynote/) | „Po keynote przyjdzie 500 osób naraz. Wytrzymamy?” |
+| 2 | [lab06 — Sekrety i logowanie](labs/lab06-sekrety/) | „Tylko zalogowani mogą tworzyć memy” |
+| 2 | [lab07 — CI/CD i canary](labs/lab07-cicd/) | „Nowy szablon dark mode — bezpiecznie” |
+| 2 | [lab08 — Awaria w piątek 16:55](labs/lab08-awaria/) | „Memy przestały działać!” |
 
 ## Co jest w repo
 
@@ -36,13 +36,15 @@ Szczegóły i problemy: [`setup/README.md`](setup/README.md).
 | [`app/meme-api/`](app/meme-api/) | MVP: mem tekstowy (gotowy obraz `v1`/`v2`) |
 | [`app/meme-gen/`](app/meme-gen/) | właściwa funkcja: memy SVG/PNG, galeria, JWT, testy |
 | [`templates/python-http/`](templates/python-http/) | „firmowy” szablon funkcji HTTP w Pythonie |
+| [`demo/`](demo/) | wszystko, co prowadzący pokazuje na ekranie (12 dem): skrypty, YAML, wynik z próby i wniosek — do powtórzenia samemu |
 | [`tools/`](tools/) | pomiar cold startu, test obciążenia k6 („keynote”), generator tokenów |
 | [`ci/`](ci/) | pipeline lokalny + wzorce GitHub Actions i Azure DevOps |
 | [`labs/`](labs/) | laboratoria: zgłoszenie, kroki, warunek SUKCES |
+| [`docs/`](docs/) | notatki do nauki: strony HTML z diagramami i pytaniami „Sprawdź się”, ponumerowane w kolejności szkolenia |
 
 ## Zasady
 
 - Kod Pythona jest gotowy. Zmieniasz konfigurację, manifesty i pipeline — w kodzie najwyżej parametry.
 - Każdy lab kończy się sekcją **SUKCES**: sprawdzasz ją sam, zanim zgłosisz „gotowe”.
-- Utknąłeś? Każdy lab ma sekcję „Dogoń grupę” — jedna komenda doprowadza stan klastra do startu labu.
+- Utknąłeś? Laby od 3 do 7 mają sekcję „Dogoń grupę”, a LAB 8 sekcję „Przed startem”: jedna komenda `tools/start-lab.sh` doprowadza stan klastra do startu labu. Uruchamiaj ją tylko wtedy, gdy nie skończyłeś poprzedniego labu, bo usuwa i tworzy od nowa usługi (tracisz własne rewizje).
 - Adresy usług: `http://<usługa>.memeops.127.0.0.1.sslip.io` (sslip.io zamienia nazwę na 127.0.0.1, a port 80 VM-ki prowadzi do Kouriera).

@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activator i target-burst-capacity</title>
+<style>
+/* Ten sam system co knative-vs-k8s: kolor = rola (ruch prosty / przez activator), jedna kolumna tekstu, tabele przewijane na telefonie. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --traffic: #0f6d6a;
+  --traffic-bg: #e3f2f0;
+  --cold: #b0306a;
+  --cold-bg: #f9e6ef;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 96px; }
+.prose { max-width: 760px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+.answer .v { font-weight: 700; }
+.answer .v.no { color: var(--cold); }
+.answer .v.yes { color: var(--traffic); }
+
+/* Diagram ścieżek */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-top: 16px; }
+.scroll svg { display: block; width: 100%; min-width: 760px; height: auto; }
+svg text { font-family: var(--sans); }
+.box rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.3; }
+.box.act rect { fill: var(--cold-bg); stroke: var(--cold); }
+.box.pod rect { fill: var(--traffic-bg); stroke: var(--traffic); }
+.box .t { font-size: 14px; font-weight: 650; fill: var(--text); }
+.box .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.a { fill: none; stroke-width: 2.6; }
+.a.cold { stroke: var(--cold); }
+.a.traffic { stroke: var(--traffic); }
+.mk-cold { fill: var(--cold); }
+.mk-traffic { fill: var(--traffic); }
+.lbl { font-size: 12px; font-weight: 700; }
+.lbl.cold { fill: var(--cold); }
+.lbl.traffic { fill: var(--traffic); }
+.note { font-size: 12px; fill: var(--muted); }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+
+/* Wzór i kalkulator */
+.formula { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-family: var(--mono); font-size: 15px; margin: 16px 0; overflow-x: auto; }
+.formula .r { display: block; color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 18px; }
+.calc h3 { margin: 0 0 12px; }
+.calc .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 16px; }
+.calc label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.calc input, .calc select { font: inherit; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 0; }
+.calc input:focus-visible, .calc select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.calc .hint { font-weight: 400; font-size: 12px; }
+.result { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.mode { font-weight: 800; font-size: 15px; padding: 4px 14px; border-radius: 999px; }
+.mode.proxy { background: var(--cold-bg); color: var(--cold); border: 1.5px solid var(--cold); }
+.mode.serve { background: var(--traffic-bg); color: var(--traffic); border: 1.5px solid var(--traffic); }
+.result .why { font-size: 14.5px; color: var(--muted); flex: 1 1 320px; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.presets button { font: inherit; font-size: 13px; cursor: pointer; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.presets button:hover { border-color: var(--accent); }
+.presets button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 680px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 26%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; }
+.tag.proxy { background: var(--cold-bg); color: var(--cold); }
+.tag.serve { background: var(--traffic-bg); color: var(--traffic); }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre .c { color: var(--code-comment); }
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.src { font-size: 13.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="prose">
+  <div class="eyebrow">Serverless na Kubernetes · notatka do nauki</div>
+  <h1>Activator i target-burst-capacity</h1>
+  <p class="lede">Kiedy żądanie idzie przez activator, a kiedy prosto do poda, kto o tym decyduje i co naprawdę daje adnotacja <code>target-burst-capacity</code>. W skrócie: przycina warm path o jeden przeskok, ale nie przyspiesza cold startu.</p>
+  <div class="meta">
+    <span class="pill">Knative Serving 1.23.0</span>
+    <span class="pill">Kourier (Envoy)</span>
+    <span class="pill">klaster kind <code>memeops</code></span>
+    <span class="pill">stan na 02.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#sciezki">Dwie ścieżki</a>
+    <a href="#decyzja">Kto decyduje</a>
+    <a href="#cykl">Cykl życia usługi</a>
+    <a href="#czego-nie">Czego TBC nie robi</a>
+    <a href="#wybor">Kiedy co ustawić</a>
+    <a href="#proxy-stale">Proxy na stałe</a>
+    <a href="#klaster">Zobacz na klastrze</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Czy <code>TBC: "0"</code> przyspiesza cold start?</div><p><span class="v no">Nie.</span> Przy zerze podów każda usługa idzie przez activator, bo tylko on może przytrzymać żądanie, zanim pod wstanie.</p></div>
+    <div class="answer"><div class="q">Co w takim razie daje?</div><p><span class="v yes">Krótszy warm path.</span> Gdy pody działają, ruch idzie Kourier → pod, bez activatora. W demo 03 (<code>hey</code>, 5000 żądań): ok. 0,3 ms na medianie (3,4 ms vs 3,6–3,7 ms).</p></div>
+    <div class="answer"><div class="q">Trzeba przełączać tryb w trakcie?</div><p><span class="v no">Nie.</span> Proxy/Serve przełącza autoskaler sam, na bieżąco. TBC to tylko próg, według którego decyduje.</p></div>
+    <div class="answer"><div class="q">Gdzie ustawić Proxy albo Serve?</div><p><span class="v no">Nigdzie bezpośrednio.</span> Tryb wybiera autoskaler. Ty ustawiasz próg TBC: adnotacją w <code>spec.template</code> albo w <code>config-autoscaler</code>. <a href="#gdzie">Szczegóły</a>.</p></div>
+    <div class="answer"><div class="q">Co pomaga na cold start?</div><p><span class="v yes"><code>min-scale ≥ 1</code>.</span> Zawsze warm pod, więc nie ma cold startu. Do tego mały obraz i szybki start procesu.</p></div>
+  </div>
+</section>
+
+<section id="sciezki">
+  <h2 class="prose"><span class="num">1</span>Dwie ścieżki żądania</h2>
+  <p class="prose">Kourier zawsze wysyła ruch na publiczny Service rewizji. To, co jest za nim, ustala obiekt <b>ServerlessService</b> (SKS): albo adresy activatora (tryb <span class="tag proxy">Proxy</span>), albo adresy podów (tryb <span class="tag serve">Serve</span>). Kourier nie wie o przełączeniu.</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 260" role="img" aria-label="Dwie ścieżki. Proxy: Kourier, activator, pod. Serve: Kourier prosto do poda. W podzie zawsze queue-proxy i user-container.">
+        <defs>
+          <marker id="mc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-cold" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="mt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        <g class="box"><rect x="20" y="100" width="130" height="60" rx="10"/><text class="t" x="85" y="126" text-anchor="middle">klient</text><text class="s" x="85" y="144" text-anchor="middle">curl / k6</text></g>
+        <g class="box"><rect x="200" y="100" width="150" height="60" rx="10"/><text class="t" x="275" y="126" text-anchor="middle">Kourier</text><text class="s" x="275" y="144" text-anchor="middle">Envoy, po Host</text></g>
+        <g class="box act"><rect x="420" y="20" width="170" height="64" rx="10"/><text class="t" x="505" y="47" text-anchor="middle">activator</text><text class="s" x="505" y="66" text-anchor="middle">buforuje, budzi, rozkłada</text></g>
+        <g class="box pod"><rect x="660" y="90" width="220" height="80" rx="10"/><text class="t" x="770" y="118" text-anchor="middle">pod rewizji</text><text class="s" x="770" y="138" text-anchor="middle">queue-proxy → user-container</text><text class="s" x="770" y="155" text-anchor="middle">(zawsze w ścieżce)</text></g>
+        <path class="a traffic" d="M150 130 H194" marker-end="url(#mt)"/>
+        <path class="a cold" d="M350 118 C385 100, 385 55, 414 52" marker-end="url(#mc)"/>
+        <path class="a cold" d="M590 52 C625 55, 630 105, 654 112" marker-end="url(#mc)"/>
+        <path class="a traffic" d="M350 145 C450 200, 560 200, 654 150" marker-end="url(#mt)"/>
+        <text class="lbl cold" x="380" y="32">Proxy</text>
+        <text class="lbl traffic" x="490" y="214" text-anchor="middle">Serve: o jeden przeskok mniej</text>
+        <text class="note" x="20" y="240">Przy 0 podów zawsze Proxy. Przy działających podach o trybie decyduje zapas pojemności i target-burst-capacity.</text>
+      </svg>
+    </div>
+    <figcaption>Activator robi cztery rzeczy: przytrzymuje żądania przy zerze, buforuje skoki ruchu, rozkłada ruch według zajętości podów (pilnuje <code>containerConcurrency</code>) i raportuje metryki autoskalerowi. Queue-proxy jest w podzie zawsze, tego nie wyłączysz.</figcaption>
+  </figure>
+</section>
+
+<section id="decyzja">
+  <h2 class="prose"><span class="num">2</span>Kto decyduje: zapas na skok ruchu</h2>
+  <p class="prose">Autoskaler (KPA) co chwilę liczy <b>excess burst capacity</b>, czyli ile równoczesnych żądań klaster przyjmie ponad bieżące obciążenie, i porównuje to z <code>target-burst-capacity</code>:</p>
+  <div class="formula prose">zapas = gotowe pody × pojemność poda − bieżąca concurrency − TBC
+    <span class="r">zapas &lt; 0 → <span class="tag proxy">Proxy</span> &nbsp; zapas ≥ 0 → <span class="tag serve">Serve</span> &nbsp; 0 podów albo schodzenie do zera → zawsze <span class="tag proxy">Proxy</span></span>
+  </div>
+  <div class="prose">
+    <ul>
+      <li><b>Pojemność poda</b> to cel concurrency <i>przed</i> <code>target-utilization</code>: <code>containerConcurrency</code>, jeśli jest ustawione, albo adnotacja <code>autoscaling.knative.dev/target</code>, albo domyślne <code>100</code>.</li>
+      <li><b>Bieżąca concurrency</b> pochodzi z krótkiego okna paniki, żeby decyzja reagowała szybko.</li>
+      <li><b>Dwa przypadki szczególne:</b> przy <code>TBC = 0</code> zapas jest na sztywno <code>0</code> (Serve, gdy autoskaler chce choć jeden pod), a przy <code>TBC = -1</code> na sztywno ujemny (zawsze Proxy).</li>
+      <li><b>Klasa HPA</b> (<code>autoscaling.knative.dev/class: hpa.autoscaling.knative.dev</code>): SKS na stałe w Serve, TBC nie ma znaczenia. HPA nie skaluje do zera, więc activator nie jest potrzebny.</li>
+    </ul>
+  </div>
+
+  <div class="calc" id="kalkulator">
+    <h3>Policz sam</h3>
+    <div class="presets" role="group" aria-label="Gotowe przykłady">
+      <button type="button" data-p="1,100,0,211">demo 03: przez-activator</button>
+      <button type="button" data-p="1,100,0,0">demo 03: bezposrednio</button>
+      <button type="button" data-p="3,100,10,211">3 bezczynne pody</button>
+      <button type="button" data-p="5,10,40,211">kourier: hello, target 10</button>
+      <button type="button" data-p="0,100,0,0">zero podów</button>
+    </div>
+    <div class="grid">
+      <label>Gotowe pody<input id="c-pods" type="number" min="0" step="1" value="1"></label>
+      <label>Pojemność poda<input id="c-cap" type="number" min="1" step="1" value="100"><span class="hint">domyślnie 100</span></label>
+      <label>Bieżąca concurrency<input id="c-load" type="number" min="0" step="1" value="0"><span class="hint">żądań naraz</span></label>
+      <label>target-burst-capacity<input id="c-tbc" type="number" min="-1" step="1" value="211"><span class="hint">domyślnie 211; 0 i -1 to przypadki szczególne</span></label>
+    </div>
+    <div class="result" aria-live="polite">
+      <span id="c-mode" class="mode proxy">Proxy</span>
+      <span id="c-why" class="why"></span>
+    </div>
+  </div>
+</section>
+
+<section id="cykl">
+  <h2 class="prose"><span class="num">3</span>Cykl życia usługi: tryb SKS w każdym stanie</h2>
+  <p class="prose">Tak wygląda ta sama usługa z trzema ustawieniami TBC. Nic tu nie przełączasz ręcznie, robi to autoskaler. Pojemność poda 100 (domyślna).</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Stan</th><th><code>TBC: "211"</code> (domyślnie)</th><th><code>TBC: "0"</code></th><th><code>TBC: "-1"</code></th></tr></thead>
+    <tbody>
+      <tr><th>0 podów, przychodzi żądanie</th><td><span class="tag proxy">Proxy</span> cold start</td><td><span class="tag proxy">Proxy</span> cold start</td><td><span class="tag proxy">Proxy</span> cold start</td></tr>
+      <tr><th>1 pod, mały ruch</th><td><span class="tag proxy">Proxy</span> 100 − 0 − 211 &lt; 0</td><td><span class="tag serve">Serve</span></td><td><span class="tag proxy">Proxy</span></td></tr>
+      <tr><th>3 pody, mały ruch</th><td><span class="tag serve">Serve</span> 300 − 10 − 211 ≥ 0</td><td><span class="tag serve">Serve</span></td><td><span class="tag proxy">Proxy</span></td></tr>
+      <tr><th>nagły skok ruchu</th><td><span class="tag proxy">Proxy</span> zapas spada poniżej zera, activator buforuje</td><td><span class="tag serve">Serve</span> skok trafia prosto w pody i czeka w ich queue-proxy, aż wstaną nowe</td><td><span class="tag proxy">Proxy</span></td></tr>
+      <tr><th>brak ruchu → 0 podów</th><td><span class="tag proxy">Proxy</span> pod znika zaraz po oknie (<code>window</code>)</td><td><span class="tag proxy">Proxy</span> najpierw <code>Serve → Proxy</code>, potem czeka <code>scale-to-zero-grace-period</code> (30 s): w demo 03 ok. 42 s zamiast 12 s</td><td><span class="tag proxy">Proxy</span> jak przy 211</td></tr>
+    </tbody>
+  </table></div>
+  <p class="prose">Pierwszy i ostatni wiersz są identyczne we wszystkich kolumnach: <b>TBC nie dotyka cold startu</b>. Różnice są tylko wtedy, gdy pody już działają.</p>
+</section>
+
+<section id="czego-nie">
+  <h2 class="prose"><span class="num">4</span>Czego TBC nie robi: problem i właściwe narzędzie</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Problem</th><th>Narzędzie</th><th>Dlaczego</th></tr></thead>
+    <tbody>
+      <tr><th>Pierwsze żądanie po ciszy trwa długo (cold start)</th><td><code>min-scale: "1"</code> (lub więcej)</td><td>Zawsze jest warm pod, więc nie ma zera i nie ma cold startu. Kosztem są zasoby trzymane cały czas.</td></tr>
+      <tr><th>Cold start po deployu nowej rewizji</th><td><code>initial-scale</code></td><td>Ile podów wstaje od razu po utworzeniu rewizji (domyślnie 1).</td></tr>
+      <tr><th>Usługa gaśnie zbyt szybko między falami ruchu</th><td><code>scale-down-delay</code>, <code>window</code>, <code>scale-to-zero-pod-retention-period</code></td><td>Pody żyją dłużej po spadku ruchu, więc rzadziej trafiasz na zero.</td></tr>
+      <tr><th>Sam cold start jest wolny</th><td>mały obraz, obraz w cache węzła, szybki start procesu, readiness probe</td><td>Activator czeka na gotowego poda. Każda sekunda startu to sekunda czekania klienta.</td></tr>
+      <tr><th>Warm requesty mają o 1 przeskok za dużo</th><td><code>target-burst-capacity: "0"</code></td><td>Tylko tu TBC pomaga: przy działających podach activator schodzi ze ścieżki.</td></tr>
+      <tr><th>Skoki ruchu przeciążają pody</th><td>domyślne TBC albo <code>"-1"</code></td><td>Activator buforuje nadmiar i rozkłada go według zajętości podów.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="wybor">
+  <h2 class="prose"><span class="num">5</span>Kiedy co ustawić</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Sytuacja</th><th>Ustawienie</th><th>Kompromis</th></tr></thead>
+    <tbody>
+      <tr><th>Typowa usługa, scale-to-zero, nikt nie liczy milisekund</th><td>nic nie ruszaj</td><td>Activator w ścieżce przy małym ruchu kosztuje poniżej 1 ms i chroni przed skokami.</td></tr>
+      <tr><th>Niska latencja, ruch równy i przewidywalny</th><td><code>min-scale: "1"</code> + <code>target-burst-capacity: "0"</code></td><td>Najkrótsza ścieżka w normalnej pracy. Nagły skok uderza wprost w pody, zanim autoskaler dołoży nowe.</td></tr>
+      <tr><th>Ruch skokowy albo twardy limit <code>containerConcurrency</code></th><td>domyślne <code>211</code> lub <code>"-1"</code></td><td>Dodatkowy przeskok w zamian za buforowanie i równy rozkład z poszanowaniem limitu.</td></tr>
+      <tr><th>Długie żądania o nierównym czasie</th><td><code>"-1"</code></td><td>Activator wybiera mniej zajęty pod. Envoy rozkłada ruch bez wiedzy o zajętości.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="prose" id="gdzie">
+  <h3>Gdzie to się ustawia</h3>
+  <p><b>Trybu Proxy/Serve nie ustawia się bezpośrednio.</b> Wybiera go autoskaler (KPA) i zapisuje w obiekcie SKS. Ty ustawiasz tylko próg <code>target-burst-capacity</code>, według którego autoskaler decyduje. Ręczną zmianę <code>MODE</code> w SKS Knative szybko nadpisze, tak samo jak <code>replicas</code> w Deploymencie rewizji.</p>
+  <p><b>1. Dla jednej usługi:</b> adnotacja w szablonie ksvc.</p>
+<pre>apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: moja-usluga
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/target-burst-capacity: "-1"   <span class="c"># Proxy na stałe</span>
+        <span class="c"># "0"  → Serve, gdy tylko jest pod (Proxy tylko przy zerze)</span>
+        <span class="c"># brak → wartość z config-autoscaler (domyślnie 211)</span></pre>
+  <p>Adnotacja musi być w <code>spec.template.metadata</code>, a nie w <code>metadata</code> samego Service'u. Jej zmiana tworzy <b>nową rewizję</b>. Tak jest zrobione w <code>demo/03-cold-start/uslugi.yaml</code>.</p>
+  <p><b>2. Dla całego klastra:</b> ConfigMap <code>config-autoscaler</code>.</p>
+<pre>kubectl patch cm config-autoscaler -n knative-serving --type merge \
+  -p '{"data":{"target-burst-capacity":"-1"}}'</pre>
+  <p>Dotyczy wszystkich rewizji bez własnej adnotacji, bo adnotacja wygrywa z ConfigMapą. Nowa rewizja nie powstaje. Autoskaler powinien przyjąć zmianę bez restartu [nie testowane]. Na <code>memeops</code> ConfigMap niczego nie nadpisuje, więc obowiązuje 211.</p>
+  <div class="callout">W skrócie: wpływasz na tryb przez TBC, a sam tryb przełącza Knative. Wynik widzisz w <code>kubectl get sks</code> (kolumna <code>MODE</code>).</div>
+  </div>
+</section>
+
+<section id="proxy-stale">
+  <h2 class="prose"><span class="num">6</span>Kiedy zostawić Proxy na stałe</h2>
+  <p class="prose"><code>target-burst-capacity: "-1"</code> trzyma activator w ścieżce zawsze, niezależnie od liczby podów. Płacisz jednym przeskokiem przy każdym żądaniu, a w zamian dostajesz to, czego Envoy sam nie umie.</p>
+  <h3 class="prose">Plusy</h3>
+  <div class="answers">
+    <div class="answer"><div class="q">Rozkład według zajętości podów</div><p>Activator wie, ile żądań obsługuje każdy pod, i wysyła nowe do wolnego. Przy <code>containerConcurrency: 1</code> (inferencja AI, generowanie obrazów, ciężkie raporty) Envoy potrafi postawić żądanie w kolejce zajętego poda, gdy obok stoi wolny. To najmocniejszy argument.</p></div>
+    <div class="answer"><div class="q">Buforowanie skoków</div><p>Nadmiar czeka w activatorze, który widzi wszystkie pody, a nie w <code>queue-proxy</code> jednego przeciążonego poda. Gdy wstaje nowy pod, activator od razu kieruje na niego czekające żądania.</p></div>
+    <div class="answer"><div class="q">Nowe pody szybciej dostają ruch</div><p>Activator sam śledzi gotowość podów. W trybie Serve nowy pod musi najpierw trafić do endpointów i do konfiguracji Envoya.</p></div>
+    <div class="answer"><div class="q">Jedna, przewidywalna ścieżka</div><p>Nie ma przełączania <code>Serve ↔ Proxy</code> ani stanów przejściowych (np. <code>NoHealthyBackends</code> zaraz po przełączeniu). Łatwiej debugować, latencja jest stabilniejsza.</p></div>
+    <div class="answer"><div class="q">Szybsze zejście do zera</div><p>Bez czekania <code>scale-to-zero-grace-period</code>. W demo 03: ok. 12 s zamiast 42 s, czyli mniej czasu pracy podów przy rzadkim ruchu.</p></div>
+  </div>
+  <h3 class="prose">Minusy</h3>
+  <div class="answers">
+    <div class="answer"><div class="q">Dodatkowy przeskok</div><p>Każde żądanie przechodzi przez activator. W demo 03 to ok. 0,3 ms na medianie (<code>hey</code>, 1 pod, kind).</p></div>
+    <div class="answer"><div class="q">Activator obsługuje cały ruch</div><p>Staje się elementem krytycznym dla każdego żądania, nie tylko przy zerze. Na produkcji potrzebuje 2+ replik, HPA, PDB i zasobów rosnących z ruchem. Na kindzie <code>memeops</code> jest jedna replika.</p></div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Proxy na stałe ma sens</th><th>Raczej Serve (domyślne albo <code>0</code>)</th></tr></thead>
+    <tbody>
+      <tr><td><code>containerConcurrency</code> 1–kilka, długie albo ciężkie żądania</td><td>Krótkie, lekkie żądania przy dużym RPS</td></tr>
+      <tr><td>Ruch skokowy, falami</td><td>Ruch równy i przewidywalny</td></tr>
+      <tr><td>Rzadki ruch, liczy się koszt i szybkie gaszenie</td><td>Każda milisekunda się liczy (near-RT)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="klaster" class="prose">
+  <h2><span class="num">7</span>Zobacz na klastrze</h2>
+  <p>Demo <code>demo/03-cold-start</code> ma dwie identyczne usługi różniące się tylko TBC.</p>
+<pre><span class="c"># tryb SKS na żywo (kolumna MODE) i skala z KPA</span>
+while true; do clear; kubectl get kpa,sks -n demo; sleep 1; done   <span class="c"># -w obsługuje tylko jeden typ zasobu</span>
+
+<span class="c"># za publicznym Service: IP activatora (Proxy) czy podów (Serve)?</span>
+kubectl get endpointslices -n demo -o wide
+
+<span class="c"># domyślne wartości klastra (pusty data = wartości domyślne Knative)</span>
+kubectl get cm config-autoscaler -n knative-serving -o jsonpath='{.data._example}' | grep -A2 '^target-burst-capacity'
+
+<span class="c"># cold vs warm czas</span>
+tools/coldstart.sh przez-activator demo</pre>
+</section>
+
+<section id="sprawdz" class="prose">
+  <h2><span class="num">8</span>Sprawdź się</h2>
+  <details><summary>Robisz <code>kubectl edit sks</code> i zmieniasz tryb na <code>Serve</code>. Co się stanie?</summary><p>Po chwili autoskaler nadpisze zmianę tym, co sam wyliczył. Właścicielem trybu jest KPA. Żeby zmienić zachowanie, ustaw <code>target-burst-capacity</code> w <code>spec.template.metadata.annotations</code> ksvc albo w <code>config-autoscaler</code>.</p></details>
+  <details><summary>Usługa generuje obrazy, <code>containerConcurrency: 1</code>, żądanie trwa 5 s. Jakie TBC?</summary><p><code>"-1"</code>. Activator wyśle każde żądanie do wolnego poda i przytrzyma nadmiar, aż wstaną nowe. Przy Serve Envoy może wysłać żądanie do zajętego poda i kazać mu czekać 5 s w <code>queue-proxy</code>, mimo że obok jest wolny. Ułamek milisekundy na przeskok nie ma tu znaczenia.</p></details>
+  <details><summary>Usługa ma <code>TBC: "0"</code> i 0 podów. Którędy idzie pierwsze żądanie?</summary><p>Przez activator (tryb Proxy). Przy zerze podów nie ma dokąd wysłać ruchu, więc activator przytrzymuje żądanie i budzi autoskaler. TBC zaczyna działać dopiero, gdy pod jest gotowy.</p></details>
+  <details><summary>Ile bezczynnych podów musi mieć usługa z domyślnymi ustawieniami, żeby activator zszedł ze ścieżki?</summary><p>Trzy: 3 × 100 = 300 ≥ 211. Przy dwóch zapas wynosi 200 − 211 &lt; 0, więc nadal Proxy.</p></details>
+  <details><summary>Usługa z <code>TBC: "0"</code> dostaje nagły skok ruchu. Czy activator wraca do ścieżki?</summary><p>Nie, dopóki jest choć jeden pod. Przy TBC = 0 zapas jest na sztywno 0, więc SKS zostaje w Serve. Skok trafia w istniejące pody i czeka w ich queue-proxy, aż autoskaler dołoży nowe.</p></details>
+  <details><summary>Klient skarży się na 0,8 s przy pierwszym żądaniu rano. Ustawić <code>TBC: "0"</code>?</summary><p>Nie, to nic nie zmieni. To cold start. Pomoże <code>min-scale: "1"</code> albo dłuższe trzymanie podów (<code>scale-down-delay</code>), ewentualnie szybszy start obrazu.</p></details>
+  <details><summary>Zmieniasz TBC adnotacją w ksvc. Co się dzieje z działającymi podami?</summary><p>Powstaje nowa rewizja, bo zmieniłeś <code>spec.template</code>. Ruch przechodzi na nią według <code>spec.traffic</code>, a stara rewizja po chwili gaśnie.</p></details>
+</section>
+
+<p class="src prose">Źródła: komentarze w <code>config-autoscaler</code> (blok <code>_example</code>) na klastrze <code>memeops</code>, Knative 1.23.0; pomiary z <code>demo/03-cold-start</code>. Dokumentacja: knative.dev → Serving → Autoscaling → Configuring target burst capacity.</p>
+
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var pods = $('c-pods'), cap = $('c-cap'), load = $('c-load'), tbc = $('c-tbc');
+  var mode = $('c-mode'), why = $('c-why');
+
+  function num(el, def) { var v = parseInt(el.value, 10); return isNaN(v) ? def : v; }
+
+  function update() {
+    var p = Math.max(0, num(pods, 0)), c = Math.max(1, num(cap, 100)), l = Math.max(0, num(load, 0)), t = num(tbc, 211);
+    var proxy, text;
+    if (p === 0) {
+      proxy = true; text = 'Zero podów: activator musi przytrzymać żądanie, niezależnie od TBC. To jest cold start.';
+    } else if (t === 0) {
+      proxy = false; text = 'TBC = 0: zapas na sztywno 0, więc przy działających podach zawsze prosto do podów.';
+    } else if (t < 0) {
+      proxy = true; text = 'TBC = -1: activator zawsze w ścieżce, niezależnie od liczby podów.';
+    } else {
+      var z = Math.floor(p * c - l - t);
+      proxy = z < 0;
+      text = 'zapas = ' + p + ' × ' + c + ' − ' + l + ' − ' + t + ' = ' + z + (proxy ? ' < 0, activator zostaje w ścieżce.' : ' ≥ 0, ruch idzie prosto do podów.');
+    }
+    mode.textContent = proxy ? 'Proxy' : 'Serve';
+    mode.className = 'mode ' + (proxy ? 'proxy' : 'serve');
+    why.textContent = text;
+  }
+
+  [pods, cap, load, tbc].forEach(function (el) { el.addEventListener('input', update); });
+  document.querySelectorAll('.presets button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.dataset.p.split(',');
+      pods.value = v[0]; cap.value = v[1]; load.value = v[2]; tbc.value = v[3];
+      update();
+    });
+  });
+  update();
+})();
+</script>
+</body>
+</html>

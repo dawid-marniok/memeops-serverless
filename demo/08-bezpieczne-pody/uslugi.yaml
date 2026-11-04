@@ -1,0 +1,42 @@
+# Demo 08: trzy usługi bez securityContext. Co z nimi zrobi flaga secure-pod-defaults i etykieta cluster-local?
+#   zwykla      — obraz meme-api: w Dockerfile jest USER 10001 (nie root)
+#   jako-root   — obraz python:3.12-slim bez USER, czyli proces działa jako root
+#   wewnetrzna  — meme-api widoczna tylko wewnątrz klastra
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: zwykla
+  namespace: demo
+spec:
+  template:
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - image: localhost:5001/meme-api:v1
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: jako-root
+  namespace: demo
+spec:
+  template:
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - image: python:3.12-slim
+          command: ["python", "-m", "http.server", "8080"]
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: wewnetrzna
+  namespace: demo
+  labels:
+    networking.knative.dev/visibility: cluster-local   # brak adresu publicznego, tylko *.svc.cluster.local
+spec:
+  template:
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - image: localhost:5001/meme-api:v1

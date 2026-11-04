@@ -1,0 +1,38 @@
+# Krok 2: nowa wersja jako canary. 80% ruchu zostaje na v1, 20% idzie do v2,
+# a v2 dostaje też własny adres kandydat-hello... (tag) do testów przed przełączeniem.
+# kubectl apply -f demo/01-serverless-60s/krok-po-kroku/02-hello-v2-canary.yaml
+# albo: kn service apply -n demo -f demo/01-serverless-60s/krok-po-kroku/02-hello-v2-canary.yaml
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: hello
+  namespace: demo
+spec:
+  template:
+    metadata:
+      name: hello-v2                                # nowa nazwa: zmieniony szablon musi mieć nową nazwę rewizji
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/max-scale: "5"
+        autoscaling.knative.dev/target: "10"
+    spec:
+      timeoutSeconds: 15                            # jak w 01 (demo: szybkie zamykanie podów)
+      containers:
+        - name: user-container                      # jawnie: inaczej ponowny apply tej samej rewizji zostanie odrzucony
+          image: localhost:5001/meme-api:v2         # zmiana obrazu
+          env:
+            - name: GREETING
+              value: "Pozdrowienia z rewizji v2"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+            successThreshold: 1
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+  traffic:                                          # bez tej sekcji 100% poszłoby do najnowszej rewizji
+    - revisionName: hello-v1
+      percent: 80
+    - revisionName: hello-v2
+      percent: 20
+      tag: kandydat                                 # dodatkowy host: kandydat-hello.demo.127.0.0.1.sslip.io

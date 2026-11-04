@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kourier dla Knative</title>
+<style>
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --accent-soft: #d8ecea;
+  --v1: #2f5fa7;
+  --v2: #c2571a;
+  --warn-bg: #fbf0dc;
+  --warn-line: #d9a441;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --code-accent: #7fd1c9;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615;
+    --surface: #1c1f1e;
+    --surface-2: #232726;
+    --text: #e8e6df;
+    --muted: #a3a097;
+    --line: #34393a;
+    --accent: #5cc4bd;
+    --accent-soft: #1d3634;
+    --v1: #7aa6e8;
+    --v2: #f0955a;
+    --warn-bg: #2e2717;
+    --warn-line: #a9822f;
+    --code-bg: #0f1110;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615;
+  --surface: #1c1f1e;
+  --surface-2: #232726;
+  --text: #e8e6df;
+  --muted: #a3a097;
+  --line: #34393a;
+  --accent: #5cc4bd;
+  --accent-soft: #1d3634;
+  --v1: #7aa6e8;
+  --v2: #f0955a;
+  --warn-bg: #2e2717;
+  --warn-line: #a9822f;
+  --code-bg: #0f1110;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, kbd { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 48px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+}
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  font-size: 14px;
+}
+.toc .brand { font-weight: 700; font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: none; }
+.toc li a {
+  display: block;
+  padding: 5px 10px;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  text-decoration: none;
+}
+.toc li a:hover { color: var(--text); }
+.toc li a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+.theme-btn {
+  margin-top: 18px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+main { min-width: 0; }
+header.hero { margin-bottom: 40px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; }
+.lede { font-size: 18px; color: var(--muted); max-width: 680px; margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill {
+  font-size: 12.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+section { margin-top: 64px; }
+h2 {
+  font-size: 26px;
+  line-height: 1.25;
+  margin: 0 0 16px;
+  letter-spacing: -.01em;
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 18px; }
+h3 { font-size: 18px; margin: 32px 0 10px; }
+p, li { max-width: 760px; }
+:not(pre) > code {
+  font-size: .88em;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  overflow-wrap: anywhere;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+}
+.tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 8px; }
+.tldr .card { padding: 16px 18px; }
+.tldr .card b { display: block; margin-bottom: 4px; }
+.tldr .card span { color: var(--muted); font-size: 14.5px; }
+.tldr .card.key { border-color: var(--accent); background: var(--accent-soft); }
+
+.note {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 12px 16px;
+  border-radius: 0 10px 10px 0;
+  margin: 18px 0;
+  max-width: 760px;
+}
+.note.warn { border-left-color: var(--warn-line); background: var(--warn-bg); }
+
+pre {
+  position: relative;
+  background: var(--code-bg);
+  color: var(--code-text);
+  border-radius: 12px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 14px 0;
+}
+pre .c { color: var(--code-comment); }
+pre .k { color: var(--code-accent); }
+.copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font: 12px/1 inherit;
+  font-family: inherit;
+  background: rgba(255,255,255,.08);
+  color: var(--code-text);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+}
+pre:hover .copy, .copy:focus { opacity: 1; }
+
+.table-wrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; font-size: 13px; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+
+/* diagram architektury */
+.diagram { margin: 18px 0; padding: 18px; overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.diagram .box { fill: var(--surface-2); stroke: var(--line); }
+.diagram .box-accent { fill: var(--accent-soft); stroke: var(--accent); }
+.diagram .box-v1 { fill: var(--surface); stroke: var(--v1); stroke-width: 1.5; }
+.diagram .box-v2 { fill: var(--surface); stroke: var(--v2); stroke-width: 1.5; }
+.diagram text { fill: var(--text); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.diagram .sub { fill: var(--muted); font-size: 11.5px; }
+.diagram .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; }
+.diagram .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+.diagram .edge-cfg { stroke: var(--accent); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+.diagram .lbl { fill: var(--muted); font-size: 11.5px; }
+.diagram .lbl-v1 { fill: var(--v1); font-weight: 700; }
+.diagram .lbl-v2 { fill: var(--v2); font-weight: 700; }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 26px; height: 0; border-top: 2px solid var(--muted); vertical-align: middle; margin-right: 6px; }
+.legend i.cfg { border-top: 2px dashed var(--accent); }
+
+/* kroki (sekwencje) */
+.steps { list-style: none; padding: 0; margin: 18px 0; counter-reset: s; max-width: 760px; }
+.steps li {
+  counter-increment: s;
+  position: relative;
+  padding: 10px 14px 10px 52px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.steps li::before {
+  content: counter(s);
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+}
+.steps .who { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; display: block; }
+
+/* ścieżka żądania */
+.path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 18px 0; }
+.path .hop { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13.5px; }
+.path .arrow { color: var(--muted); }
+.branch { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 760px; }
+.branch .card h4 { margin: 0 0 6px; font-size: 15px; }
+.branch .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+.tag {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-right: 6px;
+}
+
+/* interaktywne */
+.lab { margin: 20px 0; max-width: 760px; }
+.lab label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 8px; }
+.lab input[type="text"] {
+  width: 100%;
+  font: 14px "SF Mono", ui-monospace, Menlo, monospace;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+}
+.dns-out { margin-top: 12px; font-size: 14.5px; }
+.dns-out .hl-pre { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.dns-out .hl-ip { color: var(--accent); font-weight: 700; }
+.dns-out .hl-dom { color: var(--muted); }
+.dns-out .answer { margin-top: 8px; font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 13.5px; }
+.split-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.split-row input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--accent); }
+.split-row .val { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 140px; }
+.split-row .v1 { color: var(--v1); }
+.split-row .v2 { color: var(--v2); }
+.btn {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--bg);
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.dots { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; min-height: 18px; }
+.dot { width: 16px; height: 16px; border-radius: 4px; animation: pop .25s ease-out both; }
+.dot.v1 { background: var(--v1); }
+.dot.v2 { background: var(--v2); }
+@keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none; } html { scroll-behavior: auto; } }
+.result { font-size: 14px; color: var(--muted); margin-top: 8px; }
+
+/* quiz */
+details {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 16px;
+  margin-bottom: 8px;
+  max-width: 760px;
+}
+summary { cursor: pointer; padding: 12px 0; font-weight: 600; list-style: none; display: flex; gap: 10px; }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "+"; color: var(--accent); font-weight: 700; width: 12px; flex: none; }
+details[open] summary::before { content: "−"; }
+details > div { padding: 0 0 14px 22px; color: var(--muted); }
+
+footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 0; padding: 20px 16px 72px; }
+  nav.toc { position: static; max-height: none; margin-bottom: 28px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .toc ol { display: flex; flex-wrap: wrap; gap: 4px; }
+  .toc li a { border-left: 0; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+  .toc li a.active { border-color: var(--accent); }
+  .branch { grid-template-columns: 1fr; }
+  section { margin-top: 48px; }
+  .copy { opacity: 1; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Spis treści">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h6l3-6v12l3-6h4"/></svg>
+    Kourier
+  </div>
+  <ol>
+    <li><a href="#skrot">W skrócie</a></li>
+    <li><a href="#gdzie">1. Gdzie siedzi</a></li>
+    <li><a href="#sklad">2. Z czego się składa</a></li>
+    <li><a href="#ksvc">3. Od ksvc do Envoya</a></li>
+    <li><a href="#sciezka">4. Ścieżka żądania</a></li>
+    <li><a href="#dns">5. DNS i sslip.io</a></li>
+    <li><a href="#cwiczenie">6. Ćwiczenie</a></li>
+    <li><a href="#konfiguracja">7. Konfiguracja</a></li>
+    <li><a href="#porownanie">8. Kourier a inne</a></li>
+    <li><a href="#produkcja">9. Na produkcji</a></li>
+    <li><a href="#diagnostyka">10. Diagnostyka</a></li>
+    <li><a href="#quiz">11. Sprawdź się</a></li>
+  </ol>
+  <button class="theme-btn" id="themeBtn" type="button">Motyw: auto</button>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Serverless na Kubernetes · notatka do nauki</div>
+  <h1>Kourier: brama HTTP dla Knative</h1>
+  <p class="lede">Jak ruch z przeglądarki trafia do właściwej rewizji Knative Service, co robi Envoy, a co kontroler, i dlaczego adres <code>*.127.0.0.1.sslip.io</code> działa bez <code>/etc/hosts</code>.</p>
+  <div class="meta">
+    <span class="pill">Stan na 2026-10-30</span>
+    <span class="pill">Knative i Kourier 1.23.0</span>
+    <span class="pill">envoyproxy/envoy:v1.37-latest</span>
+    <span class="pill">wyniki z klastra memeops</span>
+  </div>
+</header>
+
+<section id="skrot">
+  <h2>W skrócie</h2>
+  <div class="tldr">
+    <div class="card key"><b>Warstwa sieciowa Knative</b><span>Wpuszcza ruch HTTP z zewnątrz i kieruje go do właściwej rewizji Knative Service.</span></div>
+    <div class="card key"><b>Działa tylko z Knative</b><span>Czyta wyłącznie <code>KIngress</code>. Zwykłego <code>Ingress</code>, <code>HTTPRoute</code> ani <code>Service</code> nie obsługuje.</span></div>
+    <div class="card"><b>Dwie części</b><span>Gateway Envoy (<code>3scale-kourier-gateway</code>) przepuszcza ruch, kontroler (<code>net-kourier-controller</code>) dostarcza jej konfigurację.</span></div>
+    <div class="card"><b>Routing po nagłówku Host</b><span><code>hello.kourier-demo…</code> trafia do usługi <code>hello</code> w namespace <code>kourier-demo</code>. Nieznany host dostaje 404.</span></div>
+    <div class="card"><b>Traffic split</b><span>Realizuje <code>80/20</code> i tagi z <code>spec.traffic</code> Knative Service.</span></div>
+    <div class="card"><b>DNS to nie Kourier</b><span>Nazwa <code>*.127.0.0.1.sslip.io</code> wskazuje na 127.0.0.1 dzięki publicznemu DNS sslip.io.</span></div>
+    <div class="card"><b>Nic więcej nie trzeba</b><span>Dla aplikacji Knative wystarczy. Zwykłe Deploymenty potrzebują osobnego kontrolera (Gateway API albo Ingress).</span></div>
+  </div>
+  <p style="color:var(--muted);font-size:14.5px;margin-top:16px">Nazwa <code>3scale-kourier-gateway</code> to ślad historii: Kourier powstał w zespole 3scale (Red Hat), a potem trafił do projektu Knative (<code>knative-extensions/net-kourier</code>).</p>
+</section>
+
+<section id="gdzie">
+  <h2><span class="num">1</span>Gdzie Kourier siedzi</h2>
+  <div class="card diagram">
+    <svg viewBox="0 0 900 300" role="img" aria-label="Droga żądania: klient, port hosta 80, NodePort 31080, Envoy, rewizje hello-v1 80% i hello-v2 20%. Kontroler czyta KIngress i konfiguruje Envoya.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker>
+        <marker id="arc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker>
+      </defs>
+      <!-- klient -->
+      <rect class="box" x="10" y="40" width="130" height="60" rx="10"/>
+      <text x="75" y="66" text-anchor="middle">curl / przeglądarka</text>
+      <text x="75" y="84" text-anchor="middle" class="sub">Twoja VM</text>
+      <!-- port hosta -->
+      <rect class="box" x="190" y="40" width="130" height="60" rx="10"/>
+      <text x="255" y="66" text-anchor="middle" class="mono">127.0.0.1:80</text>
+      <text x="255" y="84" text-anchor="middle" class="sub">port hosta</text>
+      <!-- nodeport -->
+      <rect class="box" x="370" y="40" width="140" height="60" rx="10"/>
+      <text x="440" y="66" text-anchor="middle">svc/kourier</text>
+      <text x="440" y="84" text-anchor="middle" class="sub">NodePort 31080</text>
+      <!-- envoy -->
+      <rect class="box-accent" x="560" y="30" width="150" height="80" rx="12"/>
+      <text x="635" y="62" text-anchor="middle" style="font-weight:700">Envoy</text>
+      <text x="635" y="80" text-anchor="middle" class="sub mono">3scale-kourier-gateway</text>
+      <text x="635" y="96" text-anchor="middle" class="sub">:8080</text>
+      <!-- rewizje -->
+      <rect class="box-v1" x="760" y="14" width="130" height="50" rx="10"/>
+      <text x="825" y="44" text-anchor="middle">rewizja hello-v1</text>
+      <rect class="box-v2" x="760" y="80" width="130" height="50" rx="10"/>
+      <text x="825" y="110" text-anchor="middle">rewizja hello-v2</text>
+      <!-- krawędzie ruchu -->
+      <line class="edge" x1="140" y1="70" x2="186" y2="70" marker-end="url(#ar)"/>
+      <line class="edge" x1="320" y1="70" x2="366" y2="70" marker-end="url(#ar)"/>
+      <text x="343" y="60" text-anchor="middle" class="lbl">kind</text>
+      <line class="edge" x1="510" y1="70" x2="556" y2="70" marker-end="url(#ar)"/>
+      <path class="edge" d="M710 55 C735 50, 740 39, 756 39" marker-end="url(#ar)"/>
+      <path class="edge" d="M710 85 C735 90, 740 105, 756 105" marker-end="url(#ar)"/>
+      <text x="733" y="34" text-anchor="middle" class="lbl-v1" style="font-size:12px">80%</text>
+      <text x="733" y="122" text-anchor="middle" class="lbl-v2" style="font-size:12px">20%</text>
+      <!-- Host header -->
+      <text x="255" y="22" text-anchor="middle" class="lbl mono">Host: hello.kourier-demo.127.0.0.1.sslip.io</text>
+      <!-- kontroler i kingress -->
+      <rect class="box" x="320" y="210" width="130" height="60" rx="10"/>
+      <text x="385" y="236" text-anchor="middle">KIngress hello</text>
+      <text x="385" y="254" text-anchor="middle" class="sub">tworzy go Knative</text>
+      <rect class="box-accent" x="545" y="210" width="180" height="60" rx="10"/>
+      <text x="635" y="236" text-anchor="middle" style="font-weight:600">net-kourier-controller</text>
+      <text x="635" y="254" text-anchor="middle" class="sub">ns knative-serving</text>
+      <line class="edge-cfg" x1="450" y1="240" x2="541" y2="240" marker-end="url(#arc)"/>
+      <text x="495" y="230" text-anchor="middle" class="lbl">czyta</text>
+      <line class="edge-cfg" x1="635" y1="210" x2="635" y2="114" marker-end="url(#arc)"/>
+      <text x="645" y="160" class="lbl">konfiguracja (xDS, port 18000)</text>
+    </svg>
+    <div class="legend"><span><i></i>ruch HTTP</span><span><i class="cfg"></i>konfiguracja</span></div>
+  </div>
+  <p>Knative nie ma własnego „serwera HTTP na wejściu”. Definiuje abstrakcję <code>KIngress</code> (<code>networking.internal.knative.dev</code>) i oczekuje <b>wtyczki sieciowej</b>, która ją zrealizuje. Kourier jest jedną z takich wtyczek: najlżejszą i najczęściej wybieraną, gdy nie masz service mesha.</p>
+  <p>Wtyczkę wskazuje się w ConfigMap <code>config-network</code>:</p>
+<pre><code>kubectl -n knative-serving get cm config-network -o jsonpath='{.data.ingress-class}'
+<span class="c"># kourier.ingress.networking.knative.dev</span></code></pre>
+</section>
+
+<section id="sklad">
+  <h2><span class="num">2</span>Z czego się składa</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Element</th><th>Namespace</th><th>Rola</th></tr></thead>
+    <tbody>
+      <tr><td><code>deploy/3scale-kourier-gateway</code></td><td><code>kourier-system</code></td><td>Envoy, przez który przechodzi każde żądanie. Sam nie zna Knative: robi tylko to, co dostanie od kontrolera</td></tr>
+      <tr><td><code>svc/kourier</code></td><td><code>kourier-system</code></td><td>Wejście <b>z zewnątrz</b> (<code>ExternalIP</code> w KIngress). W chmurze <code>LoadBalancer</code>, u nas <code>NodePort</code> 31080/31443</td></tr>
+      <tr><td><code>svc/kourier-internal</code></td><td><code>kourier-system</code></td><td>Wejście <b>z wnętrza klastra</b> (<code>ClusterLocal</code>): <code>http://hello.kourier-demo.svc.cluster.local</code></td></tr>
+      <tr><td><code>deploy/net-kourier-controller</code></td><td><code>knative-serving</code></td><td>Obserwuje <code>KIngress</code>, buduje z nich konfigurację Envoya i wysyła ją przez xDS (gRPC, port 18000)</td></tr>
+      <tr><td><code>cm/config-kourier</code></td><td><code>knative-serving</code></td><td>Ustawienia Kouriera: logi dostępowe, timeouty, zewnętrzna autoryzacja, nagłówki</td></tr>
+      <tr><td><code>cm/kourier-bootstrap</code></td><td><code>kourier-system</code></td><td>Startowa konfiguracja Envoya: „konfigurację bierz z <code>net-kourier-controller:18000</code>”</td></tr>
+    </tbody>
+  </table></div>
+  <p>Porty w podzie gatewaya: <code>8080</code> (ruch zewnętrzny), <code>8081</code> (ruch wewnętrzny), <code>8443</code> (HTTPS), <code>8090</code> (probe'y), <code>9000</code> (statystyki i podgląd konfiguracji).</p>
+</section>
+
+<section id="ksvc">
+  <h2><span class="num">3</span>Od <code>ksvc</code> do skonfigurowanego Envoya</h2>
+  <ol class="steps">
+    <li><span class="who">Ty</span><code>kubectl apply</code> albo <code>kn service create</code>: tworzysz Knative Service</li>
+    <li><span class="who">Knative controller</span>Z Service robi Configuration → Revision oraz Route</li>
+    <li><span class="who">Knative controller</span>Z Route robi <code>KIngress</code>: hosty i traffic split</li>
+    <li><span class="who">net-kourier-controller</span>Wysyła Envoyowi nowe trasy i klastry przez xDS, bez restartu</li>
+    <li><span class="who">net-kourier-controller</span>Oznacza KIngress jako gotowy (<code>LoadBalancerReady</code>, <code>NetworkConfigured</code>)</li>
+    <li><span class="who">Knative controller</span>Service jest <code>Ready</code>, dostajesz URL</li>
+  </ol>
+  <div class="note"><b>Nigdy nie edytujesz <code>KIngress</code> ręcznie.</b> Zmieniasz <code>ksvc</code> (<code>spec.traffic</code>), Knative przepisuje Route i KIngress, a Kourier dostosowuje Envoya. Envoy przyjmuje nową konfigurację w locie, bez restartu i bez zrywania połączeń.</div>
+  <p>Tak wygląda <code>KIngress</code> dla usługi <code>hello</code> (wycinek z klastra):</p>
+<pre><code><span class="k">spec:</span>
+  <span class="k">rules:</span>
+  - hosts:                                   <span class="c"># adresy wewnątrz klastra</span>
+    - hello.kourier-demo
+    - hello.kourier-demo.svc
+    - hello.kourier-demo.svc.cluster.local
+    visibility: ClusterLocal                 <span class="c"># → svc/kourier-internal</span>
+    http:
+      paths:
+      - splits:
+        - serviceName: hello-v1
+          percent: 100
+          appendHeaders:
+            Knative-Serving-Revision: hello-v1
+  - hosts:
+    - hello.kourier-demo.127.0.0.1.sslip.io  <span class="c"># adres z zewnątrz (config-domain)</span>
+    visibility: ExternalIP                   <span class="c"># → svc/kourier</span>
+    http:
+      paths:
+      - splits:
+        - serviceName: hello-v1
+          percent: 100
+<span class="k">status:</span>
+  publicLoadBalancer:
+    ingress:
+    - domainInternal: kourier.kourier-system.svc.cluster.local
+  privateLoadBalancer:
+    ingress:
+    - domainInternal: kourier-internal.kourier-system.svc.cluster.local</code></pre>
+  <p>Każda usługa ma więc <b>dwa zestawy hostów</b>: wewnętrzny (inne usługi w klastrze) i zewnętrzny (świat). Usługę widoczną tylko w klastrze oznaczasz etykietą <code>networking.knative.dev/visibility: cluster-local</code>; wtedy reguła <code>ExternalIP</code> w ogóle nie powstaje.</p>
+</section>
+
+<section id="sciezka">
+  <h2><span class="num">4</span>Ścieżka pojedynczego żądania</h2>
+  <div class="path" aria-label="Ścieżka żądania">
+    <span class="hop">klient</span><span class="arrow">→</span>
+    <span class="hop"><code>127.0.0.1:80</code></span><span class="arrow">→</span>
+    <span class="hop">NodePort 31080</span><span class="arrow">→</span>
+    <span class="hop">Envoy :8080</span><span class="arrow">→</span>
+    <span class="hop">dopasowanie <code>Host</code></span><span class="arrow">→</span>
+    <span class="hop">wybór rewizji wg %</span><span class="arrow">→</span>
+    <span class="hop">Service <code>hello-v1</code></span>
+  </div>
+  <p>Kourier wysyła ruch do Service rewizji (<code>hello-v1</code>), a nie bezpośrednio do podów. To, co jest za tym Service, ustala <b>ServerlessService</b> (<code>kubectl get sks</code>):</p>
+  <div class="branch">
+    <div class="card"><h4><span class="tag">Proxy</span>przez activator</h4><p>Przy zerze podów activator przytrzymuje żądanie i budzi autoskaler. Ten tryb działa też wtedy, gdy zapas pojemności jest za mały (<code>target-burst-capacity</code>, domyślnie 211).</p></div>
+    <div class="card"><h4><span class="tag">Serve</span>prosto do podów</h4><p>Ruch idzie bezpośrednio do podów (queue-proxy → user-container), bez dodatkowego skoku.</p></div>
+  </div>
+  <div class="note">Z próby: przy jednym warm podzie SKS dalej był w trybie <code>Proxy</code> (<code>ACTIVATORS 4</code>). Jeden pod z domyślnym celem 100 równoczesnych żądań nie pokrywa zapasu 211, więc activator zostaje w ścieżce. Kourier o tym nie decyduje, tylko wysyła ruch tam, gdzie wskazuje Knative.</div>
+</section>
+
+<section id="dns">
+  <h2><span class="num">5</span>DNS: dlaczego to działa bez <code>/etc/hosts</code></h2>
+  <p>Nigdzie nie wpisujemy, że <code>hello.kourier-demo…</code> ma prowadzić na nasz komputer. Nie ma tego w <code>/etc/hosts</code> ani w lokalnym DNS. Robi to za nas publiczna usługa <b>sslip.io</b>.</p>
+
+  <h3>Najpierw: jak w ogóle działa DNS</h3>
+  <p>Gdy wpisujesz nazwę, komputer nie wie, jakie ma ona IP. Pyta <b>resolver</b>, czyli serwer DNS z ustawień sieci (na Linuksie: <code>resolvectl status</code> albo <code>/etc/resolv.conf</code>; na Macu: <code>scutil --dns</code>). Resolver szuka odpowiedzi od góry hierarchii nazw i zapamiętuje ją na czas TTL.</p>
+  <ol class="steps">
+    <li><span class="who">curl → resolver 8.8.8.8</span>Jakie IP ma <code>hello.kourier-demo.127.0.0.1.sslip.io</code>?</li>
+    <li><span class="who">resolver → serwery główne i .io</span>Kto odpowiada za <code>sslip.io</code>? Odpowiedź: <code>ns-ovh.sslip.io</code>, <code>ns-00.nip.io</code>, <code>ns-01.nip.io</code> (to jest <b>delegacja</b>, rekordy <code>NS</code>)</li>
+    <li><span class="who">resolver → ns-ovh.sslip.io</span>Pyta serwer autorytatywny o pełną nazwę</li>
+    <li><span class="who">ns-ovh.sslip.io</span>Odpowiada <code>A 127.0.0.1</code>, wyczytane z samej nazwy</li>
+    <li><span class="who">curl</span>Łączy się z <code>127.0.0.1:80</code> i wysyła <code>Host: hello.kourier-demo.127.0.0.1.sslip.io</code></li>
+  </ol>
+<pre><code>dig +short NS sslip.io
+<span class="c"># ns-00.nip.io.
+# ns-ovh.sslip.io.
+# ns-01.nip.io.</span></code></pre>
+
+  <h3>Sztuczka sslip.io</h3>
+  <p>Zwykły serwer autorytatywny ma <b>plik strefy</b> z gotowymi rekordami, np. <code>www → 203.0.113.10</code>. Serwer sslip.io takiego pliku nie ma. To program, który <b>wylicza odpowiedź z samej nazwy</b>: szuka w niej adresu IP i zwraca go jako rekord <code>A</code>. Wszystko przed adresem IP jest ignorowane.</p>
+
+  <div class="card lab">
+    <label for="dnsIn">Sprawdź sam: wpisz nazwę, a zobaczysz, co odpowie sslip.io</label>
+    <input id="dnsIn" type="text" value="hello.kourier-demo.127.0.0.1.sslip.io" spellcheck="false" autocomplete="off">
+    <div class="dns-out" id="dnsOut" aria-live="polite"></div>
+  </div>
+
+<pre><code>dig +short hello.kourier-demo.127.0.0.1.sslip.io   <span class="c"># 127.0.0.1</span>
+dig +short cokolwiek.10.20.30.40.sslip.io          <span class="c"># 10.20.30.40</span>
+dig +short app-127-0-0-1.sslip.io                  <span class="c"># 127.0.0.1 (zapis z myślnikami)</span>
+
+<span class="c"># zapytanie wprost do serwera sslip.io: flaga "aa" = odpowiedź autorytatywna</span>
+dig @ns-ovh.sslip.io hello.kourier-demo.127.0.0.1.sslip.io +norec
+<span class="c"># ;; flags: qr aa; ...
+# hello.kourier-demo.127.0.0.1.sslip.io. 3600 IN A 127.0.0.1</span></code></pre>
+  <p>To działa jak <b>rekord wildcard dla każdego IP na świecie</b>, bez żadnej konfiguracji. <code>nip.io</code> to ta sama usługa pod inną nazwą: dzieli z sslip.io serwery nazw.</p>
+
+  <h3>Jak to się łączy z Knative</h3>
+  <ol class="steps">
+    <li><code>config-domain</code> ustawia domenę na <code>127.0.0.1.sslip.io</code> (<code>platform.sh</code>, krok 4/6)</li>
+    <li>Knative buduje każdy URL jako <code>&lt;usługa&gt;.&lt;namespace&gt;.&lt;domena&gt;</code>, więc <b>każda nowa usługa od razu ma nazwę, która rozwiązuje się na 127.0.0.1</b></li>
+    <li>DNS daje <b>tylko adres IP</b>. Dalej kind przekazuje <code>127.0.0.1:80</code> do NodePort 31080, a Kourier wybiera usługę po nagłówku <code>Host</code></li>
+  </ol>
+  <p>Knative ma gotowy mechanizm o nazwie <b>Magic DNS</b>: Job <code>serving-default-domain</code> sam wpisuje do <code>config-domain</code> domenę <code>&lt;IP load balancera Kouriera&gt;.sslip.io</code>. Na kind load balancer nie dostaje IP, dlatego ustawiamy <code>127.0.0.1.sslip.io</code> ręcznie.</p>
+
+  <h3>Ograniczenia</h3>
+  <div class="note warn">
+    <b>Wymaga internetu.</b> Odpowiedź przychodzi z serwerów sslip.io, a nie z Twojego komputera.<br>
+    <b>Ochrona przed DNS rebinding.</b> Część routerów i firmowych DNS-ów odrzuca publiczne odpowiedzi wskazujące na adresy prywatne (<code>127.0.0.1</code>, <code>10.x</code>, <code>192.168.x</code>), bo tak wygląda jeden z ataków na przeglądarki. Wtedy nazwa się nie rozwiązuje, choć internet działa. Ten przypadek wyłapuje krok „DNS” w <code>setup/check.sh</code>.<br>
+    <b>Zewnętrzna zależność.</b> Do labów i dem jest w porządku, na produkcji nie.
+  </div>
+
+  <h3>Gdy sslip.io nie działa</h3>
+<pre><code><span class="c"># 1. nagłówek Host podany ręcznie (najprostsze)</span>
+curl -H 'Host: hello.kourier-demo.127.0.0.1.sslip.io' http://127.0.0.1/
+
+<span class="c"># 2. curl sam podstawia IP dla tej nazwy, bez pytania DNS</span>
+curl --resolve hello.kourier-demo.127.0.0.1.sslip.io:80:127.0.0.1 http://hello.kourier-demo.127.0.0.1.sslip.io/
+
+<span class="c"># 3. /etc/hosts: działa też w przeglądarce, ale bez wildcardów (każda usługa osobno)</span>
+echo '127.0.0.1 hello.kourier-demo.127.0.0.1.sslip.io' | sudo tee -a /etc/hosts</code></pre>
+  <p>Wildcard lokalnie da się zrobić tylko własnym serwerem DNS, np. <code>dnsmasq</code> z regułą <code>address=/127.0.0.1.sslip.io/127.0.0.1</code>.</p>
+  <p><b>Na produkcji:</b> własna domena w <code>config-domain</code> i jeden rekord wildcard, np. <code>*.apps.firma.pl  A  &lt;IP load balancera Kouriera&gt;</code>. Mechanizm jest ten sam co w sslip.io („każda nazwa pod tą domeną → to IP”), tylko strefą zarządzasz sam.</p>
+</section>
+
+<section id="cwiczenie">
+  <h2><span class="num">6</span>Ćwiczenie na klastrze <code>memeops</code> (~10 min)</h2>
+  <p>Wymaga postawionej platformy (<code>setup/check.sh</code> → 13/13). Ta sama usługa jako pliki YAML (wdrożenie, canary, przełączenie, rollback): <a href="../../demo/01-serverless-60s/krok-po-kroku/README.md"><code>demo/01-serverless-60s/krok-po-kroku/</code></a>.</p>
+
+  <h3>1. Usługa i jej KIngress</h3>
+<pre><code>kubectl create ns kourier-demo
+kn service create hello -n kourier-demo --image localhost:5001/meme-api:v1 --revision-name hello-v1
+kubectl get kingress -n kourier-demo
+<span class="c"># NAME    READY
+# hello   True</span></code></pre>
+
+  <h3>2. Routing po nagłówku <code>Host</code></h3>
+<pre><code>curl -i http://hello.kourier-demo.127.0.0.1.sslip.io     <span class="c"># 200, nagłówek "server: envoy"</span>
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: hello.kourier-demo.127.0.0.1.sslip.io' http://127.0.0.1/   <span class="c"># 200</span>
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1/                                                      <span class="c"># 404</span></code></pre>
+  <p>Ten sam adres IP i port, a różne wyniki. Decyduje wyłącznie <code>Host</code>. Tak też działa test w <code>setup/check.sh</code>: oczekuje 404 dla nieistniejącej usługi, bo 404 od Envoya znaczy, że Kourier żyje.</p>
+
+  <h3>3. Traffic split i tag</h3>
+<pre><code>kn service update hello -n kourier-demo --image localhost:5001/meme-api:v2 --revision-name hello-v2 \
+  --traffic hello-v1=80 --traffic hello-v2=20 --tag hello-v2=kandydat
+
+kubectl get kingress hello -n kourier-demo \
+  -o jsonpath='{range .spec.rules[*]}{.hosts}{" -> "}{range .http.paths[*].splits[*]}{.serviceName}={.percent} {end}{"\n"}{end}'
+<span class="c"># [..."hello.kourier-demo.127.0.0.1.sslip.io"] -> hello-v2=20 hello-v1=80
+# [..."kandydat-hello.kourier-demo.127.0.0.1.sslip.io"] -> hello-v2=100</span>
+
+for i in $(seq 20); do curl -s http://hello.kourier-demo.127.0.0.1.sslip.io | grep '^\['; done | cut -d' ' -f1 | sort | uniq -c
+<span class="c"># z próby: 14 × [v1, 6 × [v2 (przy 20 żądaniach losowość jest spora)</span>
+curl -s http://kandydat-hello.kourier-demo.127.0.0.1.sslip.io   <span class="c"># zawsze v2</span></code></pre>
+
+  <div class="card lab">
+    <label for="split">Symulacja: tak Envoy losuje rewizję dla każdego żądania</label>
+    <div class="split-row">
+      <input id="split" type="range" min="0" max="100" step="5" value="80" aria-describedby="splitVal">
+      <span class="val" id="splitVal"><span class="v1">v1 80%</span> · <span class="v2">v2 20%</span></span>
+      <button class="btn" id="fire" type="button">Wyślij 20 żądań</button>
+    </div>
+    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div class="result" id="splitRes" aria-live="polite">Każde żądanie losuje rewizję niezależnie, więc przy 20 próbach 14/6 zamiast 16/4 to nic dziwnego.</div>
+  </div>
+  <p>Tag to po prostu <b>dodatkowy host</b> w KIngress, wskazujący w 100% na jedną rewizję.</p>
+
+  <h3>4. Zajrzyj do Envoya</h3>
+<pre><code>kubectl -n kourier-system port-forward deploy/3scale-kourier-gateway 9000:9000 &amp;
+curl -s localhost:9000/listeners      <span class="c"># listener_8080, listener_8081, listener_8090...</span>
+curl -s localhost:9000/clusters | grep -oE '^kourier-demo/[^:]+' | sort -u   <span class="c"># kourier-demo/hello-v1, .../hello-v2</span>
+kill %1
+kubectl -n kourier-system logs deploy/3scale-kourier-gateway --tail=5   <span class="c"># log dostępowy każdego żądania</span></code></pre>
+  <p>Każda rewizja to w Envoyu osobny <b>cluster</b> (w znaczeniu Envoya: grupa backendów).</p>
+
+  <h3>5. Sprzątanie</h3>
+<pre><code>kubectl delete ns kourier-demo</code></pre>
+</section>
+
+<section id="konfiguracja">
+  <h2><span class="num">7</span>Konfiguracja, którą warto znać</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Gdzie</th><th>Klucz</th><th>Po co</th></tr></thead>
+    <tbody>
+      <tr><td><code>knative-serving/config-network</code></td><td><code>ingress-class</code></td><td>wybór wtyczki: <code>kourier.ingress.networking.knative.dev</code></td></tr>
+      <tr><td><code>knative-serving/config-domain</code></td><td>np. <code>127.0.0.1.sslip.io: ""</code></td><td>domena w zewnętrznych URL-ach: <code>&lt;usługa&gt;.&lt;ns&gt;.&lt;domena&gt;</code></td></tr>
+      <tr><td rowspan="5"><code>knative-serving/config-kourier</code></td><td><code>enable-service-access-logging</code></td><td>logi dostępowe Envoya (domyślnie włączone)</td></tr>
+      <tr><td><code>stream-idle-timeout</code></td><td>timeout bezczynnego strumienia (długie żądania, SSE, websockety)</td></tr>
+      <tr><td><code>trusted-hops-count</code>, <code>use-remote-address</code></td><td>prawdziwe IP klienta za load balancerem</td></tr>
+      <tr><td><code>extauthz-host</code>, <code>extauthz-protocol</code></td><td>zewnętrzna autoryzacja: Envoy pyta osobną usługę, czy wpuścić żądanie</td></tr>
+      <tr><td><code>cluster-cert-secret</code>, <code>cipher-suites</code></td><td>TLS</td></tr>
+      <tr><td><code>kourier-system/svc kourier</code></td><td><code>spec.type</code></td><td><code>LoadBalancer</code> w chmurze, <code>NodePort</code> na kind (patch w <code>platform.sh</code>)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Pełna lista z opisami: <code>kubectl -n knative-serving get cm config-kourier -o yaml</code> (sekcja <code>_example</code>).</p>
+</section>
+
+<section id="porownanie">
+  <h2><span class="num">8</span>Kourier a inne opcje</h2>
+  <h3>Inne wtyczki sieciowe Knative (do wyboru jedna)</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Wtyczka</th><th>Kiedy</th></tr></thead>
+    <tbody>
+      <tr><td><b>Kourier</b></td><td>domyślny wybór: lekki, tylko Envoy i kontroler, bez service mesha</td></tr>
+      <tr><td><b>Istio</b> (<code>net-istio</code>)</td><td>masz już Istio albo potrzebujesz mTLS między usługami i polityk mesha</td></tr>
+      <tr><td><b>Contour</b> (<code>net-contour</code>)</td><td>w organizacji standardem jest już Contour</td></tr>
+      <tr><td><b>Gateway API</b> (<code>net-gateway-api</code>)</td><td>chcesz jednego standardu dla Knative i reszty klastra; sprawdź dojrzałość w dokumentacji swojej wersji Knative</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Kourier a ingress dla zwykłych aplikacji</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Kourier</th><th>Kontroler Gateway API / Ingress</th></tr></thead>
+    <tbody>
+      <tr><td>Co czyta</td><td><code>KIngress</code> (tylko z Knative)</td><td><code>HTTPRoute</code> / <code>Ingress</code></td></tr>
+      <tr><td>Dla kogo</td><td>Knative Service</td><td>dowolny <code>Service</code></td></tr>
+      <tr><td>Traffic split między rewizjami</td><td>tak, z <code>spec.traffic</code></td><td>ręcznie, wagami w <code>HTTPRoute</code></td></tr>
+      <tr><td>Scale-to-zero</td><td>tak, współpracuje z activatorem</td><td>nie</td></tr>
+    </tbody>
+  </table></div>
+  <p>Oba mogą działać w jednym klastrze. Potrzebują wtedy osobnych punktów wejścia: dwóch LoadBalancerów, albo na kind dwóch różnych mapowanych portów. U nas port 80 hosta jest zajęty przez Kouriera.</p>
+</section>
+
+<section id="produkcja">
+  <h2><span class="num">9</span>Na produkcji</h2>
+  <div class="tldr">
+    <div class="card"><b>LoadBalancer i DNS</b><span><code>svc/kourier</code> jako <code>LoadBalancer</code>. Prawdziwa domena w <code>config-domain</code> i rekord wildcard <code>*.twoja-domena</code> na IP load balancera.</span></div>
+    <div class="card"><b>TLS</b><span>cert-manager (od Knative 1.15 integracja jest w serving-core, ConfigMap <code>config-certmanager</code>; patrz LAB 6) albo terminacja TLS na load balancerze.</span></div>
+    <div class="card key"><b>Wysoka dostępność</b><span>2+ repliki <code>3scale-kourier-gateway</code> i <code>activator</code> oraz PodDisruptionBudget. Padnięty gateway = <b>żadna</b> usługa Knative nie odpowiada.</span></div>
+    <div class="card"><b>Prawdziwe IP klienta</b><span>Za load balancerem ustaw <code>trusted-hops-count</code> albo <code>enable-proxy-protocol</code>.</span></div>
+    <div class="card"><b>Monitoring</b><span>Envoy wystawia metryki na <code>:9000/stats/prometheus</code>.</span></div>
+  </div>
+</section>
+
+<section id="diagnostyka">
+  <h2><span class="num">10</span>Diagnostyka</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Objaw</th><th>Co sprawdzić</th></tr></thead>
+    <tbody>
+      <tr><td><code>curl</code> na <code>127.0.0.1:80</code>: connection refused</td><td><code>kubectl -n kourier-system get pods,svc</code>: czy gateway jest <code>Running</code>, czy svc ma NodePort 31080, czy kind ma mapowanie portu (<code>docker ps</code>)</td></tr>
+      <tr><td><code>Could not resolve host: …sslip.io</code></td><td>brak internetu albo DNS blokuje odpowiedzi z adresem prywatnym (<a href="#dns">sekcja 5</a>): <code>dig +short &lt;nazwa&gt;</code>; obejście: <code>curl -H 'Host: …' http://127.0.0.1/</code></td></tr>
+      <tr><td>404 dla istniejącej usługi</td><td>zły <code>Host</code> (literówka, namespace, domena); <code>kubectl get ksvc -A</code> pokazuje prawdziwy URL</td></tr>
+      <tr><td><code>ksvc</code> nie jest <code>Ready</code>, powód dotyczy sieci</td><td><code>kubectl get kingress -n &lt;ns&gt;</code> i <code>kubectl describe kingress &lt;nazwa&gt;</code>; logi <code>net-kourier-controller</code></td></tr>
+      <tr><td>503 albo długie oczekiwanie</td><td>rewizja nie wstaje: <code>kubectl get pods</code>, <code>kubectl describe revision</code>; to zwykle problem aplikacji, nie Kouriera</td></tr>
+      <tr><td>Jednorazowy błąd zaraz po instalacji</td><td>gateway mógł się zrestartować (zdarzyło się w próbie z 30.10); powtórz <code>setup/check.sh</code></td></tr>
+      <tr><td>Nic nie działa po zmianie <code>config-network</code></td><td>inna wtyczka nie zrealizuje istniejących <code>KIngress</code>: sprawdź <code>ingress-class</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="quiz">
+  <h2><span class="num">11</span>Sprawdź się</h2>
+  <details><summary>Masz w klastrze zwykły Deployment + Service. Czy Kourier go wystawi?</summary>
+    <div>Nie. Kourier czyta tylko <code>KIngress</code>, a te tworzy Knative z Route. Zwykły Service wystawisz przez <code>port-forward</code> (test), NodePort/LoadBalancer albo kontroler Gateway API/Ingress. Druga droga to zamiana aplikacji na Knative Service.</div></details>
+  <details><summary>Dlaczego <code>curl http://127.0.0.1/</code> zwraca 404, a z nagłówkiem Host zwraca 200?</summary>
+    <div>Envoy dopasowuje trasę po nagłówku <code>Host</code>. Bez niego <code>Host</code> to <code>127.0.0.1</code>, czyli nazwa, której nie ma w żadnym KIngress, więc Envoy zwraca 404.</div></details>
+  <details><summary>Zmieniasz traffic split z 80/20 na 50/50. Co robisz z Kourierem?</summary>
+    <div>Nic. Zmieniasz <code>spec.traffic</code> w <code>ksvc</code> (albo <code>kn service update --traffic</code>). Knative przepisuje KIngress, kontroler wysyła nową konfigurację do Envoya, bez restartu.</div></details>
+  <details><summary>Czym jest tag <code>kandydat</code> z punktu widzenia Kouriera?</summary>
+    <div>Dodatkową regułą w KIngress z hostem <code>kandydat-hello.&lt;ns&gt;.&lt;domena&gt;</code>, która w 100% wskazuje na jedną rewizję.</div></details>
+  <details><summary>Pada <code>3scale-kourier-gateway</code>, a <code>net-kourier-controller</code> działa. Co się dzieje?</summary>
+    <div>Ruch z zewnątrz nie dochodzi do żadnej usługi Knative, bo Envoy jest jedynym wejściem. Kontroler nie przenosi ruchu, tylko konfigurację. W odwrotnej sytuacji (pada kontroler, gateway działa) istniejące trasy dalej działają, ale nowe usługi i zmiany ruchu nie zostaną zastosowane.</div></details>
+  <details><summary>Czym różni się <code>svc/kourier</code> od <code>svc/kourier-internal</code>?</summary>
+    <div><code>kourier</code> obsługuje hosty zewnętrzne (<code>visibility: ExternalIP</code>), czyli ruch spoza klastra. <code>kourier-internal</code> obsługuje hosty <code>*.svc.cluster.local</code> (<code>ClusterLocal</code>), czyli ruch usługa → usługa wewnątrz klastra. Dlatego <code>kubectl get svc hello</code> w namespace usługi pokazuje <code>ExternalName</code> wskazujący na <code>kourier-internal</code>.</div></details>
+  <details><summary>Kto sprawia, że <code>hello.kourier-demo.127.0.0.1.sslip.io</code> wskazuje na 127.0.0.1?</summary>
+    <div>Publiczny serwer DNS sslip.io: wyczytuje IP z nazwy i zwraca je jako rekord <code>A</code>. Knative tylko buduje nazwę z domeny w <code>config-domain</code>, a Kourier dostaje żądanie dopiero, gdy klient zna już IP. Dzięki temu nie potrzebujesz wpisów w <code>/etc/hosts</code>.</div></details>
+  <details><summary>Nazwa nie rozwiązuje się na firmowym laptopie, choć internet działa. Dlaczego i jak to obejść?</summary>
+    <div>Najczęściej ochrona przed DNS rebinding: firmowy DNS odrzuca publiczne odpowiedzi wskazujące na adresy prywatne. Obejście: <code>curl -H 'Host: &lt;nazwa&gt;' http://127.0.0.1/</code>, <code>curl --resolve</code> albo wpis w <code>/etc/hosts</code>.</div></details>
+</section>
+
+<footer>
+  <b>Źródła:</b>
+  <a href="https://github.com/knative-extensions/net-kourier">knative-extensions/net-kourier</a> ·
+  <a href="https://sslip.io">sslip.io</a> (<a href="https://github.com/cunnie/sslip.io">kod serwera</a>) ·
+  <a href="https://knative.dev/docs/install/yaml-install/serving/install-serving-with-yaml/">Knative: instalacja warstwy sieciowej i Magic DNS</a><br>
+  U nas: <code>setup/platform.sh</code> (krok 4/6).
+</footer>
+</main>
+</div>
+
+<script>
+(function () {
+  // motyw: auto → jasny → ciemny
+  var root = document.documentElement, btn = document.getElementById('themeBtn');
+  var modes = ['auto', 'light', 'dark'], names = { auto: 'auto', light: 'jasny', dark: 'ciemny' };
+  function apply(m) {
+    if (m === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', m);
+    btn.textContent = 'Motyw: ' + names[m];
+  }
+  var mode = 'auto';
+  try { mode = localStorage.getItem('kourier-theme') || 'auto'; } catch (e) {}
+  apply(mode);
+  btn.addEventListener('click', function () {
+    mode = modes[(modes.indexOf(mode) + 1) % modes.length];
+    apply(mode);
+    try { localStorage.setItem('kourier-theme', mode); } catch (e) {}
+  });
+
+  // kopiowanie bloków kodu
+  document.querySelectorAll('pre').forEach(function (pre) {
+    var b = document.createElement('button');
+    b.className = 'copy'; b.type = 'button'; b.textContent = 'Kopiuj';
+    b.addEventListener('click', function () {
+      var text = pre.querySelector('code').innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = 'Skopiowano'; setTimeout(function () { b.textContent = 'Kopiuj'; }, 1400);
+      });
+    });
+    pre.appendChild(b);
+  });
+
+  // aktywna pozycja w spisie treści
+  var links = {};
+  document.querySelectorAll('.toc a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting && links[e.target.id]) {
+        Object.values(links).forEach(function (l) { l.classList.remove('active'); });
+        links[e.target.id].classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  document.querySelectorAll('main section').forEach(function (s) { obs.observe(s); });
+
+  // „serwer sslip.io” w przeglądarce: szuka IPv4 (kropki albo myślniki) przed .sslip.io / .nip.io
+  var dnsIn = document.getElementById('dnsIn'), dnsOut = document.getElementById('dnsOut');
+  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function octets(a) { return a.every(function (n) { return n !== '' && +n >= 0 && +n <= 255; }); }
+  function resolve() {
+    var name = dnsIn.value.trim().toLowerCase().replace(/\.$/, '');
+    var m = name.match(/^(.*?)((?:\d{1,3}[.-]){3}\d{1,3})\.(sslip\.io|nip\.io)$/);
+    if (!m) {
+      dnsOut.innerHTML = /(sslip|nip)\.io$/.test(name)
+        ? 'Brak adresu IPv4 w nazwie. Prawdziwy sslip.io zwróci wtedy własny adres zamiast Twojego.'
+        : 'To nie jest nazwa w domenie <code>sslip.io</code> ani <code>nip.io</code>, więc odpowiada za nią inny serwer DNS.';
+      return;
+    }
+    var ip = m[2].split(/[.-]/);
+    if (!octets(ip)) { dnsOut.innerHTML = 'Liczby w adresie muszą mieścić się w zakresie 0–255.'; return; }
+    var prefix = m[1];
+    dnsOut.innerHTML =
+      '<div><span class="hl-pre">' + esc(prefix) + '</span><span class="hl-ip">' + esc(m[2]) + '</span><span class="hl-dom">.' + m[3] + '</span></div>' +
+      '<div class="answer">' + esc(name) + '. 3600 IN A <b>' + ip.join('.') + '</b></div>' +
+      '<div class="result">' + (prefix ? 'Przekreślony prefiks jest ignorowany, liczy się tylko adres IP.' : 'Bez prefiksu też działa.') +
+      (ip[0] === '127' || ip[0] === '10' || (ip[0] === '192' && ip[1] === '168') ? ' To adres prywatny: część firmowych DNS-ów odrzuci taką odpowiedź.' : '') + '</div>';
+  }
+  dnsIn.addEventListener('input', resolve);
+  resolve();
+
+  // symulacja traffic splitu
+  var split = document.getElementById('split'), splitVal = document.getElementById('splitVal');
+  var dots = document.getElementById('dots'), res = document.getElementById('splitRes');
+  function showSplit() {
+    var p = +split.value;
+    splitVal.innerHTML = '<span class="v1">v1 ' + p + '%</span> · <span class="v2">v2 ' + (100 - p) + '%</span>';
+  }
+  split.addEventListener('input', showSplit);
+  showSplit();
+  document.getElementById('fire').addEventListener('click', function () {
+    var p = +split.value, v1 = 0;
+    dots.innerHTML = '';
+    for (var i = 0; i < 20; i++) {
+      var hit = Math.random() * 100 < p;
+      if (hit) v1++;
+      var d = document.createElement('span');
+      d.className = 'dot ' + (hit ? 'v1' : 'v2');
+      d.style.animationDelay = (i * 35) + 'ms';
+      dots.appendChild(d);
+    }
+    res.textContent = 'Wynik: ' + v1 + ' × v1, ' + (20 - v1) + ' × v2 (oczekiwane ' + (p / 5) + ' / ' + ((100 - p) / 5) + '). Kliknij jeszcze raz: rozkład za każdym razem jest trochę inny.';
+  });
+})();
+</script>
+</body>
+</html>

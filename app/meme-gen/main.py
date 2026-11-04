@@ -10,7 +10,7 @@ Konfiguracja tylko przez zmienne środowiskowe (manifest, ConfigMap, Secret):
 
 Endpointy:
   GET  /                 strona z formularzem
-  GET  /healthz          200 OK (sonda)
+  GET  /healthz          200 OK (probe)
   GET  /api/info         wersja, rewizja Knative, format, czas od startu procesu
   POST /api/memes        {"top", "bottom", "template", "scale"} → {"id", "url"}
   GET  /api/memes        galeria (lista id, w pamięci procesu)

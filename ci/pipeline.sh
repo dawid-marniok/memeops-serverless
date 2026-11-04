@@ -38,4 +38,4 @@ kn service update meme-gen -n "$NS" --image "$IMAGE" --revision-name "$REV" \
   --traffic "$CURRENT=$((100 - PERCENT))" --traffic "@latest=$PERCENT" --tag "@latest=canary"
 kn revision list -n "$NS" -s meme-gen | head -4
 echo; echo "Canary: $(kubectl get ksvc meme-gen -n $NS -o jsonpath='{.status.traffic[?(@.tag=="canary")].url}')"
-echo "Promocja: kn service update meme-gen -n $NS --traffic $REV=100   Wycofanie: --traffic $CURRENT=100"
+echo "Promocja: kn service update meme-gen -n $NS --traffic $REV=100   Rollback: --traffic $CURRENT=100"

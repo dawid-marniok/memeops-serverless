@@ -1,0 +1,27 @@
+# Demo 06: usługa do pokazu trybu panic. Obraz meme-gen z LAB 4 (generowanie PNG zajmuje CPU, więc żądania trwają).
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: panika
+  namespace: demo
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/target: "10"            # 10 równoczesnych żądań na pod
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/window: "60s"           # stable window (domyślne)
+        autoscaling.knative.dev/panic-window-percentage: "10"     # panic window = 10% stable window = 6 s (domyślne)
+        autoscaling.knative.dev/panic-threshold-percentage: "200" # panic, gdy ruch w oknie 6 s > 2× tego, co obsłużą obecne pody (domyślne)
+    spec:
+      timeoutSeconds: 30
+      containers:
+        - image: localhost:5001/meme-gen:2.0.0
+          env:
+            - {name: APP_VERSION, value: "panika"}
+            - {name: MEME_FORMAT, value: png}
+          readinessProbe:
+            httpGet: {path: /healthz}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 512Mi}               # zapas: galeria memów jest trzymana w pamięci

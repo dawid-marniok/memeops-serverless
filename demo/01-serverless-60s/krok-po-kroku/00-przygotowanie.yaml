@@ -1,0 +1,29 @@
+# Krok 0: obiekty, z których korzystają zakomentowane opcje w 01-hello-v1.yaml
+# (serviceAccountName, envFrom, valueFrom, volumes). Bez nich odkomentowanie tych opcji zablokuje start rewizji.
+# Namespace demo tworzy demo/00-namespace.yaml.
+# kubectl apply -f demo/00-namespace.yaml -f demo/01-serverless-60s/krok-po-kroku/00-przygotowanie.yaml
+#
+# Usługi (01–03) są w osobnych plikach, bo `kn service apply -f` czyta tylko pierwszy dokument YAML
+# i ignoruje metadata.namespace z pliku (namespace podajesz przez -n).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: meme-api
+  namespace: demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meme-config
+  namespace: demo
+data:
+  tryb: demo
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: meme-sekret
+  namespace: demo
+type: Opaque
+stringData:
+  haslo: tylko-na-szkolenie        # przykład; prawdziwych sekretów nie trzymamy w repo (LAB 6)

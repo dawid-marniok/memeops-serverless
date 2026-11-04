@@ -1,35 +1,41 @@
 # lab01 — Platforma pod MemeOps
 
-| Dzień | Czas | Po bloku |
-|---|---|---|
-| 1 | 30 min | 1.1 Architektura i wybór frameworka |
+| Dzień | Po bloku |
+|---|---|
+| 1 | 1.1 Architektura i wybór frameworka |
 
 > **Zgłoszenie od PO:** „Konferencja za dwa dni. Zanim cokolwiek wdrożymy, potrzebujemy platformy, która sama skaluje się od zera do szczytu. Wybraliśmy Knative — postawcie ją.”
 
-**Cel:** masz działający klaster z Knative Serving i rozumiesz, z jakich komponentów się składa.
+**Cel:** sprawdzasz, że klaster z Knative Serving działa, i rozumiesz, z jakich komponentów się składa.
+
+**Platforma już stoi.** Twoja VM-ka to klon z gotowym klasterem kind, rejestrem, Knative Serving i Kourierem (postawił je `setup/platform.sh` przed szkoleniem). Nic nie instalujesz, tylko sprawdzasz i czytasz.
 
 ## Kroki
 
-| # | Co robisz | Czas |
-|---|---|---|
-| 1 | Narzędzia i platforma | 10 min (skrypt działa sam) |
-| 2 | Komponenty Knative | 10 min |
-| 3 | Pierwsza usługa w 30 sekund | 5 min |
-| 4 | Pytania do zespołu | 5 min |
+| # | Co robisz |
+|---|---|
+| 1 | Sprawdzenie platformy: `setup/check.sh` |
+| 2 | Co postawił `setup/platform.sh` |
+| 3 | Komponenty Knative: kto co robi |
+| 4 | Usługa `hello` w 30 sekund |
 
-### 1. Narzędzia i platforma
+### 1. Sprawdzenie platformy
 
 ```bash
-setup/install-tools.sh && export PATH="$HOME/.local/bin:$PATH"
-setup/platform.sh
-setup/check.sh
+cd ~/memeops
+export PATH="$HOME/.local/bin:$PATH"
+setup/check.sh                 # oczekiwany wynik: SUKCES: 13/13
 ```
 
-W trakcie przeczytaj `setup/platform.sh`: co robi każdy z 6 kroków? Zwróć uwagę na dwie rzeczy, które nie są oczywiste:
-- `config-domain` — skąd wezmą się adresy usług,
-- `registries-skipping-tag-resolving` — co Knative normalnie robi z tagiem obrazu.
+Nie masz 13/13? Uruchom `setup/platform.sh` (skrypt jest idempotentny, można go puścić drugi raz) i napisz na czacie, który punkt `check.sh` nie przeszedł.
 
-### 2. Komponenty Knative
+### 2. Co postawił `setup/platform.sh`
+
+Otwórz `setup/platform.sh` w edytorze i przeczytaj, co robi każdy z 6 kroków (rejestr, klaster kind, Knative Serving, Kourier z domeną, obrazy `meme-api`, sprawdzenie). Zwróć uwagę na dwie rzeczy, które nie są oczywiste:
+- `config-domain` — skąd wezmą się adresy usług (`*.127.0.0.1.sslip.io`),
+- `registries-skipping-tag-resolving` — co Knative normalnie robi z tagiem obrazu (wrócimy do tego w bloku 1.5).
+
+### 3. Komponenty Knative
 
 ```bash
 kubectl get pods -n knative-serving
@@ -49,7 +55,7 @@ Dopasuj komponent do roli (odpowiedzi omawiamy wspólnie):
 
 Podpowiedź: jeden z nich „trzyma” żądania, gdy usługa ma zero podów.
 
-### 3. Pierwsza usługa w 30 sekund
+### 4. Usługa `hello` w 30 sekund
 
 ```bash
 kn service create hello -n default --image ghcr.io/knative/helloworld-go:latest --env TARGET=MemeOps
@@ -58,7 +64,7 @@ kubectl get deploy,pods,svc -n default     # co Knative utworzył za Ciebie?
 kn service delete hello -n default
 ```
 
-### 4. Pytania do zespołu
+## Pytania do zespołu
 
 Zanotuj odpowiedzi — wrócimy do nich na koniec dnia:
 1. Ile zasobów zajmuje sama platforma (`kubectl top` nie działa bez metrics-server — użyj `docker stats --no-stream`)?
@@ -67,12 +73,12 @@ Zanotuj odpowiedzi — wrócimy do nich na koniec dnia:
 ## SUKCES
 
 - [ ] `setup/check.sh` → `SUKCES: 13/13`
-- [ ] `curl` z kroku 3 zwrócił `Hello MemeOps!`
+- [ ] `curl` z kroku 4 (albo przeglądarka na VM) zwrócił `Hello MemeOps!`
 - [ ] umiesz powiedzieć, który komponent odpowiada za scale-to-zero, a który za przyjęcie żądania przy zerze podów
 
 ## Dla chętnych
 
-- `kubectl get cm -n knative-serving` → przejrzyj `config-autoscaler`: ile trwa okno stabilne i po jakim czasie pod znika?
+- `kubectl get cm -n knative-serving` → przejrzyj `config-autoscaler`: ile trwa stable window i po jakim czasie pod znika?
 
 ## Gdy coś nie działa
 

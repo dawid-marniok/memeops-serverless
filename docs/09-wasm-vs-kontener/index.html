@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wasm a kontener</title>
+<style>
+/* Ten sam system co activator-tbc: kolor = rola (pomarańczowy = kontener, morski = Wasm, różowy = pułapka), jedna kolumna tekstu, tabele przewijane na telefonie. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --ct: #b4561a;
+  --ct-bg: #fbe9da;
+  --ct-soft: #fdf6ef;
+  --wasm: #0f6d6a;
+  --wasm-bg: #e3f2f0;
+  --warn: #b0306a;
+  --warn-bg: #f9e6ef;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --ct: #f0955a; --ct-bg: #33241a; --ct-soft: #261e18;
+    --wasm: #5cc4bd; --wasm-bg: #17302e; --warn: #ee7fae; --warn-bg: #3a1a28; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --ct: #f0955a; --ct-bg: #33241a; --ct-soft: #261e18;
+  --wasm: #5cc4bd; --wasm-bg: #17302e; --warn: #ee7fae; --warn-bg: #3a1a28; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 96px; }
+.prose { max-width: 760px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+.answer .v { font-weight: 700; }
+.answer .v.no { color: var(--warn); }
+.answer .v.yes { color: var(--wasm); }
+
+/* Diagramy */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-top: 16px; }
+.scroll svg { display: block; width: 100%; min-width: 760px; height: auto; }
+svg text { font-family: var(--sans); }
+.ly rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.3; }
+.ly.ct rect { fill: var(--ct-bg); stroke: var(--ct); }
+.ly.wasm rect { fill: var(--wasm-bg); stroke: var(--wasm); }
+.ly .t { font-size: 14px; font-weight: 650; fill: var(--text); }
+.ly .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.hd { font-size: 15px; font-weight: 750; }
+.hd.ct { fill: var(--ct); }
+.hd.wasm { fill: var(--wasm); }
+.a { fill: none; stroke-width: 2.4; }
+.a.ct { stroke: var(--ct); }
+.a.wasm { stroke: var(--wasm); }
+.a.muted { stroke: var(--muted); }
+.mk-ct { fill: var(--ct); }
+.mk-wasm { fill: var(--wasm); }
+.mk-muted { fill: var(--muted); }
+.lbl { font-size: 12px; font-weight: 700; }
+.lbl.ct { fill: var(--ct); }
+.lbl.wasm { fill: var(--wasm); }
+.note { font-size: 12px; fill: var(--muted); }
+.seg { stroke: var(--surface); stroke-width: 2; }
+.seg.g { fill: var(--surface-2); }
+.seg.ct { fill: var(--ct); }
+.seg.wasm { fill: var(--wasm); }
+.segt { font-size: 11.5px; fill: var(--muted); }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 680px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+thead th.ct { color: var(--ct); }
+thead th.wasm { color: var(--wasm); }
+tbody th { font-weight: 650; width: 22%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code, summary code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; }
+.tag.ct { background: var(--ct-bg); color: var(--ct); }
+.tag.wasm { background: var(--wasm-bg); color: var(--wasm); }
+.tag.warn { background: var(--warn-bg); color: var(--warn); }
+
+/* Dwie kolumny kart */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; min-width: 0; }
+.card.wasm { border-top: 3px solid var(--wasm); }
+.card.warn { border-top: 3px solid var(--warn); }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card ul { margin: 0; padding-left: 20px; font-size: 15px; }
+.card li { margin: 4px 0; }
+
+/* Lista kontrolna */
+.check { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 18px; }
+.check h3 { margin: 0 0 4px; }
+.check .hint { font-size: 13.5px; color: var(--muted); margin: 0 0 12px; }
+.check fieldset { border: 0; margin: 0 0 10px; padding: 0; }
+.check legend { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.check legend.za { color: var(--wasm); }
+.check legend.przeciw { color: var(--warn); }
+.check label { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; padding: 5px 0; cursor: pointer; }
+.check input { margin-top: 5px; accent-color: var(--accent); flex: none; }
+.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.result { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+.verdict { font-weight: 800; font-size: 15px; padding: 4px 14px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--muted); }
+.verdict.yes { background: var(--wasm-bg); color: var(--wasm); border-color: var(--wasm); }
+.verdict.no { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+.verdict.maybe { background: var(--ct-bg); color: var(--ct); border-color: var(--ct); }
+.result .why { font-size: 14.5px; color: var(--muted); flex: 1 1 320px; }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre .c { color: var(--code-comment); }
+.callout { border-left: 3px solid var(--ct); background: var(--ct-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+.callout.say { border-left-color: var(--wasm); background: var(--wasm-bg); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.src { font-size: 13.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="prose">
+  <div class="eyebrow">Serverless na Kubernetes · notatka do nauki</div>
+  <h1>Wasm a zwykły kontener</h1>
+  <p class="lede">Czym jest WebAssembly, co dokładnie się zmienia, gdy pod uruchamia moduł <code>.wasm</code> zamiast kontenera, i kiedy to się opłaca. W skrócie: Wasm nie zastępuje poda, tylko proces w kontenerze. Wygrywa startem instancji, gęstością i rozmiarem, a nie startem poda.</p>
+  <div class="meta">
+    <span class="pill">containerd-shim-spin v0.26.0</span>
+    <span class="pill">Spin · SpinKube (CNCF Sandbox)</span>
+    <span class="pill">klaster kind <code>wasm</code></span>
+    <span class="pill">blok 2.5 · demo 12</span>
+    <span class="pill">stan na 02.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#co-to">Co to jest Wasm</a>
+    <a href="#warstwy">Co jest w środku</a>
+    <a href="#izolacja">Izolacja</a>
+    <a href="#bez-k8s">Wasm bez Kubernetesa</a>
+    <a href="#k8s">Wasm w Kubernetesie</a>
+    <a href="#start">Dlaczego pod nie wstaje szybciej</a>
+    <a href="#uzycie">Do czego się używa</a>
+    <a href="#kiedy">Kiedy warto</a>
+    <a href="#klient">Wasm w telco</a>
+    <a href="#klaster">Zobacz na klastrze</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Co to jest Wasm?</div><p><span class="v yes">Przenośny kod bajtowy</span> dla wirtualnego procesora. Kompilujesz Rust, Go czy C raz, a uruchamia go runtime (np. wasmtime) na x86 i ARM.</p></div>
+    <div class="answer"><div class="q">Czym różni się od kontenera?</div><p>Kontener pakuje <b>cały system plików Linuksa</b> i działa na jądrze hosta. Moduł Wasm to <b>sama aplikacja</b>, która widzi tylko to, co runtime jej przyzna.</p></div>
+    <div class="answer"><div class="q">Czy pod Wasm startuje szybciej?</div><p><span class="v no">Nie.</span> W demo 12: 1,0 s vs 0,99 s. Czas startu poda to kubelet, sandbox i sieć, nie sam proces.</p></div>
+    <div class="answer"><div class="q">To gdzie jest zysk?</div><p><span class="v yes">Start instancji w milisekundach</span> wewnątrz działającego runtime’u, gęstość wielu aplikacji w jednym procesie, artefakty po kilka MB.</p></div>
+    <div class="answer"><div class="q">Czy przeniosę na Wasm swoją aplikację w Pythonie?</div><p><span class="v no">Zwykle nie wprost.</span> Biblioteki z kodem C (Pillow, część numpy), wątki i surowe gniazda to dziś główne ograniczenia.</p></div>
+  </div>
+</section>
+
+<section id="co-to" class="prose">
+  <h2><span class="num">1</span>Co to jest WebAssembly</h2>
+  <p><b>WebAssembly (Wasm)</b> to binarny format instrukcji dla wymyślonego, prostego procesora. Nie ma takiego procesora w krzemie. Program w Wasm uruchamia <b>runtime</b>, który tłumaczy te instrukcje na kod maszynowy prawdziwego CPU (JIT albo z góry, AOT). To ten sam pomysł co bajtkod JVM, ale z trzema różnicami, które tu są najważniejsze:</p>
+  <ul>
+    <li><b>Wiele języków.</b> Do Wasm kompilujesz Rust, C/C++, Go (TinyGo albo <code>GOOS=wasip1</code>), Zig, a z ograniczeniami też JavaScript i Pythona.</li>
+    <li><b>Domyślnie nic nie wolno.</b> Moduł nie ma dostępu do plików, sieci ani zegara, dopóki host mu ich jawnie nie da.</li>
+    <li><b>Mały i szybki start.</b> Moduł ma zwykle od kilkuset kB do kilku MB. Runtime tworzy jego instancję w milisekundach albo szybciej.</li>
+  </ul>
+
+  <h3>Skąd się wziął i co to jest WASI</h3>
+  <p>Wasm powstał dla przeglądarki (standard W3C od 2019 r.), żeby szybko i bezpiecznie uruchamiać tam kod spoza JavaScriptu, np. edytory grafiki. W przeglądarce kontakt ze światem zapewnia JavaScript. Na serwerze takiego pośrednika nie ma, dlatego powstał <b>WASI</b> (WebAssembly System Interface): standardowy zestaw funkcji, które host udostępnia modułowi, czyli pliki, zegar, losowość, gniazda i HTTP.</p>
+  <ul>
+    <li><b>WASI Preview 1</b> (<code>wasip1</code>) jest prosty i przypomina POSIX.</li>
+    <li><b>WASI 0.2</b> (Preview 2, styczeń 2024) opiera się na <b>component model</b>: moduły mają typowane interfejsy (WIT), np. <code>wasi:http</code>, i można je składać jak klocki, nawet gdy napisano je w różnych językach.</li>
+    <li><b>WASI 0.3</b> dodaje natywną asynchroniczność. Stan wydania sprawdź na <a href="https://wasi.dev">wasi.dev</a>.</li>
+  </ul>
+  <div class="callout say">Zdanie do zapamiętania, Solomon Hykes (twórca Dockera), 2019: <i>„Gdyby WASM+WASI istniały w 2008 roku, nie musielibyśmy tworzyć Dockera”</i>. Uczciwy kontekst: dodał wtedy, że Docker i Wasm będą działać obok siebie, a nie że jedno zastąpi drugie.</div>
+
+  <h3>Analogia</h3>
+  <p><b>Kontener</b> to wynajęte mieszkanie z własnymi meblami (biblioteki, interpreter, <code>/bin</code>) w bloku, który dzieli fundamenty (jądro) z sąsiadami. <b>Moduł Wasm</b> to pokój w hotelu: przynosisz tylko walizkę (sam kod), a recepcja (runtime) decyduje, do których drzwi dostajesz klucz.</p>
+</section>
+
+<section id="warstwy">
+  <h2 class="prose"><span class="num">2</span>Co jest w środku: warstwa po warstwie</h2>
+  <p class="prose">Dolne warstwy są wspólne. Różnica zaczyna się na wysokości runtime’u kontenera: <code>runc</code> tworzy proces Linuksa w namespaces, a shim Spin ładuje moduł do <code>wasmtime</code>.</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 360" role="img" aria-label="Porównanie warstw. Kontener: sprzęt, jądro hosta, containerd i runc, namespaces i cgroupy, system plików Linuksa z interpreterem, aplikacja. Wasm: sprzęt, jądro hosta, containerd i shim spin, wasmtime, WASI z przyznanymi uprawnieniami, moduł wasm.">
+        <defs>
+          <marker id="mct" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ct" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="mw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-wasm" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        <text class="hd ct" x="210" y="26" text-anchor="middle">Zwykły kontener (runc)</text>
+        <text class="hd wasm" x="680" y="26" text-anchor="middle">Wasm (containerd-shim-spin)</text>
+
+        <!-- Kontener -->
+        <g class="ly ct"><rect x="40" y="42" width="340" height="38" rx="8"/><text class="t" x="56" y="66">app.py</text><text class="s" x="364" y="66" text-anchor="end">Twój kod</text></g>
+        <g class="ly ct"><rect x="40" y="86" width="340" height="38" rx="8"/><text class="t" x="56" y="110">Linux userland</text><text class="s" x="364" y="110" text-anchor="end">/bin, glibc, python3.12</text></g>
+        <g class="ly ct"><rect x="40" y="130" width="340" height="38" rx="8"/><text class="t" x="56" y="154">namespaces + cgroups</text><text class="s" x="364" y="154" text-anchor="end">seccomp, capabilities</text></g>
+        <g class="ly ct"><rect x="40" y="174" width="340" height="38" rx="8"/><text class="t" x="56" y="198">runc</text><text class="s" x="364" y="198" text-anchor="end">tworzy proces</text></g>
+        <g class="ly"><rect x="40" y="218" width="340" height="38" rx="8"/><text class="t" x="56" y="242">containerd + kubelet</text><text class="s" x="364" y="242" text-anchor="end">CRI</text></g>
+        <g class="ly"><rect x="40" y="262" width="340" height="38" rx="8"/><text class="t" x="56" y="286">jądro Linuksa hosta</text><text class="s" x="364" y="286" text-anchor="end">wspólne</text></g>
+        <g class="ly"><rect x="40" y="306" width="340" height="38" rx="8"/><text class="t" x="56" y="330">sprzęt</text><text class="s" x="364" y="330" text-anchor="end">amd64 albo arm64</text></g>
+
+        <!-- Wasm -->
+        <g class="ly wasm"><rect x="510" y="42" width="340" height="38" rx="8"/><text class="t" x="526" y="66">moduł .wasm</text><text class="s" x="834" y="66" text-anchor="end">Twój kod, kilka MB</text></g>
+        <g class="ly wasm"><rect x="510" y="86" width="340" height="38" rx="8"/><text class="t" x="526" y="110">WASI / Spin SDK</text><text class="s" x="834" y="110" text-anchor="end">tylko przyznane</text></g>
+        <g class="ly wasm"><rect x="510" y="130" width="340" height="38" rx="8"/><text class="t" x="526" y="154">wasmtime</text><text class="s" x="834" y="154" text-anchor="end">kompiluje → kod CPU</text></g>
+        <g class="ly wasm"><rect x="510" y="174" width="340" height="38" rx="8"/><text class="t" x="526" y="198">containerd-shim-spin</text><text class="s" x="834" y="198" text-anchor="end">zamiast runc</text></g>
+        <g class="ly"><rect x="510" y="218" width="340" height="38" rx="8"/><text class="t" x="526" y="242">containerd + kubelet</text><text class="s" x="834" y="242" text-anchor="end">CRI</text></g>
+        <g class="ly"><rect x="510" y="262" width="340" height="38" rx="8"/><text class="t" x="526" y="286">jądro Linuksa hosta</text><text class="s" x="834" y="286" text-anchor="end">wspólne</text></g>
+        <g class="ly"><rect x="510" y="306" width="340" height="38" rx="8"/><text class="t" x="526" y="330">sprzęt</text><text class="s" x="834" y="330" text-anchor="end">amd64 albo arm64</text></g>
+
+        <!-- Strzałki: jak kod dotyka systemu -->
+        <path class="a ct" d="M395 61 C440 100, 440 230, 395 279" marker-end="url(#mct)"/>
+        <text class="lbl ct" x="445" y="160" text-anchor="middle">syscalle</text>
+        <text class="note" x="445" y="176" text-anchor="middle">wprost do jądra</text>
+        <path class="a wasm" d="M500 61 C470 75, 470 95, 500 105" marker-end="url(#mw)"/>
+        <text class="lbl wasm" x="462" y="56" text-anchor="end">import</text>
+      </svg>
+    </div>
+    <figcaption>Kontener woła jądro bezpośrednio (system calls, filtrowane przez seccomp). Moduł Wasm nie zna syscalli: woła funkcje zaimportowane od hosta (WASI, Spin SDK), a host sprawdza, czy mu wolno. Na dole wszystko jest takie samo, więc kubelet nie widzi różnicy.</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th class="ct">Zwykły kontener</th><th class="wasm">Wasm (Spin)</th></tr></thead>
+      <tbody>
+        <tr><th>Co uruchamiasz</th><td>Proces Linuksa z własnym systemem plików</td><td>Moduł w maszynie wirtualnej Wasm, w procesie shima</td></tr>
+        <tr><th>Co jest w obrazie OCI</th><td>Warstwy systemu plików: dystrybucja, biblioteki, interpreter, kod</td><td>Moduł <code>.wasm</code> + <code>spin.toml</code>, bez dystrybucji Linuksa</td></tr>
+        <tr><th>Rozmiar</th><td>Dziesiątki do setek MB (<code>python:3.12-slim</code> ok. 40–50 MB po kompresji)</td><td>Zwykle od setek kB do kilku MB</td></tr>
+        <tr><th>Architektura CPU</th><td>Osobny obraz na amd64 i arm64 (albo obraz wieloarchitekturowy)</td><td>Ten sam moduł wszędzie, runtime kompiluje go na miejscu</td></tr>
+        <tr><th>Izolacja</th><td>Namespaces, cgroups, seccomp. Wspólne jądro, więc błąd w jądrze dotyka wszystkich</td><td>Sandbox pamięci + uprawnienia nadawane jawnie (capabilities). Pod nadal ma cgroupy</td></tr>
+        <tr><th>Dostęp do systemu</th><td>Wszystko, co daje Linux, chyba że zabronisz</td><td>Nic, dopóki host nie pozwoli (np. <code>allowed_outbound_hosts</code> w <code>spin.toml</code>)</td></tr>
+        <tr><th>Start</th><td>Proces: od dziesiątek ms do sekund (zależnie od interpretera i importów)</td><td>Instancja: poniżej 1 ms do kilku ms, gdy runtime już działa</td></tr>
+        <tr><th>Model pracy (Spin)</th><td>Jeden długo żyjący proces obsługuje wiele żądań</td><td>Nowa, świeża instancja na każde żądanie HTTP. Brak stanu w pamięci między żądaniami</td></tr>
+        <tr><th>Ekosystem</th><td>Każdy język, każda biblioteka, debugger, strace</td><td>Języki z dobrym wsparciem: Rust, Go, C/C++, JS. Mniej bibliotek, słabsze debugowanie</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="izolacja" class="prose">
+  <h2><span class="num">3</span>Izolacja: dwa różne pomysły</h2>
+  <h3><span class="tag ct">Kontener</span> odgradzanie procesu</h3>
+  <p>Proces w kontenerze to zwykły proces Linuksa. Jądro pokazuje mu własny widok systemu (namespaces: PID, sieć, mount, user) i ogranicza zasoby (cgroups). Proces może wywołać każdy syscall, a seccomp i capabilities wycinają te niebezpieczne. Izolacja jest tak dobra, jak dobre jest jądro i konfiguracja. Stąd pomysły typu gVisor czy Kata Containers, gdy uruchamiasz cudzy kod.</p>
+  <h3><span class="tag wasm">Wasm</span> brak drzwi zamiast zamków</h3>
+  <p>Moduł Wasm ma <b>pamięć liniową</b>, czyli jedną tablicę bajtów, poza którą nie może pisać ani czytać. Nie ma instrukcji „wywołaj syscall”. Może tylko wołać funkcje, które host mu zaimportował. Jeśli host nie dał funkcji do otwierania gniazd, moduł fizycznie nie ma jak się połączyć z siecią. To jest <b>capability-based security</b>: domyślnie zero, uprawnienia dodajesz pojedynczo.</p>
+  <div class="callout">⚠ „Wasm jest bezpieczniejszy od kontenera” to prawda tylko z zastrzeżeniami. Runtime (wasmtime) też może mieć błędy, a w Kubernetesie moduł i tak działa w podzie z cgroupami. Dokładniej: <b>mniejsza powierzchnia ataku i deny-by-default</b>, czyli dodatkowa warstwa, a nie zamiennik.</div>
+</section>
+
+<section id="bez-k8s">
+  <h2 class="prose"><span class="num">4</span>Wasm bez Kubernetesa</h2>
+  <p class="prose">Wasm to format programu, a nie platforma. Moduł uruchomisz bez Kubernetesa, a nawet bez kontenerów. Kubernetes to tylko jeden ze sposobów, żeby uruchamiać go na wielu maszynach. Do nauki najlepiej zacząć lokalnie.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Gdzie</th><th>Jak</th><th>Do czego</th></tr></thead>
+      <tbody>
+        <tr><th>Sam runtime</th><td><code>wasmtime run app.wasm</code></td><td>Najprostszy sposób, żeby zobaczyć moduł i działanie uprawnień</td></tr>
+        <tr><th>Spin CLI</th><td><code>spin up</code></td><td>Ta sama aplikacja co w demo 12, lokalnie na <code>localhost:3000</code></td></tr>
+        <tr><th>Sam containerd</th><td><code>ctr run --runtime io.containerd.spin.v2 …</code></td><td>Ta sama warstwa co w podzie, tylko bez kubeleta</td></tr>
+        <tr><th>Docker Desktop</th><td><code>docker run --runtime=io.containerd.wasmtime.v1 --platform=wasi/wasm …</code></td><td><span class="tag warn">deprecated</span> Funkcja ma status beta, nie jest rozwijana i ma zostać usunięta. Nie opieraj na niej nowych rozwiązań</td></tr>
+        <tr><th>Przeglądarka, Node.js</th><td>API <code>WebAssembly</code> w JavaScripcie</td><td>Tu Wasm powstał i tu jest używany najczęściej</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="prose">
+    <h3>Spróbuj: moduł w Rust i wasmtime</h3>
+  </div>
+<pre><span class="c"># runtime i target Wasm dla Rusta</span>
+curl https://wasmtime.dev/install.sh -sSf | bash   <span class="c"># Linux (VM szkoleniowa)</span>
+brew install wasmtime                               <span class="c"># macOS</span>
+rustup target add wasm32-wasip1
+
+<span class="c"># zwykły program w Rust, skompilowany do Wasm zamiast na Twój system</span>
+cargo new hello &amp;&amp; cd hello
+cargo build --release --target wasm32-wasip1
+ls -lh target/wasm32-wasip1/release/hello.wasm     <span class="c"># mały plik, ten sam na x86 i ARM</span>
+wasmtime run target/wasm32-wasip1/release/hello.wasm
+
+<span class="c"># uprawnienia: bez --dir moduł nie widzi żadnego pliku</span>
+wasmtime run app.wasm                 <span class="c"># odczyt pliku kończy się błędem</span>
+wasmtime run --dir=. app.wasm         <span class="c"># dostęp tylko do bieżącego katalogu</span></pre>
+
+  <div class="prose">
+    <h3>Spróbuj: aplikacja HTTP w Spinie</h3>
+  </div>
+<pre><span class="c"># Linux: instalator ze spinframework.dev → Install</span>
+<span class="c"># macOS — uwaga: samo „brew install spin” instaluje inne narzędzie o tej nazwie</span>
+brew tap spinframework/tap
+brew install spinframework/tap/spin
+
+spin new -t http-rust hello-spin &amp;&amp; cd hello-spin
+spin build                            <span class="c"># wymaga toolchaina Rusta z targetem Wasm</span>
+spin up                               <span class="c"># serwer na localhost:3000</span>
+curl localhost:3000</pre>
+  <p class="prose">Ta sama aplikacja trafia potem do Kubernetesa: <code>spin registry push</code> pakuje moduł i <code>spin.toml</code> do obrazu OCI, a w klastrze uruchamia ją shim (demo 12) albo SpinKube.</p>
+  <div class="callout say">W skrócie: Wasm to format programu, a nie platforma. Uruchamiasz go <code>wasmtime run</code> jak zwykłą binarkę. Kubernetes dokłada tylko to, co dokłada każdej aplikacji: harmonogram, sieć i skalowanie.</div>
+</section>
+
+<section id="k8s">
+  <h2 class="prose"><span class="num">5</span>Jak Wasm wchodzi do Kubernetesa</h2>
+  <p class="prose">Kubernetes nic nie wie o Wasm. Jedyny punkt zaczepienia to <b>RuntimeClass</b>: pod mówi „uruchom mnie handlerem <code>spin</code>”, kubelet przekazuje to containerd, a containerd zamiast <code>runc</code> woła <b>shim</b>, czyli małą binarkę, która umie uruchomić moduł.</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 230" role="img" aria-label="Ścieżka uruchomienia. Pod z runtimeClassName trafia do kubeleta, ten przez CRI do containerd. Bez RuntimeClass containerd woła runc i powstaje kontener Linuksa. Z RuntimeClass spin containerd woła containerd-shim-spin, który ładuje moduł w wasmtime.">
+        <defs>
+          <marker id="mct2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ct" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="mw2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-wasm" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="mm2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-muted" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        <g class="ly"><rect x="20" y="85" width="150" height="60" rx="10"/><text class="t" x="95" y="111" text-anchor="middle">Pod</text><text class="s" x="95" y="129" text-anchor="middle">runtimeClassName</text></g>
+        <g class="ly"><rect x="210" y="85" width="140" height="60" rx="10"/><text class="t" x="280" y="111" text-anchor="middle">kubelet</text><text class="s" x="280" y="129" text-anchor="middle">CRI → handler</text></g>
+        <g class="ly"><rect x="390" y="85" width="150" height="60" rx="10"/><text class="t" x="465" y="111" text-anchor="middle">containerd</text><text class="s" x="465" y="129" text-anchor="middle">runtimes.&lt;handler&gt;</text></g>
+        <g class="ly ct"><rect x="600" y="16" width="280" height="64" rx="10"/><text class="t" x="740" y="42" text-anchor="middle">runc</text><text class="s" x="740" y="61" text-anchor="middle">proces Linuksa w namespaces</text></g>
+        <g class="ly wasm"><rect x="600" y="150" width="280" height="64" rx="10"/><text class="t" x="740" y="176" text-anchor="middle">containerd-shim-spin</text><text class="s" x="740" y="195" text-anchor="middle">moduł .wasm w wasmtime</text></g>
+        <path class="a muted" d="M170 115 H204" marker-end="url(#mm2)"/>
+        <path class="a muted" d="M350 115 H384" marker-end="url(#mm2)"/>
+        <path class="a ct" d="M540 100 C570 90, 570 52, 594 50" marker-end="url(#mct2)"/>
+        <path class="a wasm" d="M540 130 C570 140, 570 180, 594 182" marker-end="url(#mw2)"/>
+        <text class="lbl ct" x="560" y="40" text-anchor="middle">domyślnie</text>
+        <text class="lbl wasm" x="556" y="214" text-anchor="middle">handler: spin</text>
+      </svg>
+    </div>
+    <figcaption>Shimy Wasm dla containerd powstają na bazie projektu <b>runwasi</b> (containerd). Są shimy dla wasmtime, WasmEdge, Wasmer i Spin. W demo używamy Spina, bo daje gotowy model aplikacji HTTP.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <h3>Trzy elementy, które musisz mieć</h3>
+    <ol>
+      <li><b>Binarka shima na węźle.</b> W demo jest w obrazie węzła kind <code>containerd-shim-spin/kind:v0.26.0</code>. Na prawdziwym klastrze instaluje ją <b>runtime-class-manager</b> ze SpinKube.</li>
+      <li><b>Wpis w konfiguracji containerd</b>, który łączy nazwę handlera z shimem. Bez niego dostaniesz <code>no runtime for "spin" is configured</code> (pułapka z próby 29.10, dlatego <code>prepare.sh</code> ma <code>containerdConfigPatches</code>).</li>
+      <li><b>RuntimeClass</b> w API i <code>runtimeClassName</code> w podzie.</li>
+    </ol>
+  </div>
+<pre><span class="c"># demo/12-wasm/wasm.yaml (fragment)</span>
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: wasmtime-spin-v2
+handler: spin                 <span class="c"># nazwa runtime'u w containerd</span>
+---
+spec:
+  template:
+    spec:
+      runtimeClassName: wasmtime-spin-v2
+      containers:
+        - name: hello
+          image: ghcr.io/spinframework/containerd-shim-spin/examples/spin-rust-hello:v0.26.0
+          command: ["/"]      <span class="c"># tak w przykładach shima; aplikację opisuje spin.toml w obrazie</span></pre>
+  <div class="prose">
+    <h3>SpinKube, czyli wersja „na produkcję”</h3>
+    <p>SpinKube (CNCF Sandbox od 01.2025) składa to w całość: <b>spin-operator</b> z zasobem <code>SpinApp</code> (zamiast ręcznego Deploymentu), <b>containerd-shim-spin</b> i <b>runtime-class-manager</b>, który instaluje shim na węzłach. Na AKS pule węzłów WASI wycofano 20.07.2025, więc dziś drogą na AKS jest właśnie SpinKube.</p>
+  </div>
+</section>
+
+<section id="start">
+  <h2 class="prose"><span class="num">6</span>Dlaczego pod Wasm nie wstaje szybciej</h2>
+  <p class="prose">To najważniejsza część dla tego szkolenia. Od <code>scale 0 → 1</code> do <code>Ready</code> kubelet robi wiele rzeczy, a Wasm przyspiesza tylko jedną z nich.</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 200" role="img" aria-label="Schemat startu poda. Oba paski mają tę samą długość, około jednej sekundy. Większość to harmonogram, sandbox i sieć oraz readiness probe. Wasm skraca tylko krótki odcinek startu procesu.">
+        <text class="hd ct" x="20" y="44">kontener</text>
+        <text class="hd wasm" x="20" y="104">Wasm</text>
+        <!-- kontener -->
+        <rect class="seg g" x="110" y="26" width="110" height="28" rx="4"/>
+        <rect class="seg g" x="220" y="26" width="300" height="28"/>
+        <rect class="seg g" x="520" y="26" width="60" height="28"/>
+        <rect class="seg ct" x="580" y="26" width="60" height="28"/>
+        <rect class="seg g" x="640" y="26" width="160" height="28" rx="4"/>
+        <text class="lbl ct" x="810" y="45">0,99 s</text>
+        <!-- wasm -->
+        <rect class="seg g" x="110" y="86" width="110" height="28" rx="4"/>
+        <rect class="seg g" x="220" y="86" width="300" height="28"/>
+        <rect class="seg g" x="520" y="86" width="60" height="28"/>
+        <rect class="seg wasm" x="580" y="86" width="64" height="28"/>
+        <rect class="seg g" x="644" y="86" width="160" height="28" rx="4"/>
+        <text class="lbl wasm" x="814" y="105">1,0 s</text>
+        <!-- podpisy -->
+        <text class="segt" x="165" y="140" text-anchor="middle">harmonogram</text>
+        <text class="segt" x="370" y="140" text-anchor="middle">sandbox poda: pause, sieć (CNI), cgroupy</text>
+        <text class="segt" x="550" y="140" text-anchor="middle">obraz</text>
+        <text class="segt" x="550" y="154" text-anchor="middle">(cache)</text>
+        <text class="segt" x="611" y="140" text-anchor="middle">proces /</text>
+        <text class="segt" x="611" y="154" text-anchor="middle">moduł</text>
+        <text class="segt" x="722" y="140" text-anchor="middle">status, probe, Ready</text>
+        <text class="note" x="20" y="186">Schemat poglądowy: proporcje odcinków nie są zmierzone. Zmierzone są tylko sumy z demo 12 (próby 29.10 i 01.11, kind, arm64).</text>
+      </svg>
+    </div>
+    <figcaption>Python <code>http.server</code> startuje bardzo szybko, więc w demo nie było nawet czego oszczędzać. Przy ciężkiej aplikacji (Django, duże importy, JVM) proces startuje dłużej i tam Wasm mógłby coś dać, ale wtedy zwykle nie da się jej przenieść na Wasm.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <h3>Skąd więc „milisekundy” w materiałach marketingowych</h3>
+    <p>To dwa różne pomiary:</p>
+    <ul>
+      <li><b>Start poda</b>: kubelet, sandbox, sieć, probe. Około sekundy niezależnie od tego, co jest w środku.</li>
+      <li><b>Start instancji</b>: runtime już działa, moduł jest skompilowany, trzeba tylko utworzyć nową instancję. Spin robi to <b>przy każdym żądaniu HTTP</b>, w czasie poniżej milisekundy do kilku ms.</li>
+    </ul>
+    <p>W Kubernetesie cold start funkcji to cold start <b>poda</b>. Zysk Wasm widać dopiero wtedy, gdy pod (albo proces runtime’u) już działa i obsługuje wiele aplikacji albo wiele instancji naraz. Tak działają platformy edge i serwerowy model Spina.</p>
+    <div class="callout">⚠ „Wasm do 1000× szybciej” nie ma pierwotnego źródła. Fermyon podaje start instancji poniżej 1 ms, WasmEdge „100×”, niezależne pomiary są mieszane. Bezpieczne sformułowanie: <b>milisekundy zamiast setek milisekund startu instancji, według danych producentów</b>.</div>
+  </div>
+</section>
+
+<section id="uzycie">
+  <h2 class="prose"><span class="num">7</span>Do czego się dziś używa Wasm</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Obszar</th><th>Przykład</th><th>Dlaczego Wasm</th></tr></thead>
+      <tbody>
+        <tr><th>Przeglądarka</th><td>Figma, Photoshop w przeglądarce, Google Earth</td><td>Szybki kod C++/Rust bez wtyczek</td></tr>
+        <tr><th>Funkcje na edge</th><td>Fastly Compute, Cloudflare Workers (obok JS), Fermyon</td><td>Tysiące klientów na jednym serwerze, start w ms, ten sam moduł w każdym POP-ie</td></tr>
+        <tr><th>Wtyczki i rozszerzenia</th><td>Envoy i Istio (proxy-wasm, <code>WasmPlugin</code>), Shopify Functions</td><td>Bezpieczne uruchamianie cudzego kodu w środku własnego procesu</td></tr>
+        <tr><th>Polityki</th><td>Kubewarden (polityki admission jako moduły), OPA (kompilacja Rego do Wasm)</td><td>Przenośne, małe, w sandboxie</td></tr>
+        <tr><th>Serverless na Kubernetesie</th><td>SpinKube, shimy runwasi</td><td>Gęstość: wiele małych aplikacji, mniej pamięci i miejsca na węźle</td></tr>
+        <tr><th>IoT i urządzenia</th><td>WAMR, WasmEdge na małych urządzeniach</td><td>Mały runtime, ten sam moduł na różnych CPU</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose">Wspólny mianownik: <b>dużo małego, krótko żyjącego, często cudzego kodu</b>, który trzeba szybko uruchomić i odizolować. Długo działające usługi z ciężkimi zależnościami to wciąż teren kontenerów.</p>
+</section>
+
+<section id="kiedy">
+  <h2 class="prose"><span class="num">8</span>Kiedy warto, a kiedy nie</h2>
+  <div class="cols">
+    <div class="card wasm">
+      <h3>Warto rozważyć</h3>
+      <ul>
+        <li>Wiele małych funkcji HTTP z ruchem skokowym i chęć upchnięcia ich gęsto na węźle</li>
+        <li>Uruchamianie kodu klientów albo wtyczek (multi-tenant), gdzie liczy się deny-by-default</li>
+        <li>Edge z mieszanką x86 i ARM, wolne łącze, mało miejsca na dysku</li>
+        <li>Nowy kod w Rust, Go albo TinyGo, bez ciężkich zależności natywnych</li>
+        <li>Rozszerzanie istniejącego systemu (Envoy, polityki) zamiast osobnego serwisu</li>
+      </ul>
+    </div>
+    <div class="card warn">
+      <h3>Zostań przy kontenerze</h3>
+      <ul>
+        <li>Istniejąca aplikacja w Pythonie lub Javie z bibliotekami w C (Pillow, część numpy, sterowniki baz)</li>
+        <li>Potrzebne wątki, surowe gniazda, dostęp do urządzeń, GPU</li>
+        <li>Długo żyjąca usługa ze stanem w pamięci (Spin tworzy nową instancję na żądanie)</li>
+        <li>Problemem jest cold start <b>poda</b>: tu pomaga <code>min-scale</code>, nie Wasm</li>
+        <li>Zespół potrzebuje debuggera, strace i znanych narzędzi na produkcji</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="check" id="lista">
+    <h3>Szybka ocena: czy Wasm ma sens dla tej usługi?</h3>
+    <p class="hint">Zaznacz, co pasuje. Przydaje się, gdy oceniasz konkretną usługę.</p>
+    <fieldset>
+      <legend class="za">Za</legend>
+      <label><input type="checkbox" data-w="za"> Dużo małych, krótkich funkcji (handler HTTP, transformacja zdarzenia)</label>
+      <label><input type="checkbox" data-w="za"> Uruchamiamy kod klientów lub wtyczki i chcemy twardej izolacji</label>
+      <label><input type="checkbox" data-w="za"> Liczy się gęstość: wiele aplikacji na małym węźle albo edge</label>
+      <label><input type="checkbox" data-w="za"> Różne architektury CPU (x86 i ARM) i jeden artefakt</label>
+      <label><input type="checkbox" data-w="za"> Kod piszemy od nowa w Rust, Go lub TinyGo</label>
+    </fieldset>
+    <fieldset>
+      <legend class="przeciw">Przeciw</legend>
+      <label><input type="checkbox" data-w="stop"> Kluczowe biblioteki mają kod natywny w C (Pillow, numpy, sterowniki)</label>
+      <label><input type="checkbox" data-w="stop"> Potrzebne wątki, surowe gniazda, GPU lub dostęp do urządzeń</label>
+      <label><input type="checkbox" data-w="przeciw"> Usługa trzyma stan w pamięci między żądaniami</label>
+      <label><input type="checkbox" data-w="przeciw"> Jedyny cel to szybszy cold start poda</label>
+      <label><input type="checkbox" data-w="przeciw"> Zespół nie ma czasu na nowy toolchain i debugowanie</label>
+    </fieldset>
+    <div class="result" aria-live="polite">
+      <span class="verdict" id="v">Zaznacz coś</span>
+      <span class="why" id="why">Werdykt pojawi się po zaznaczeniu co najmniej jednej pozycji.</span>
+    </div>
+  </div>
+</section>
+
+<section id="klient" class="prose">
+  <h2><span class="num">9</span>Wasm w telco: edge, multi-tenant, 5G/6G</h2>
+  <p>Przy multi-tenant i przetwarzaniu bliżej sieci Wasm jest ciekawy z innego powodu niż szybkość poda:</p>
+  <ul>
+    <li><b>Gęstość na edge.</b> Wiele funkcji różnych dzierżawców w jednym procesie, bez osobnego poda dla każdej.</li>
+    <li><b>Izolacja cudzego kodu</b> bez kosztu osobnej maszyny wirtualnej.</li>
+    <li><b>Badania.</b> OpenWhisk z Wasm i podobne prace (patrz <a href="../02-frameworki/index.html">Frameworki serverless</a>): projekt OpenWhisk ma niską aktywność, więc to temat do eksperymentów, nie na produkcję.</li>
+  </ul>
+  <p>Granica: funkcje near-RT z budżetem latencji w milisekundach nie mogą czekać na cold start poda, niezależnie od Wasm. Tam i tak pod musi być warm (<code>min-scale</code>), więc pytanie brzmi: czy zysk na starcie instancji ma znaczenie, gdy pod już działa? Więcej: <a href="../07-near-rt-skalowanie/index.html">Knative, HPA czy KEDA w aplikacji near-RT</a>.</p>
+  <div class="callout say">❓ Sprawdź u siebie: jaki budżet latencji ma Twoja funkcja? Czy zysk kilku ms ma znaczenie, skoro pod i tak musi być warm?</div>
+</section>
+
+<section id="klaster">
+  <h2 class="prose"><span class="num">10</span>Zobacz na klastrze</h2>
+<pre><span class="c"># osobny klaster kind z shimem Spin (ok. 1,5 min)</span>
+demo/12-wasm/prepare.sh
+
+<span class="c"># RuntimeClass i binarka shima na węźle</span>
+kubectl --context kind-wasm get runtimeclass
+docker exec wasm-control-plane ls /usr/local/bin | grep shim
+
+<span class="c"># które pody używają którego runtime'u</span>
+kubectl --context kind-wasm get pods -o custom-columns=POD:.metadata.name,RUNTIME:.spec.runtimeClassName
+
+<span class="c"># działa jak zwykły pod</span>
+kubectl --context kind-wasm port-forward deploy/wasm-hello 18099:80 &amp;
+curl -s localhost:18099/hello; echo; kill %1
+
+<span class="c"># pomiar startu poda: Wasm vs Python</span>
+demo/12-wasm/start.sh wasm-hello
+demo/12-wasm/start.sh python-hello
+
+<span class="c"># porównaj rozmiary obrazów na węźle</span>
+docker exec wasm-control-plane crictl images | grep -E 'spin-rust-hello|python'
+
+<span class="c"># sprzątanie, powrót do kind-memeops</span>
+demo/12-wasm/prepare.sh --delete</pre>
+</section>
+
+<section id="sprawdz" class="prose">
+  <h2><span class="num">11</span>Sprawdź się</h2>
+  <details><summary>Czym Wasm na Kubernetesie różni się od kontenera i dlaczego pod nie startuje szybciej?</summary><p>Pod jest ten sam: kubelet, sandbox, sieć, cgroupy, probe'y. Zmienia się tylko to, co containerd uruchamia w środku. Zamiast <code>runc</code> i procesu Linuksa z własnym systemem plików shim Spin ładuje moduł <code>.wasm</code> do wasmtime. Moduł ma kilka MB, działa na każdym CPU i domyślnie nie ma dostępu do niczego. Start poda to głównie koszty kubeleta, więc wynik jest ten sam: 1,0 s vs 0,99 s. Wasm wygrywa startem instancji w działającym runtime, gęstością i rozmiarem.</p></details>
+  <details><summary>Co jest w obrazie OCI aplikacji Spin?</summary><p>Moduł <code>.wasm</code> i <code>spin.toml</code> (manifest: trasy HTTP, uprawnienia, np. <code>allowed_outbound_hosts</code>). Nie ma dystrybucji Linuksa, <code>/bin</code> ani interpretera. Obraz ma kilka MB.</p></details>
+  <details><summary>Dodajesz <code>runtimeClassName: wasmtime-spin-v2</code>, ale pod wisi z błędem <code>no runtime for "spin" is configured</code>. Co brakuje?</summary><p>Wpisu w konfiguracji containerd na węźle, który łączy handler <code>spin</code> z <code>io.containerd.spin.v2</code>. Sama binarka shima i RuntimeClass nie wystarczą. W demo robi to <code>containerdConfigPatches</code> w <code>prepare.sh</code>, w SpinKube robi to runtime-class-manager.</p></details>
+  <details><summary>Ktoś mówi: „przenieśmy nasz serwis w Pythonie z Pillow na Wasm, będzie 1000× szybciej”. Co odpowiesz?</summary><p>Po pierwsze, Pillow ma kod natywny w C, więc nie przeniesie się wprost. Po drugie, „1000×” nie ma pierwotnego źródła, a w Kubernetesie start poda się nie zmienia (demo: 1,0 s vs 0,99 s). Jeśli problemem jest cold start, pomoże <code>min-scale</code> i mniejszy obraz. Wasm rozważ dla nowych, małych funkcji.</p></details>
+  <details><summary>Dlaczego Spin może tworzyć nową instancję na każde żądanie, a Python nie?</summary><p>Bo instancja Wasm powstaje w milisekundach albo szybciej: moduł jest już skompilowany, trzeba tylko przydzielić pamięć liniową. Start interpretera Pythona z importami trwa dziesiątki do setek ms, więc proces musi żyć długo. Skutek uboczny w Spinie: brak stanu w pamięci między żądaniami, stan trzymasz w key-value albo bazie.</p></details>
+  <details><summary>Czy Wasm jest bezpieczniejszy niż kontener?</summary><p>Ma mniejszą powierzchnię ataku: brak syscalli, pamięć ograniczona do jednej tablicy, uprawnienia nadawane jawnie. Ale runtime też może mieć błędy, a w Kubernetesie moduł działa i tak w podzie z cgroupami. To dodatkowa warstwa obrony, nie zamiennik izolacji.</p></details>
+  <details><summary>Klient pyta o Wasm na AKS. Co mu powiesz?</summary><p>Pule węzłów WASI w AKS wycofano 20.07.2025. Dziś drogą jest SpinKube: runtime-class-manager instaluje shim na węzłach, spin-operator zarządza zasobami <code>SpinApp</code>.</p></details>
+  <details><summary>Czym WASI 0.2 różni się od Preview 1?</summary><p>Preview 1 to prosty interfejs w stylu POSIX (pliki, zegar). WASI 0.2 opiera się na component model: typowane interfejsy w WIT (np. <code>wasi:http</code>), moduły z różnych języków da się składać ze sobą.</p></details>
+</section>
+
+<p class="src prose">Źródła: <code>demo/12-wasm/</code> (pomiary z prób 29.10 i 01.11.2026), spinkube.dev (Overview, Install on AKS), wasi.dev, spinframework.dev (Install), docs.docker.com (Wasm workloads, status deprecated), github.com/containerd/runwasi, webassembly.org.</p>
+
+</div>
+
+<script>
+(function () {
+  var boxes = document.querySelectorAll('#lista input[type=checkbox]');
+  var v = document.getElementById('v'), why = document.getElementById('why');
+
+  function update() {
+    var za = 0, przeciw = 0, stop = 0;
+    boxes.forEach(function (b) {
+      if (!b.checked) return;
+      if (b.dataset.w === 'za') za++;
+      else if (b.dataset.w === 'stop') stop++;
+      else przeciw++;
+    });
+    var cls, label, text;
+    if (za + przeciw + stop === 0) {
+      cls = ''; label = 'Zaznacz coś'; text = 'Werdykt pojawi się po zaznaczeniu co najmniej jednej pozycji.';
+    } else if (stop > 0) {
+      cls = 'no'; label = 'Kontener';
+      text = 'Zależności natywne albo wątki, gniazda, GPU to dziś twarda granica WASI. Najpierw sprawdź, czy da się je obejść; jeśli nie, zostań przy kontenerze.';
+    } else if (za >= 2 && przeciw === 0) {
+      cls = 'yes'; label = 'Warto spróbować';
+      text = 'Dobry kandydat. Zrób pilotaż z SpinKube i zmierz u siebie start instancji, pamięć na węzeł i gęstość, nie start poda.';
+    } else if (za > przeciw) {
+      cls = 'maybe'; label = 'Pilotaż';
+      text = 'Są argumenty za, ale też koszty. Wybierz jedną małą funkcję, porównaj z kontenerem na tym samym obciążeniu.';
+    } else {
+      cls = 'no'; label = 'Raczej kontener';
+      text = 'Korzyści z Wasm są tu małe. Na cold start poda pomoże min-scale i mniejszy obraz.';
+    }
+    v.className = 'verdict' + (cls ? ' ' + cls : '');
+    v.textContent = label;
+    why.textContent = text;
+  }
+
+  boxes.forEach(function (b) { b.addEventListener('change', update); });
+})();
+</script>
+</body>
+</html>

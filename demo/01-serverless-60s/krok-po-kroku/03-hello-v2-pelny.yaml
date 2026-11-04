@@ -1,0 +1,38 @@
+# Krok 3: canary się sprawdził. 100% ruchu do najnowszej gotowej rewizji.
+# Szablon bez zmian (ta sama nazwa hello-v2), więc nowa rewizja NIE powstaje: zmienia się tylko Route.
+# kubectl apply -f demo/01-serverless-60s/krok-po-kroku/03-hello-v2-pelny.yaml
+# albo: kn service apply -n demo -f demo/01-serverless-60s/krok-po-kroku/03-hello-v2-pelny.yaml
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: hello
+  namespace: demo
+spec:
+  template:
+    metadata:
+      name: hello-v2
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/max-scale: "5"
+        autoscaling.knative.dev/target: "10"
+    spec:
+      timeoutSeconds: 15                            # jak w 01 (demo: szybkie zamykanie podów)
+      containers:
+        - name: user-container                      # jawnie: inaczej ponowny apply tej samej rewizji zostanie odrzucony
+          image: localhost:5001/meme-api:v2
+          env:
+            - name: GREETING
+              value: "Pozdrowienia z rewizji v2"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+            successThreshold: 1
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+  traffic:
+    - latestRevision: true                          # zawsze najnowsza gotowa rewizja
+      percent: 100
+    - revisionName: hello-v1                        # stara rewizja bez ruchu, ale pod własnym adresem
+      percent: 0
+      tag: poprzednia                               # poprzednia-hello...: szybki podgląd przed rollbackiem

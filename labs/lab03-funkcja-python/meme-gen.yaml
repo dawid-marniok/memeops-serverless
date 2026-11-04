@@ -11,7 +11,7 @@ spec:
   template:
     metadata:
       annotations:
-        memeops/git-sha: "UZUPELNIJ"        # krok 4: git rev-parse --short HEAD
+        memeops/git-sha: "UZUPELNIJ"        # krok B: git rev-parse --short HEAD
     spec:
       containers:
         - image: localhost:5001/meme-gen:1.0.0

@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stos MemeOps</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Układ i tokeny jak w docs/01-knative-vs-k8s: jedna kolumna tekstu, diagram na pełną szerokość z przewijaniem na telefonie.
+   Kolor = kto dostarcza element (Kubernetes / Knative / aplikacja MemeOps / infrastruktura), linia przerywana = element opcjonalny. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --k8s: #2f5fa7;
+  --k8s-bg: #e7eef9;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --app: #6d4bb0;
+  --app-bg: #efe9f8;
+  --traffic: #0f6d6a;
+  --cold: #b0306a;
+  --ctrl: #6b675e;
+  --zone: #efede6;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --app: #b39cf0; --app-bg: #241d33;
+    --traffic: #5cc4bd; --cold: #ee7fae; --ctrl: #a3a097; --zone: #1a1d1c; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --k8s: #7aa6e8; --k8s-bg: #1a2436; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --app: #b39cf0; --app-bg: #241d33;
+  --traffic: #5cc4bd; --cold: #ee7fae; --ctrl: #a3a097; --zone: #1a1d1c; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-block: 32px 96px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.prose { max-width: 760px; }
+header.hero { margin-bottom: 28px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+.answer code { overflow-wrap: anywhere; }
+
+figure.diagram { margin: 18px 0 0; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.scroll svg { display: block; width: 100%; min-width: 980px; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; max-width: 900px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 13.5px; margin: 14px 0 4px; }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.sw { width: 30px; height: 18px; border-radius: 5px; flex: none; }
+.sw.k8s { background: var(--k8s-bg); border: 1.5px solid var(--k8s); }
+.sw.kn { background: var(--kn-bg); border: 1.5px solid var(--kn); }
+.sw.app { background: var(--app-bg); border: 1.5px solid var(--app); }
+.sw.ext { background: var(--surface); border: 2.5px solid var(--muted); border-radius: 2px; }
+.sw.opt { background: transparent; border: 1.5px dashed var(--muted); }
+.ln { width: 34px; height: 0; flex: none; }
+.ln.traffic { border-top: 3px solid var(--traffic); }
+.ln.cold { border-top: 3px solid var(--cold); }
+.ln.ctrl { border-top: 2px dashed var(--ctrl); }
+
+/* SVG */
+svg text { font-family: var(--sans); }
+.zone rect { fill: var(--zone); stroke: var(--line); }
+.zone text { font-size: 11px; font-weight: 700; letter-spacing: .09em; fill: var(--muted); }
+.b .k { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.b .t { font-size: 13.5px; font-weight: 650; fill: var(--text); }
+.b .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.b.k8s rect { fill: var(--k8s-bg); stroke: var(--k8s); stroke-width: 1.3; }
+.b.k8s .k { fill: var(--k8s); }
+.b.kn rect { fill: var(--kn-bg); stroke: var(--kn); stroke-width: 1.3; }
+.b.kn .k { fill: var(--kn); }
+.b.app rect { fill: var(--app-bg); stroke: var(--app); stroke-width: 1.5; }
+.b.app .k { fill: var(--app); }
+.b.proc rect { fill: var(--surface); stroke-width: 2.5; }
+.b.proc.p-k8s rect { stroke: var(--k8s); }
+.b.proc.p-kn rect { stroke: var(--kn); }
+.b.proc.p-kn .k { fill: var(--kn); }
+.b.proc.p-ext rect { stroke: var(--muted); }
+.b.proc.p-ext .k { fill: var(--muted); }
+.node rect.nb { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.node .nl { font-size: 12px; font-weight: 700; fill: var(--muted); font-family: var(--mono); }
+.ns rect { fill: var(--zone); stroke: var(--line); stroke-width: 1.2; }
+.ns .nsl { font-size: 12px; font-weight: 700; font-family: var(--mono); fill: var(--muted); }
+.ns.kn rect { stroke: var(--kn); }
+.ns.kn .nsl { fill: var(--kn); }
+.ns.k8s rect { stroke: var(--k8s); }
+.ns.k8s .nsl { fill: var(--k8s); }
+.ns.app rect { stroke: var(--app); stroke-width: 2; }
+.ns.app .nsl { fill: var(--app); }
+.ns.opt rect { fill: none; stroke: var(--muted); stroke-dasharray: 6 4; stroke-width: 1.5; }
+.ns.opt.kn rect { stroke: var(--kn); }
+.ns .t { font-size: 13.5px; font-weight: 650; fill: var(--text); }
+.ns .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.strip rect { fill: var(--surface); stroke: var(--line); }
+.strip text { font-size: 12px; fill: var(--muted); font-family: var(--mono); white-space: pre; }
+.strip .em { fill: var(--text); font-weight: 650; }
+.note { font-size: 12px; fill: var(--muted); }
+.note.strong { fill: var(--text); font-weight: 650; }
+
+.a { fill: none; }
+.a.traffic { stroke: var(--traffic); stroke-width: 2.6; }
+.a.cold { stroke: var(--cold); stroke-width: 2.6; }
+.a.ctrl { stroke: var(--ctrl); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.mk-traffic { fill: var(--traffic); }
+.mk-cold { fill: var(--cold); }
+.mk-ctrl { fill: var(--ctrl); }
+.lbl { font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.lbl.cold { fill: var(--cold); }
+.lbl.ctrl { fill: var(--ctrl); }
+.badge circle { stroke: var(--surface); stroke-width: 2; }
+.badge.traffic circle { fill: var(--traffic); }
+.badge.cold circle { fill: var(--cold); }
+.badge.ctrl circle { fill: var(--ctrl); }
+.badge text { fill: var(--surface); font-size: 11px; font-weight: 800; }
+
+/* Tabela */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 760px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 18%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+tr.day td { background: var(--surface-2); font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-block: 6px; }
+td code, li code, p code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 1px 8px; border-radius: 999px; margin: 1px 2px 1px 0; white-space: nowrap; }
+.tag.k8s { background: var(--k8s-bg); color: var(--k8s); border: 1px solid var(--k8s); }
+.tag.kn { background: var(--kn-bg); color: var(--kn); border: 1px solid var(--kn); }
+.tag.app { background: var(--app-bg); color: var(--app); border: 1px solid var(--app); }
+.tag.opt { color: var(--muted); border: 1px dashed var(--muted); }
+
+.flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-top: 12px; }
+.flow { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 6px; min-width: 0; }
+.flow h3 { margin: 0 0 8px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.flow h3 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.flow ol, .flow ul { padding-left: 20px; margin: 0 0 10px; font-size: 14.5px; }
+.flow li { margin-bottom: 6px; }
+.flow p { font-size: 14.5px; margin: 0 0 10px; }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre .c { color: var(--code-comment); }
+
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+
+.links { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 14px; }
+.links a { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; text-decoration: none; color: var(--text); min-width: 0; }
+.links a:hover, .links a:focus-visible { border-color: var(--accent); }
+.links a b { display: block; color: var(--accent); margin-bottom: 4px; }
+.links a span { font-size: 14px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+<header class="hero prose">
+  <div class="eyebrow">Dzień 1 · Serverless na Kubernetes</div>
+  <h1>Stos MemeOps: nasz klaster i nasza aplikacja</h1>
+  <p class="lede">Na czym pracujemy przez dwa dni. Każdy ma własną VM-kę w DaDesktop. Na niej w Dockerze działa mały klaster Kubernetes z Knative, a w nim aplikacja MemeOps. Najpierw rysunek, potem krótko warstwa po warstwie.</p>
+  <div class="meta">
+    <span class="pill">Knative Serving 1.23.0</span>
+    <span class="pill">Kourier 1.23.0</span>
+    <span class="pill">kind 0.33.0 · Kubernetes 1.35.8</span>
+    <span class="pill">klaster <code>memeops</code>, jeden węzeł</span>
+    <span class="pill">rejestr <code>localhost:5001</code></span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#obraz">Cały stos</a>
+    <a href="#ruch">Droga żądania</a>
+    <a href="#klaster">Klaster</a>
+    <a href="#aplikacja">Aplikacja</a>
+    <a href="#laby">Lab po labie</a>
+    <a href="#zobacz">Zobacz na klastrze</a>
+    <a href="#dalej">Czytaj dalej</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Gdzie to działa?</div><p>Na twojej VM-ce w DaDesktop. Wszystko jest lokalne: Docker, klaster, rejestr obrazów. Nic nie stoi w chmurze.</p></div>
+    <div class="answer"><div class="q">Jaki klaster?</div><p><b>kind</b> o nazwie <code>memeops</code>. Jeden węzeł <code>memeops-control-plane</code>, Kubernetes 1.35.8. Kontekst kubectl: <code>kind-memeops</code>.</p></div>
+    <div class="answer"><div class="q">Skąd biorą się obrazy?</div><p>Z lokalnego rejestru <code>localhost:5001</code>. To osobny kontener Dockera. Obrazy budujesz i wypychasz tam sam.</p></div>
+    <div class="answer"><div class="q">Co daje serverless?</div><p><b>Knative Serving 1.23</b>. Usługa schodzi do zera podów, gdy nikt jej nie woła, i wstaje przy pierwszym żądaniu. Bramą HTTP jest <b>Kourier</b> (Envoy).</p></div>
+    <div class="answer"><div class="q">Jak wejść do usługi?</div><p><code>http://&lt;usługa&gt;.memeops.127.0.0.1.sslip.io</code>. Adres wskazuje na 127.0.0.1, więc działa tylko na twojej VM-ce.</p></div>
+    <div class="answer"><div class="q">Co budujemy?</div><p>Dwie usługi Knative w namespace <code>memeops</code>: <b>meme-api</b> (MVP, LAB 2) i <b>meme-gen</b> (generator memów, LAB 3–8).</p></div>
+    <div class="answer"><div class="q">Co jest dodatkiem?</div><p>Monitoring (Prometheus + Grafana) to opcja <code>--monitoring</code>. Knative Eventing stawiamy tylko na demo 04.</p></div>
+  </div>
+</section>
+
+<!-- ============ DIAGRAM ============ -->
+<section id="obraz">
+  <h2 class="prose"><span class="num">1</span>Cały stos na jednym rysunku</h2>
+  <p class="prose">Od zewnątrz do środka: VM, Docker, dwa kontenery (węzeł kind i rejestr), a w węźle namespace’y. Fioletowe jest nasze: to dokładamy w labach. Numery na zielonej linii to droga żądania z przeglądarki do poda.</p>
+  <div class="legend">
+    <div class="item"><span class="sw ext"></span>infrastruktura: VM, Docker, kontenery</div>
+    <div class="item"><span class="sw k8s"></span>Kubernetes</div>
+    <div class="item"><span class="sw kn"></span>Knative i Kourier</div>
+    <div class="item"><span class="sw app"></span>aplikacja MemeOps (laby)</div>
+    <div class="item"><span class="sw opt"></span>opcjonalne / tylko na demo</div>
+  </div>
+  <div class="legend">
+    <div class="item"><span class="ln traffic"></span>ruch HTTP</div>
+    <div class="item"><span class="ln cold"></span>przez activator, gdy usługa ma 0 podów</div>
+    <div class="item"><span class="ln ctrl"></span>obrazy i DNS</div>
+  </div>
+  <figure class="diagram">
+    <div class="scroll">
+<svg viewBox="0 0 1200 960" role="img" aria-label="Stos MemeOps. VM DaDesktop z Dockerem. W Dockerze dwa kontenery: rejestr kind-registry pod localhost:5001 i węzeł kind memeops-control-plane. W węźle namespace'y: kourier-system z Service kourier NodePort 31080 i podem Envoy, knative-serving z activatorem, autoscalerem, controllerem, webhookiem i net-kourier-controllerem, memeops z usługami meme-api i meme-gen, demo z usługą mem-dnia, opcjonalne knative-eventing i monitoring oraz kube-system. Ruch: przeglądarka, DNS sslip.io zwraca 127.0.0.1, port 80 VM do NodePort 31080, Envoy, pod usługi; przy zerze podów przez activator.">
+  <defs>
+    <marker id="m-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-traffic" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="m-x" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-cold" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="m-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <!-- INTERNET -->
+  <g class="zone"><rect x="20" y="20" width="1160" height="84" rx="12"/><text x="36" y="40">INTERNET</text></g>
+  <g class="b proc p-ext"><rect x="40" y="50" width="300" height="44" rx="3"/><text class="t" x="52" y="68">sslip.io · publiczny DNS</text><text class="s" x="52" y="85">*.127.0.0.1.sslip.io → 127.0.0.1</text></g>
+  <g class="b proc p-ext"><rect x="360" y="50" width="420" height="44" rx="3"/><text class="t" x="372" y="68">GitHub · gcr.io · ghcr.io · Docker Hub</text><text class="s" x="372" y="85">manifesty Knative, obrazy bazowe, narzędzia</text></g>
+
+  <!-- VM -->
+  <g class="zone"><rect x="20" y="120" width="1160" height="822" rx="12"/><text x="1164" y="142" text-anchor="end">VM DADESKTOP · TWOJE STANOWISKO</text></g>
+
+  <!-- lewa kolumna: VM -->
+  <g class="b proc p-ext"><rect x="40" y="160" width="270" height="66" rx="3"/><text class="k" x="52" y="177">NA VM-CE</text><text class="t" x="52" y="195">przeglądarka · curl · k6</text><text class="s" x="52" y="213">kubectl · kn · func · helm</text></g>
+  <g class="strip"><rect x="40" y="250" width="270" height="150" rx="6"/>
+    <text x="54" y="272"><tspan class="em">Porty na 127.0.0.1 (Docker)</tspan></text>
+    <text x="54" y="296">:80   → węzeł :31080 Kourier</text>
+    <text x="54" y="318">:443  → węzeł :31443 HTTPS</text>
+    <text x="54" y="340">:3000 → węzeł :30300 Grafana</text>
+    <text x="54" y="362">:5001 → rejestr :5000</text>
+    <text x="54" y="384">:losowy → API :6443</text>
+  </g>
+  <g class="b proc p-ext"><rect x="40" y="424" width="270" height="66" rx="3"/><text class="k" x="52" y="441">KATALOG ~/memeops</text><text class="t" x="52" y="459">repo ćwiczeń (git clone)</text><text class="s" x="52" y="477">setup/ app/ labs/ demo/</text></g>
+  <text class="note strong" x="40" y="526">Wszystko działa lokalnie.</text>
+  <text class="note" x="40" y="544">Porty słuchają na 127.0.0.1,</text>
+  <text class="note" x="40" y="562">więc adresy działają tylko z VM-ki.</text>
+
+  <text class="note strong" x="40" y="612">Droga żądania</text>
+  <g class="badge traffic"><circle cx="50" cy="632" r="9"/><text x="50" y="636" text-anchor="middle">1</text></g>
+  <text class="note" x="66" y="636">DNS: sslip.io zwraca 127.0.0.1</text>
+  <g class="badge traffic"><circle cx="50" cy="658" r="9"/><text x="50" y="662" text-anchor="middle">2</text></g>
+  <text class="note" x="66" y="662">port 80 → NodePort 31080</text>
+  <g class="badge traffic"><circle cx="50" cy="684" r="9"/><text x="50" y="688" text-anchor="middle">3</text></g>
+  <text class="note" x="66" y="688">Envoy wybiera usługę po Host</text>
+  <g class="badge traffic"><circle cx="50" cy="710" r="9"/><text x="50" y="714" text-anchor="middle">4</text></g>
+  <text class="note" x="66" y="714">pod: queue-proxy → kontener</text>
+  <g class="badge cold"><circle cx="50" cy="736" r="9"/><text x="50" y="740" text-anchor="middle">0</text></g>
+  <text class="note" x="66" y="740">0 podów: czeka w activatorze</text>
+
+  <!-- DOCKER -->
+  <g class="zone"><rect x="330" y="160" width="830" height="762" rx="12"/><text x="346" y="182">DOCKER NA VM · 2 KONTENERY</text></g>
+  <g class="b proc p-ext"><rect x="350" y="196" width="380" height="70" rx="3"/><text class="k" x="362" y="213">KONTENER kind-registry · registry:2</text><text class="t" x="362" y="231">rejestr obrazów localhost:5001</text><text class="s" x="362" y="249">meme-api (setup) · meme-gen (laby)</text></g>
+  <text class="note" x="760" y="214">Węzeł Kubernetesa to też kontener</text>
+  <text class="note" x="760" y="231">Dockera. Rejestr i węzeł są w tej</text>
+  <text class="note" x="760" y="248">samej sieci Dockera <tspan style="font-family:var(--mono)">kind</tspan>.</text>
+
+  <!-- WĘZEŁ -->
+  <g class="node"><rect class="nb" x="350" y="290" width="790" height="616" rx="10"/><text class="nl" x="366" y="310">node: memeops-control-plane · kindest/node v1.35.8 · jedyny węzeł</text></g>
+
+  <!-- kourier-system -->
+  <g class="ns kn"><rect x="366" y="326" width="300" height="160" rx="10"/><text class="nsl" x="380" y="345">kourier-system</text></g>
+  <g class="b k8s"><rect x="380" y="356" width="272" height="54" rx="10"/><text class="k" x="392" y="372">Service · NodePort</text><text class="t" x="392" y="389">kourier  80 → 31080</text><text class="s" x="392" y="404">443 → 31443</text></g>
+  <g class="b proc p-kn"><rect x="380" y="420" width="272" height="54" rx="3"/><text class="k" x="392" y="436">POD · ENVOY</text><text class="t" x="392" y="453">3scale-kourier-gateway</text><text class="s" x="392" y="468">Host → usługa i rewizja</text></g>
+
+  <!-- knative-serving -->
+  <g class="ns kn"><rect x="686" y="326" width="438" height="160" rx="10"/><text class="nsl" x="700" y="345">knative-serving · Serving 1.23.0</text></g>
+  <g class="b proc p-kn"><rect x="700" y="356" width="130" height="50" rx="3"/><text class="t" x="712" y="376">webhook</text><text class="s" x="712" y="394">walidacja</text></g>
+  <g class="b proc p-kn"><rect x="846" y="356" width="130" height="50" rx="3"/><text class="t" x="858" y="376">autoscaler</text><text class="s" x="858" y="394">liczy pody</text></g>
+  <g class="b proc p-kn"><rect x="992" y="356" width="130" height="50" rx="3"/><text class="t" x="1004" y="376">controller</text><text class="s" x="1004" y="394">ksvc → obiekty</text></g>
+  <g class="b proc p-kn"><rect x="700" y="420" width="130" height="54" rx="3"/><text class="t" x="712" y="440">activator</text><text class="s" x="712" y="458">trzyma żądania</text></g>
+  <g class="b proc p-kn"><rect x="846" y="420" width="276" height="54" rx="3"/><text class="t" x="858" y="440">net-kourier-controller</text><text class="s" x="858" y="458">konfiguruje Envoya</text></g>
+
+  <!-- memeops -->
+  <g class="ns app"><rect x="366" y="504" width="500" height="260" rx="10"/><text class="nsl" x="380" y="523">memeops · nasza aplikacja</text></g>
+  <g class="b app"><rect x="380" y="536" width="230" height="100" rx="10"/><text class="k" x="392" y="553">KSVC · OD LAB 2</text><text class="t" x="392" y="572">meme-api</text><text class="s" x="392" y="590">MVP: mem tekstowy</text><text class="s" x="392" y="607">rewizje meme-api-v1, -v2</text><text class="s" x="392" y="624">obraz meme-api:v1 / v2</text></g>
+  <g class="b app"><rect x="622" y="536" width="230" height="100" rx="10"/><text class="k" x="634" y="553">KSVC · OD LAB 3</text><text class="t" x="634" y="572">meme-gen</text><text class="s" x="634" y="590">memy SVG/PNG, galeria</text><text class="s" x="634" y="607">logowanie JWT od LAB 6</text><text class="s" x="634" y="624">obraz 1.0.0 → … → 2.2.0</text></g>
+  <g class="strip"><rect x="380" y="650" width="472" height="36" rx="6"/><text x="404" y="673">każdy pod rewizji: queue-proxy + user-container :8080</text></g>
+  <g class="strip"><rect x="380" y="698" width="472" height="54" rx="6"/>
+    <text x="394" y="720">LAB 6: ConfigMap meme-config · Secret meme-jwt</text>
+    <text x="394" y="740">LAB 7: DomainMapping memy.127.0.0.1.sslip.io</text>
+  </g>
+
+  <!-- demo -->
+  <g class="ns kn"><rect x="886" y="504" width="238" height="260" rx="10"/><text class="nsl" x="900" y="523">demo · dema prowadzącego</text></g>
+  <g class="b kn"><rect x="900" y="536" width="210" height="70" rx="10"/><text class="k" x="912" y="553">KSVC · DEMO 04</text><text class="t" x="912" y="572">mem-dnia</text><text class="s" x="912" y="590">loguje CloudEventy</text></g>
+  <text class="note" x="900" y="634">Większość dem działa tutaj,</text>
+  <text class="note" x="900" y="652">osobno od labów.</text>
+  <text class="note strong" x="900" y="690">Redis tylko w demo 11</text>
+  <text class="note" x="900" y="708">(KEDA i kolejka zadań).</text>
+  <text class="note" x="900" y="736">Aplikacja MemeOps nie ma bazy.</text>
+
+  <!-- rząd 3 -->
+  <g class="ns kn opt"><rect x="366" y="782" width="240" height="108" rx="10"/><text class="nsl" x="380" y="801">knative-eventing</text><text class="t" x="380" y="824">Knative Eventing 1.23</text><text class="s" x="380" y="844">tylko na demo 04</text><text class="s" x="380" y="862">demo/04-eventing/prepare.sh</text></g>
+  <g class="ns opt"><rect x="622" y="782" width="244" height="108" rx="10"/><text class="nsl" x="636" y="801">monitoring</text><text class="t" x="636" y="824">Prometheus + Grafana</text><text class="s" x="636" y="844">opcja: --monitoring</text><text class="s" x="636" y="862">Grafana: localhost:3000</text></g>
+  <g class="ns k8s"><rect x="882" y="782" width="242" height="108" rx="10"/><text class="nsl" x="896" y="801">kube-system</text><text class="t" x="896" y="824">zwykły Kubernetes</text><text class="s" x="896" y="844">apiserver · etcd · scheduler</text><text class="s" x="896" y="862">CoreDNS · kube-proxy · kindnet</text></g>
+
+  <!-- OBRAZY I DNS -->
+  <path class="a ctrl" marker-start="url(#m-c)" marker-end="url(#m-c)" d="M100 158 V97"/>
+  <path class="a ctrl" marker-end="url(#m-c)" d="M310 210 H347"/>
+  <text class="lbl ctrl" x="329" y="203" text-anchor="middle">push</text>
+  <path class="a ctrl" marker-end="url(#m-c)" d="M540 266 V288"/>
+  <text class="lbl ctrl" x="550" y="282">containerd pobiera obrazy</text>
+
+  <!-- RUCH -->
+  <path class="a traffic" marker-end="url(#m-t)" d="M175 226 V248"/>
+  <path class="a traffic" marker-end="url(#m-t)" d="M310 296 H340 V383 H377"/>
+  <path class="a traffic" marker-end="url(#m-t)" d="M500 410 V418"/>
+  <path class="a traffic" marker-end="url(#m-t)" d="M580 474 V533"/>
+  <path class="a traffic" marker-end="url(#m-t)" d="M630 474 V494 H737 V533"/>
+  <path class="a cold" marker-end="url(#m-x)" d="M652 447 H697"/>
+  <path class="a cold" marker-end="url(#m-x)" d="M765 474 V533"/>
+  <text class="lbl cold" x="774" y="498">przy 0 podów</text>
+
+  <g class="badge traffic"><circle cx="100" cy="112" r="10"/><text x="100" y="116" text-anchor="middle">1</text></g>
+  <g class="badge traffic"><circle cx="340" cy="334" r="10"/><text x="340" y="338" text-anchor="middle">2</text></g>
+  <g class="badge traffic"><circle cx="580" cy="500" r="10"/><text x="580" y="504" text-anchor="middle">3</text></g>
+  <g class="badge traffic"><circle cx="392" cy="668" r="9"/><text x="392" y="672" text-anchor="middle">4</text></g>
+  <g class="badge cold"><circle cx="765" cy="520" r="10"/><text x="765" y="524" text-anchor="middle">0</text></g>
+</svg>
+    </div>
+    <figcaption>Węzeł jest jeden i pełni obie role: control plane i węzeł roboczy. Pody Knative, Kouriera i naszej aplikacji działają obok kube-apiservera. Na klastrze nie ma metrics-servera, dlatego <code>kubectl top</code> nie działa. Autoskaler Knative go nie potrzebuje.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ RUCH ============ -->
+<section id="ruch">
+  <h2 class="prose"><span class="num">2</span>Jak żądanie trafia do usługi</h2>
+  <div class="flows">
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--traffic)"></span>Od przeglądarki do poda</h3>
+      <ol>
+        <li>Wpisujesz <code>http://meme-gen.memeops.127.0.0.1.sslip.io</code>.</li>
+        <li>Publiczny DNS <b>sslip.io</b> czyta IP z samej nazwy i odpowiada <code>127.0.0.1</code>.</li>
+        <li>Port 80 na VM-ce należy do Dockera. Docker przekazuje ruch do kontenera węzła na port <code>31080</code>.</li>
+        <li><code>31080</code> to NodePort Service’u <code>kourier</code>. Ruch trafia do poda Envoy (<code>3scale-kourier-gateway</code>).</li>
+        <li>Envoy patrzy na nagłówek <code>Host</code> i wybiera usługę oraz rewizję.</li>
+        <li>W podzie żądanie przechodzi przez <code>queue-proxy</code> do twojego kontenera na <code>:8080</code>.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--cold)"></span>Gdy usługa ma 0 podów</h3>
+      <p>Envoy oddaje żądanie do <b>activatora</b>. Activator trzyma je i daje znać autoskalerowi. Pod wstaje (cold start), a activator przekazuje mu żądanie. Gdy pody już działają, ruch idzie prosto do nich.</p>
+      <p>Szczegóły: <a href="../05-activator-tbc/index.html">Activator i target-burst-capacity</a>.</p>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--ctrl)"></span>Gdy DNS nie działa</h3>
+      <p>Sieć może blokować sslip.io. Wtedy podaj nagłówek <code>Host</code> sam:</p>
+      <p><code>curl -H "Host: meme-api.memeops.127.0.0.1.sslip.io" http://127.0.0.1/</code></p>
+      <p>Dlaczego to działa i jak sslip.io liczy odpowiedź: <a href="../04-kourier/index.html#dns">Kourier, sekcja „DNS i sslip.io”</a>.</p>
+    </div>
+  </div>
+  <p class="prose">Wzór adresu to <code>&lt;usługa&gt;.&lt;namespace&gt;.127.0.0.1.sslip.io</code>. Końcówkę <code>127.0.0.1.sslip.io</code> ustawia <code>setup/platform.sh</code> w ConfigMap <code>config-domain</code>. Dlatego usługi z labów mają w adresie <code>.memeops.</code>, a dema <code>.demo.</code>.</p>
+</section>
+
+<!-- ============ KLASTER ============ -->
+<section id="klaster">
+  <h2 class="prose"><span class="num">3</span>Klaster warstwa po warstwie</h2>
+  <p class="prose">Prawie wszystko stawia jeden skrypt: <code>setup/platform.sh</code> (6 kroków, można go uruchomić ponownie). Wersje są przypięte w <code>setup/versions.env</code>. Na koniec <code>setup/check.sh</code> ma pokazać <code>SUKCES: 13/13</code>.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Warstwa</th><th scope="col">Co to jest</th><th scope="col">Skąd się bierze</th><th scope="col">Namespace / adres</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">VM DaDesktop</th><td>Twoja maszyna na szkolenie. Docker działa na niej bez <code>sudo</code>.</td><td>przygotowana przed szkoleniem</td><td>—</td></tr>
+        <tr><th scope="row">Docker</th><td>Uruchamia dwa kontenery: węzeł kind i rejestr. Oba są w sieci Dockera <code>kind</code>.</td><td>na VM-ce</td><td><code>docker ps</code></td></tr>
+        <tr><th scope="row">Rejestr obrazów</th><td>Kontener <code>kind-registry</code> (<code>registry:2</code>). Węzeł kind przekierowuje <code>localhost:5001</code> na <code>kind-registry:5000</code>, więc węzeł pobiera obrazy spod tego samego adresu co ty.</td><td><code>platform.sh</code>, krok 1/6</td><td><code>localhost:5001</code></td></tr>
+        <tr><th scope="row">Klaster kind</th><td>Kubernetes 1.35.8 w jednym kontenerze. Jeden węzeł: <code>memeops-control-plane</code>.</td><td>krok 2/6</td><td>kontekst <code>kind-memeops</code></td></tr>
+        <tr><th scope="row">Knative Serving 1.23.0</th><td>Pody <code>controller</code>, <code>webhook</code>, <code>autoscaler</code>, <code>activator</code>. Nowe typy w API: <code>ksvc</code>, rewizje, trasy.</td><td>krok 3/6</td><td><code>knative-serving</code></td></tr>
+        <tr><th scope="row">Kourier 1.23.0</th><td>Brama HTTP: Envoy (<code>3scale-kourier-gateway</code>) i jego kontroler (<code>net-kourier-controller</code>, działa w <code>knative-serving</code>). Service <code>kourier</code> przestawiony na NodePort 31080 (HTTP) i 31443 (HTTPS).</td><td>krok 4/6</td><td><code>kourier-system</code></td></tr>
+        <tr><th scope="row">Domena</th><td><code>127.0.0.1.sslip.io</code> w <code>config-domain</code>. Stąd adresy usług.</td><td>krok 4/6</td><td><code>*.127.0.0.1.sslip.io</code></td></tr>
+        <tr><th scope="row">Obrazy startowe</th><td><code>meme-api:v1</code> i <code>meme-api:v2</code>, gotowe na LAB 2.</td><td>krok 5/6</td><td><code>localhost:5001/meme-api</code></td></tr>
+        <tr><th scope="row"><span class="tag opt">opcja</span> Monitoring</th><td>kube-prometheus-stack: Prometheus i Grafana z dashboardem „MemeOps — funkcja Knative”. Login <code>admin</code> / <code>memeops</code>. Przydaje się w LAB 5 i LAB 8.</td><td><code>platform.sh --monitoring</code></td><td><code>monitoring</code>, <code>http://localhost:3000</code></td></tr>
+        <tr><th scope="row"><span class="tag opt">opcja</span> cert-manager</th><td>Własne CA i HTTPS dla usług. Tylko w LAB 6, dla chętnych.</td><td><code>platform.sh --cert-manager</code></td><td><code>cert-manager</code></td></tr>
+        <tr><th scope="row"><span class="tag opt">demo</span> Knative Eventing 1.23</th><td>Eventing core, InMemoryChannel i broker. Potrzebny tylko w demo 04 (mem dnia). Ten sam skrypt z <code>--delete</code> go usuwa.</td><td><code>demo/04-eventing/prepare.sh</code></td><td><code>knative-eventing</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout prose"><b>Czego tu nie ma:</b> metrics-servera (więc nie działa <code>kubectl top</code>), zwykłego kontrolera Ingress (ruch przyjmuje Kourier), bazy danych. Redis pojawia się tylko w demo 11 z KEDA, w namespace <code>demo</code>.</div>
+</section>
+
+<!-- ============ APLIKACJA ============ -->
+<section id="aplikacja">
+  <h2 class="prose"><span class="num">4</span>Aplikacja MemeOps</h2>
+  <p class="prose">Jesteście zespołem platformowym startupu MemeOps. Organizator konferencji chce generator memów. Ruch jest nierówny: długo prawie zero, po keynote kilkaset osób naraz. Kod w Pythonie jest gotowy. Wy zmieniacie konfigurację, manifesty i pipeline.</p>
+  <div class="flows">
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--app)"></span>meme-api · MVP (LAB 2)</h3>
+      <ul>
+        <li>Mem tekstowy (ASCII) z parametrów URL: <code>/?top=…&amp;bottom=…</code>.</li>
+        <li>Obraz <code>localhost:5001/meme-api</code>: <code>v1</code> to ASCII, <code>v2</code> dokłada emoji.</li>
+        <li>Rewizje <code>meme-api-v1</code> i <code>meme-api-v2</code>, traffic split i tag <code>kandydat</code>.</li>
+        <li>Kod: <code>app/meme-api/main.py</code>, sama biblioteka standardowa Pythona.</li>
+      </ul>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--app)"></span>meme-gen · właściwa funkcja (LAB 3–8)</h3>
+      <ul>
+        <li>Strona z formularzem, memy w SVG albo PNG, galeria.</li>
+        <li>Endpointy: <code>/</code>, <code>/healthz</code>, <code>/api/info</code>, <code>POST /api/memes</code>, <code>GET /api/memes</code>.</li>
+        <li>Galeria żyje w pamięci procesu. Nie ma bazy ani Redisa.</li>
+        <li>Od LAB 6 tworzenie mema wymaga tokenu JWT. Galeria zostaje publiczna.</li>
+        <li>Kod: <code>app/meme-gen/</code>, zbudowany z szablonu <code>templates/python-http/</code>.</li>
+      </ul>
+    </div>
+    <div class="flow">
+      <h3><span class="dot" style="background:var(--kn)"></span>Poza aplikacją</h3>
+      <ul>
+        <li><code>hello</code> w namespace <code>default</code> (LAB 1) i <code>hello-fn</code> z <code>func</code> (LAB 3). Usuwacie je zaraz po teście.</li>
+        <li><code>mem-dnia</code> z demo 04 to nie nasz kod. To obraz <code>event_display</code> z Knative, który wypisuje zdarzenia w logach. Działa w namespace <code>demo</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 class="prose">Zmienne środowiskowe meme-gen</h3>
+  <p class="prose">Funkcję konfiguruje się tylko zmiennymi. Każda zmiana zmiennej w <code>ksvc</code> to nowa rewizja. Zmiana samej ConfigMap nowej rewizji nie tworzy.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Zmienna</th><th scope="col">Wartości</th><th scope="col">Skąd w labach</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>MEME_FORMAT</code></th><td><code>svg</code> (domyślnie, bez zależności) albo <code>png</code> (wymaga Pillow; bez niego proces kończy się przy starcie)</td><td>LAB 3: <code>svg</code>, od LAB 4: <code>png</code></td></tr>
+        <tr><th scope="row"><code>APP_VERSION</code></th><td>wersja pokazywana w <code>/api/info</code></td><td><code>1.0.0</code>, <code>1.1.0</code>, <code>2.0.0-full</code>, <code>2.0.0</code>, <code>2.1.0</code>, <code>2.2.0</code></td></tr>
+        <tr><th scope="row"><code>WATERMARK</code></th><td>tekst znaku wodnego w rogu mema</td><td>LAB 3: <code>#MemeOpsConf</code> (z <code>kn</code>), od LAB 6: z ConfigMap <code>meme-config</code></td></tr>
+        <tr><th scope="row"><code>THEME</code></th><td><code>light</code> (domyślnie) albo <code>dark</code></td><td>LAB 6: <code>light</code> z ConfigMap, LAB 7: <code>dark</code> w rewizji canary</td></tr>
+        <tr><th scope="row"><code>JWT_SECRET</code></th><td>gdy jest ustawiony, <code>POST /api/memes</code> wymaga nagłówka <code>Authorization: Bearer &lt;JWT&gt;</code></td><td>LAB 6: z Secretu <code>meme-jwt</code></td></tr>
+        <tr><th scope="row"><code>PORT</code>, <code>K_REVISION</code></th><td>port HTTP (<code>8080</code>) i nazwa rewizji. Obie ustawia Knative</td><td>sami nie ustawiacie</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose">meme-api ma mniej: <code>APP_VERSION</code> (wpisaną w obraz przy budowie), opcjonalnie <code>GREETING</code> (LAB 2, dla chętnych) oraz <code>PORT</code> i <code>K_REVISION</code>.</p>
+
+  <h3 class="prose">Obrazy w rejestrze</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Obraz</th><th scope="col">Co w nim jest</th><th scope="col">Kto buduje</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>meme-api:v1</code>, <code>:v2</code></th><td>MVP, ASCII / ASCII + emoji</td><td><code>setup/platform.sh</code></td></tr>
+        <tr><th scope="row"><code>meme-gen:1.0.0</code> + tag z SHA commita</th><td>tylko SVG, bez zależności (<code>Dockerfile</code>)</td><td>ty, LAB 3</td></tr>
+        <tr><th scope="row"><code>meme-gen:2.0.0-full</code></th><td>Pillow na pełnym <code>python:3.12</code> (<code>Dockerfile.full</code>), duży</td><td>ty, LAB 4</td></tr>
+        <tr><th scope="row"><code>meme-gen:2.0.0</code></th><td>Pillow, multi-stage na <code>python:3.12-slim</code> (<code>Dockerfile.slim</code>)</td><td>ty, LAB 4</td></tr>
+        <tr><th scope="row"><code>meme-gen:2.2.0</code> + tag z SHA</th><td>Pillow, <code>Dockerfile.slim</code>; pipeline wypycha go dopiero po teście i skanie Trivy</td><td><code>ci/pipeline.sh</code>, LAB 7</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose">Uwaga: na tym klastrze Knative <b>nie</b> zamienia tagów na digest dla <code>localhost:5001</code>. Tak jest ustawione w <code>platform.sh</code> (<code>registries-skipping-tag-resolving</code>). Na produkcji tak się nie robi. Wracamy do tego w LAB 3.</p>
+</section>
+
+<!-- ============ LABY ============ -->
+<section id="laby">
+  <h2 class="prose"><span class="num">5</span>Lab po labie: co dokładamy do stosu</h2>
+  <p class="prose">Każdy lab zaczyna się od zgłoszenia od Product Ownera i dokłada jeden element do tej samej aplikacji. Kto utknie, dogania grupę jedną komendą: <code>tools/start-lab.sh labNN</code> (od LAB 3).</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Lab</th><th scope="col">Zgłoszenie od PO</th><th scope="col">Co dokłada do stosu</th></tr></thead>
+      <tbody>
+        <tr class="day"><td colspan="3">Dzień 1</td></tr>
+        <tr><th scope="row">LAB 1 · Platforma</th><td>„Postawcie platformę pod MemeOps”</td><td><span class="tag k8s">kind</span> <span class="tag kn">Knative + Kourier</span> Cały klaster z rysunku, rejestr i obrazy <code>meme-api</code>. Próbna usługa <code>hello</code> w <code>default</code>, potem ją usuwacie.</td></tr>
+        <tr><th scope="row">LAB 2 · MVP na Knative</th><td>„Wdrażamy MVP, bez przestojów przy zmianach”</td><td><span class="tag app">memeops</span> namespace i <code>ksvc meme-api</code>. Rewizje v1 i v2, ruch 80/20, rollback do v1, tag <code>kandydat</code>. Pomiar cold startu.</td></tr>
+        <tr><th scope="row">LAB 3 · Funkcja w Pythonie</th><td>„Chcemy własny kod i porządek w wersjach”</td><td><span class="tag app">meme-gen</span> obraz <code>1.0.0</code> + tag SHA, <code>MEME_FORMAT=svg</code>, adnotacja <code>memeops/git-sha</code>. Druga rewizja ze znakiem wodnym i rollback ruchu. Na rozgrzewkę <code>hello-fn</code> z <code>func</code>.</td></tr>
+        <tr><th scope="row">LAB 4 · Zależności natywne</th><td>„Memy ze zdjęciami, nie z tekstu!”</td><td>Pillow, obrazy <code>2.0.0-full</code> i <code>2.0.0</code>, <code>MEME_FORMAT=png</code>. Cold start z obrazem i bez obrazu na węźle. Zostaje <code>2.0.0</code>.</td></tr>
+        <tr class="day"><td colspan="3">Dzień 2</td></tr>
+        <tr><th scope="row">LAB 5 · Symulacja keynote</th><td>„Po keynote przyjdzie 500 osób naraz. Wytrzymamy?”</td><td>Adnotacje autoskalowania w <code>meme-gen</code> (<code>target: 5</code>, <code>max-scale: 8</code>). Test obciążenia k6 (<code>tools/keynote.js</code>). <span class="tag opt">opcja</span> Grafana.</td></tr>
+        <tr><th scope="row">LAB 6 · Sekrety i logowanie</th><td>„Tylko zalogowani mogą tworzyć memy”</td><td>Secret <code>meme-jwt</code>, ConfigMap <code>meme-config</code>, bezpieczny <code>securityContext</code>. <code>POST</code> bez tokenu daje 401. <span class="tag opt">dla chętnych</span> HTTPS z cert-managerem.</td></tr>
+        <tr><th scope="row">LAB 7 · CI/CD i canary</th><td>„Nowy szablon dark mode — bezpiecznie”</td><td>Pipeline <code>ci/pipeline.sh</code>: test → build → skan Trivy → push → deploy. Rewizja <code>meme-gen-2-2-0</code> z <code>THEME=dark</code> dostaje 10% ruchu i tag <code>canary</code>. DomainMapping <code>memy.127.0.0.1.sslip.io</code>.</td></tr>
+        <tr><th scope="row">LAB 8 · Awaria w piątek 16:55</th><td>„Memy przestały działać!”</td><td>Nic nowego na stałe. Skrypt wdraża trzy zepsute zmiany <code>meme-gen</code>. Diagnozujecie i naprawiacie, <code>sprawdz.sh</code> potwierdza.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ ZOBACZ ============ -->
+<section id="zobacz" class="prose">
+  <h2><span class="num">6</span>Zobacz na klastrze (tylko odczyt)</h2>
+  <p>Żadne z tych poleceń niczego nie zmienia. Uruchom je w katalogu <code>~/memeops</code>.</p>
+<pre><span class="c"># warstwa Dockera: węzeł kind i rejestr, z mapowaniem portów</span>
+docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
+
+<span class="c"># klaster: nazwa, kontekst, jeden węzeł</span>
+kind get clusters
+kubectl config current-context
+kubectl get nodes -o wide
+
+<span class="c"># namespace'y z rysunku</span>
+kubectl get ns
+
+<span class="c"># Knative i Kourier</span>
+kubectl get pods -n knative-serving
+kubectl get pods,svc -n kourier-system          <span class="c"># kourier: 80:31080, 443:31443</span>
+kubectl get cm config-domain -n knative-serving -o yaml | grep sslip
+
+<span class="c"># rejestr: jakie obrazy i tagi już są</span>
+curl -s localhost:5001/v2/_catalog
+curl -s localhost:5001/v2/meme-gen/tags/list
+
+<span class="c"># nasza aplikacja (od LAB 2)</span>
+kn service list -n memeops
+kn revision list -n memeops
+kubectl get ksvc -A                              <span class="c"># usługi Knative we wszystkich namespace'ach</span>
+
+<span class="c"># dwa kontenery w podzie rewizji</span>
+kubectl get pods -n memeops -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.containers[*].name}{"\n"}{end}'
+
+<span class="c"># cały stan stanowiska naraz</span>
+setup/check.sh                                   <span class="c"># → SUKCES: 13/13</span></pre>
+</section>
+
+<!-- ============ DALEJ ============ -->
+<section id="dalej">
+  <h2 class="prose"><span class="num">7</span>Czytaj dalej</h2>
+  <div class="links">
+    <a href="../01-knative-vs-k8s/index.html"><b>Knative a zwykły Kubernetes</b><span>Co Knative dokłada nad Deploymentem i kto steruje podami.</span></a>
+    <a href="../04-kourier/index.html"><b>Kourier dla Knative</b><span>Envoy, trasy, traffic split i sslip.io.</span></a>
+    <a href="../08-autoskalowanie/index.html"><b>Autoskalowanie w Knative</b><span>Concurrency, KPA, panic window. Przed LAB 5.</span></a>
+    <a href="../05-activator-tbc/index.html"><b>Activator i target-burst-capacity</b><span>Kiedy activator jest w ścieżce żądania.</span></a>
+  </div>
+</section>
+</div>

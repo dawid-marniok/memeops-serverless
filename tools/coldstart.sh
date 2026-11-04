@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Mierzy cold start usługi Knative: czeka, aż usługa zejdzie do zera podów, i mierzy pierwsze żądanie,
-# potem kilka ciepłych dla porównania.
+# potem kilka warm requestów dla porównania.
 # Użycie: tools/coldstart.sh <usługa> [namespace=memeops] [ścieżka=/] [metoda=GET] [dane JSON]
 #   tools/coldstart.sh meme-api
-#   tools/coldstart.sh meme-gen memeops /api/memes POST '{"top":"zimny","bottom":"start"}'
+#   tools/coldstart.sh meme-gen memeops /api/memes POST '{"top":"cold","bottom":"start"}'
 #   NOWY_WEZEL=1 tools/coldstart.sh meme-gen ...   # po zejściu do zera usuń obraz z węzła (jak nowy węzeł bez cache)
 set -euo pipefail
 SVC=${1:?podaj nazwę usługi}; NS=${2:-memeops}; P=${3:-/}; M=${4:-GET}; DATA=${5:-}
@@ -25,8 +25,8 @@ if [ -n "${NOWY_WEZEL:-}" ]; then
 fi
 measure() { local out; out=$(curl "${args[@]}" "$URL$P"); code=${out% *}; ms=$(awk "BEGIN{printf \"%.0f\", ${out#* } * 1000}"); }
 measure
-printf 'ZIMNY start: HTTP %s, %6s ms\n' "$code" "$ms"
+printf 'COLD start: HTTP %s, %6s ms\n' "$code" "$ms"
 for i in 1 2 3; do
   measure
-  printf 'ciepły #%s:   HTTP %s, %6s ms\n' "$i" "$code" "$ms"
+  printf 'warm #%s:   HTTP %s, %6s ms\n' "$i" "$code" "$ms"
 done

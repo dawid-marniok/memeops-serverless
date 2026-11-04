@@ -1,0 +1,153 @@
+# Krok 1: pierwsza wersja usługi. 100% ruchu do rewizji hello-v1.
+# kubectl apply -f demo/01-serverless-60s/krok-po-kroku/01-hello-v1.yaml
+# albo: kn service apply -n demo -f demo/01-serverless-60s/krok-po-kroku/01-hello-v1.yaml
+#
+# Ten plik to też ściąga: aktywne są tylko pola potrzebne do startu, a zakomentowane pokazują,
+# co jeszcze można ustawić w Knative Service (sprawdzone na Knative 1.23).
+# Po odkomentowaniu czegokolwiek w spec.template zmień nazwę rewizji (hello-v1 → np. hello-v1b):
+# każda zmiana szablonu to nowa rewizja, a stara nazwa jest już zajęta.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: hello
+  namespace: demo
+  # labels:
+  #   networking.knative.dev/visibility: cluster-local   # usługa tylko wewnątrz klastra: bez adresu *.sslip.io,
+  #                                                      # dostępna jako hello.demo.svc.cluster.local
+  # annotations:
+  #   serving.knative.dev/rollout-duration: "120s"       # nowa rewizja przejmuje ruch stopniowo przez 120 s,
+  #                                                      # zamiast skoku z 0 do 100% (działa z latestRevision: true)
+spec:
+  template:                                         # szablon rewizji: każda zmiana tutaj = nowa rewizja
+    metadata:
+      name: hello-v1                                # nazwa rewizji (bez tego: hello-00001, hello-00002...)
+      # labels:
+      #   app.kubernetes.io/part-of: memeops        # etykiety trafiają na rewizję i na pody
+      annotations:
+        # --- Autoskalowanie: ile podów ---
+        autoscaling.knative.dev/min-scale: "0"      # dolna granica; 0 = scale-to-zero po ok. 60 s bez ruchu
+        autoscaling.knative.dev/max-scale: "5"      # górna granica, bezpiecznik kosztowy
+        autoscaling.knative.dev/target: "10"        # cel: 10 równoczesnych żądań na pod (domyślnie 100)
+        # autoscaling.knative.dev/initial-scale: "1"          # pody przy tworzeniu rewizji (domyślnie 1);
+        #                                                     # "0" wymaga allow-zero-initial-scale: "true" w config-autoscaler
+        # autoscaling.knative.dev/activation-scale: "2"       # przy wybudzeniu z zera od razu 2 pody zamiast 1
+        # autoscaling.knative.dev/scale-down-delay: "5m"      # odczekaj 5 min przed zmniejszeniem (mniej cold startów)
+        # autoscaling.knative.dev/scale-to-zero-pod-retention-period: "10m"  # trzymaj ostatni pod 10 min po spadku ruchu
+
+        # --- Autoskalowanie: według czego ---
+        # autoscaling.knative.dev/class: kpa.autoscaling.knative.dev   # KPA (domyślny, umie scale-to-zero)
+        #                                                              # albo hpa.autoscaling.knative.dev (HPA Kubernetesa,
+        #                                                              # bez zera; wymaga serving-hpa.yaml z wydania Knative)
+        # autoscaling.knative.dev/metric: concurrency       # KPA: concurrency (domyślnie) albo rps (żądania na sekundę);
+        #                                                   # cpu i memory tylko z klasą hpa
+        # autoscaling.knative.dev/target-utilization-percentage: "70"  # skaluj przy 70% celu (domyślnie 70)
+
+        # --- Autoskalowanie: jak szybko reagować ---
+        # autoscaling.knative.dev/window: "60s"                    # okno uśredniania metryki (6s–1h, domyślnie 60s)
+        # autoscaling.knative.dev/panic-window-percentage: "10"    # okno trybu panic = 10% okna (6 s)
+        # autoscaling.knative.dev/panic-threshold-percentage: "200"  # panic, gdy ruch > 200% możliwości podów
+        # autoscaling.knative.dev/target-burst-capacity: "211"     # zapas na nagły skok; od niego zależy, czy activator
+        #                                                          # zostaje w ścieżce ("-1" = zawsze, "0" = tylko przy zerze)
+
+        # --- Wdrożenie i sidecar ---
+        # serving.knative.dev/progress-deadline: "120s"   # ile czekać na gotowość rewizji, zanim uznać ją za nieudaną
+        # queue.sidecar.serving.knative.dev/cpu-resource-request: "25m"     # zasoby kontenera queue-proxy
+        # queue.sidecar.serving.knative.dev/memory-resource-request: "32Mi"
+        # queue.sidecar.serving.knative.dev/cpu-resource-limit: "500m"
+        # queue.sidecar.serving.knative.dev/memory-resource-limit: "128Mi"
+    spec:
+      # --- Żądania i timeouty ---
+      # containerConcurrency: 0             # twardy limit równoczesnych żądań na pod; 0 = bez limitu (domyślnie),
+      #                                     # 1 = jedno żądanie naraz (jak AWS Lambda)
+      timeoutSeconds: 15                    # maks. czas całego żądania (domyślnie 300); to też czas na łagodne zamknięcie poda.
+      #                                     # W demach 15 s, żeby pody i namespace znikały po kilkunastu sekundach, nie po 5 min
+      # responseStartTimeoutSeconds: 60     # ile czekać na pierwszy bajt odpowiedzi
+      # idleTimeoutSeconds: 0               # ile może trwać cisza w trakcie odpowiedzi (0 = bez limitu)
+
+      # --- Tożsamość i dostęp do rejestru ---
+      # serviceAccountName: meme-api        # ServiceAccount poda (RBAC, Workload Identity / IRSA w chmurze);
+      #                                     # musi istnieć (00-przygotowanie.yaml), inaczej rewizja nie powstanie
+      # imagePullSecrets:
+      #   - name: moj-rejestr               # dane logowania do prywatnego rejestru obrazów
+      # enableServiceLinks: false           # bez zmiennych środowiskowych o innych Service'ach w namespace
+
+      containers:
+        - name: user-container                      # jawnie: inaczej ponowny apply tej samej rewizji zostanie odrzucony
+          image: localhost:5001/meme-api:v1         # obraz z lokalnego rejestru (platform.sh)
+          # imagePullPolicy: IfNotPresent
+          # command: ["python"]                     # nadpisuje ENTRYPOINT obrazu
+          # args: ["main.py"]                       # nadpisuje CMD obrazu
+          # workingDir: /app
+
+          # ports:                                  # najczęściej zbędne: Knative ustawia $PORT=8080
+          #   - name: http1                         # http1 (domyślnie) albo h2c dla gRPC / HTTP/2 bez TLS
+          #     containerPort: 8080                 # dozwolony jest jeden port
+
+          env:
+            - name: GREETING
+              value: "Pozdrowienia z rewizji v1"
+            # - name: TRYB                          # pojedyncza wartość z ConfigMap (00-przygotowanie.yaml)
+            #   valueFrom:
+            #     configMapKeyRef: {name: meme-config, key: tryb}
+            # - name: HASLO                         # pojedyncza wartość z Secret
+            #   valueFrom:
+            #     secretKeyRef: {name: meme-sekret, key: haslo}
+          # envFrom:                                # wszystkie klucze naraz jako zmienne środowiskowe
+          #   - configMapRef: {name: meme-config}
+          #   - secretRef: {name: meme-sekret}
+          # Uwaga: zmiana treści ConfigMap/Secret NIE tworzy nowej rewizji i nie restartuje podów (pułapka z LAB 6).
+
+          readinessProbe:                           # kiedy pod może dostać ruch
+            httpGet:
+              path: /healthz                        # portu nie podajesz: Knative wie, że to $PORT
+            successThreshold: 1                     # jawnie, z tego samego powodu co name
+            # periodSeconds: 5
+            # failureThreshold: 3
+          # livenessProbe:                          # kiedy zrestartować kontener, który się zawiesił
+          #   httpGet: {path: /healthz}
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 10
+          # startupProbe:                           # dla wolno startujących aplikacji
+          #   httpGet: {path: /healthz, port: 8080} # tu port JEST wymagany: bez niego rewizja wisi w Deploying (port 0)
+          #   failureThreshold: 30
+          #   periodSeconds: 1
+
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }    # na tej podstawie scheduler wybiera węzeł
+            limits: { memory: 128Mi }               # limit CPU celowo pominięty: throttling wydłuża cold start
+
+          # securityContext:                        # usuwa ostrzeżenie "Kubernetes default value is insecure"
+          #   runAsNonRoot: true
+          #   allowPrivilegeEscalation: false
+          #   readOnlyRootFilesystem: true          # system plików tylko do odczytu; zapis tylko w podmontowanych wolumenach
+          #   capabilities: {drop: ["ALL"]}
+          #   seccompProfile: {type: RuntimeDefault}
+
+          # volumeMounts:
+          #   - {name: konfig, mountPath: /etc/meme, readOnly: true}      # pliki z ConfigMap
+          #   - {name: tajne, mountPath: /etc/sekrety, readOnly: true}    # pliki z Secret
+          #   - {name: tmp, mountPath: /tmp}                              # zapisywalny katalog przy readOnlyRootFilesystem
+      # volumes:
+      #   - name: konfig
+      #     configMap: {name: meme-config}
+      #   - name: tajne
+      #     secret: {secretName: meme-sekret}
+      #   - name: tmp
+      #     emptyDir: {sizeLimit: 64Mi}
+
+      # --- Domyślnie WYŁĄCZONE w Knative (webhook odrzuca: "must not set the field(s)") ---
+      # Włącza się je w ConfigMap config-features (namespace knative-serving), np.:
+      #   kubectl -n knative-serving patch cm config-features --type merge \
+      #     -p '{"data":{"kubernetes.podspec-nodeselector":"enabled"}}'
+      # nodeSelector: {kubernetes.io/os: linux}        # flaga kubernetes.podspec-nodeselector
+      # tolerations: [{key: gpu, operator: Exists}]   # kubernetes.podspec-tolerations
+      # affinity: {...}                               # kubernetes.podspec-affinity
+      # topologySpreadConstraints: [...]              # kubernetes.podspec-topologyspreadconstraints
+      # priorityClassName: wysoki                     # kubernetes.podspec-priorityclassname
+      # runtimeClassName: wasmtime-spin-v2            # kubernetes.podspec-runtimeclassname (np. Wasm, demo SpinKube)
+      # initContainers: [...]                         # kubernetes.podspec-init-containers
+      # volumes z persistentVolumeClaim               # kubernetes.podspec-persistent-volume-claim
+
+  # traffic:                                  # bez tej sekcji: 100% do najnowszej gotowej rewizji
+  #   - latestRevision: true                  # przykłady traffic splitu: 02-hello-v2-canary.yaml, 03-hello-v2-pelny.yaml
+  #     percent: 100

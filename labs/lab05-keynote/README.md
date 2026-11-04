@@ -1,8 +1,8 @@
 # lab05 — Symulacja keynote: testy, metryki, autoskalowanie
 
-| Dzień | Czas | Po bloku |
-|---|---|---|
-| 2 | 50 min | 2.1 Testowanie, metryki i autoskalowanie |
+| Dzień | Po bloku |
+|---|---|
+| 2 | 2.1 Testowanie, metryki i autoskalowanie |
 
 > **Zgłoszenie od PO:** „Keynote kończy się o 10:00. Przez godzinę przed — cisza. Potem 500 osób chce mema w ciągu 5 minut. Udowodnijcie, że wytrzymamy, i powiedzcie, ile to kosztuje.”
 
@@ -10,16 +10,26 @@
 
 **Zasada:** jedna zmiana parametru na jeden przebieg testu — inaczej nie wiesz, co pomogło.
 
+## Przed startem
+
+Stan startowy: `meme-gen` 2.0.0 (PNG) z LAB 4, domyślne autoskalowanie.
+
+```bash
+tools/start-lab.sh lab05            # tylko jeśli LAB 4 nie skończony (usuwa Twoje rewizje meme-api i meme-gen)
+```
+
+Na początku labu prowadzący pokazuje [demo 07 „Keynote na domyślnych ustawieniach”](../../demo/07-keynote/) — to ten sam test co Twój przebieg 1, na laptopie prowadzącego.
+
 ## Kroki
 
-| # | Co robisz | Czas |
-|---|---|---|
-| 1 | Testy funkcji przed obciążeniem | 5 min |
-| 2 | Przebieg 1: domyślny autoskaler | 10 min |
-| 3 | Przebieg 2: `target: 5` | 10 min |
-| 4 | Przebieg 3: Twoja zmiana | 10 min |
-| 5 | Decyzja na keynote | 10 min |
-| 6 | Zagadka galerii | 5 min |
+| # | Co robisz |
+|---|---|
+| 1 | Testy funkcji przed obciążeniem |
+| 2 | Przebieg 1: domyślny autoskaler |
+| 3 | Przebieg 2: `target: 5` |
+| 4 | Przebieg 3: Twoja zmiana |
+| 5 | Decyzja na keynote |
+| 6 | Zagadka galerii |
 
 Otwórz **dwa terminale**. W drugim przez cały lab:
 
@@ -44,7 +54,7 @@ docker run --rm -v "$PWD/app/meme-gen:/src:ro" -w /src python:3.12-slim \
 k6 run tools/keynote.js
 ```
 
-Zapisz: maks. liczbę podów, p95 czasu odpowiedzi, odsetek błędów. Domyślny cel to 100 równoczesnych żądań na pod (`kubectl get cm config-autoscaler -n knative-serving -o yaml | grep container-concurrency-target-default`).
+Ten sam test widziałeś w demie 07 — powtórz go u siebie, bo na VM-ce liczby będą inne i to one są Twoim punktem odniesienia. Zapisz: maks. liczbę podów, p95 czasu odpowiedzi, odsetek błędów. Domyślny cel to 100 równoczesnych żądań na pod (`kubectl get cm config-autoscaler -n knative-serving -o yaml | grep container-concurrency-target-default`).
 
 ### 3. Przebieg 2: `target: 5`
 
@@ -55,7 +65,7 @@ kubectl apply -f labs/lab05-keynote/autoscaling.yaml
 k6 run tools/keynote.js
 ```
 
-Obserwuj w `kubectl get kpa`: `DESIRED` vs `ACTUAL`, a w Grafanie współbieżność stabilną i *panic*.
+Obserwuj w `kubectl get kpa`: `DESIRED` vs `ACTUAL`, a w Grafanie concurrency stabilną i *panic*.
 
 ### 4. Przebieg 3: Twoja zmiana
 
@@ -99,7 +109,7 @@ Dlaczego galeria za każdym razem wygląda inaczej, a po scale-to-zero jest pust
 ## Dogoń grupę
 
 ```bash
-tools/dogon.sh lab05
+tools/start-lab.sh lab05
 ```
 
 **Cliffhanger:** „Ktoś wrzuca memy anonimowo, a klucz leży w kodzie.”

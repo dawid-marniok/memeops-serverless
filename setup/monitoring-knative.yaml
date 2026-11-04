@@ -164,7 +164,7 @@ data:
       },
       {
        "type": "timeseries",
-       "title": "Współbieżność: stabilna vs cel autoskalera",
+       "title": "Concurrency: stable vs target autoskalera",
        "gridPos": {
         "x": 0,
         "y": 16,

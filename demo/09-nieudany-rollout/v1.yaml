@@ -1,0 +1,18 @@
+# Demo 09, krok 1: działająca wersja. 100% ruchu do najnowszej gotowej rewizji.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: rollout
+  namespace: demo
+spec:
+  template:
+    metadata:
+      name: rollout-v1
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - name: user-container
+          image: localhost:5001/meme-api:v1
+          readinessProbe:
+            httpGet: {path: /healthz}
+            successThreshold: 1

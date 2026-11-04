@@ -1,0 +1,13 @@
+# Demo 10: funkcja do dema, meme-api v1 z rejestru szkolenia, skaluje do zera po ok. 30 s bez ruchu
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata: {name: meme-trace, namespace: demo}
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/scale-to-zero-pod-retention-period: "0s"
+        autoscaling.knative.dev/window: "10s"
+    spec:
+      containers:
+        - image: localhost:5001/meme-api:v1

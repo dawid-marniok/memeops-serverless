@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# „Dogoń grupę”: doprowadza klaster do stanu startowego wskazanego labu (= rozwiązanie poprzedniego).
-# Usuwa i tworzy od nowa usługi Knative, więc tracisz własne rewizje — Twoje pliki w repo zostają.
-# Użycie: tools/dogon.sh lab03|lab04|lab05|lab06|lab07|lab08
+# Start labu („dogoń grupę”): doprowadza klaster do stanu startowego wskazanego labu (= rozwiązanie poprzedniego).
+# Usuwa i tworzy od nowa usługi Knative, więc tracisz własne rewizje. Pliki w repo zostają, z jednym wyjątkiem:
+# od lab05 odkomentowuje Pillow w app/meme-gen/requirements.txt (krok 1 LAB 4), jeśli wciąż jest zakomentowany.
+# Użycie: tools/start-lab.sh lab03|lab04|lab05|lab06|lab07|lab08
 set -euo pipefail
 cd "$(dirname "$0")/.."; source setup/versions.env
 LAB=${1:?podaj lab, np. lab05}; N=${LAB#lab}; N=$((10#$N))
@@ -17,11 +18,13 @@ fresh() { kubectl delete ksvc "$1" -n $NS --ignore-not-found >/dev/null; }
 if [ "$N" -ge 3 ]; then fresh meme-api; kubectl apply -f labs/lab02-knative-mvp/meme-api.yaml >/dev/null; fi
 if [ "$N" -ge 4 ]; then
   build 1.0.0 ""; fresh meme-gen
-  sed 's/"UZUPELNIJ"/"dogon"/' labs/lab03-funkcja-python/meme-gen.yaml | kubectl apply -f - >/dev/null
+  sed 's/"UZUPELNIJ"/"start-lab"/' labs/lab03-funkcja-python/meme-gen.yaml | kubectl apply -f - >/dev/null
 fi
 if [ "$N" -ge 5 ]; then
+  # LAB 5 (testy PNG) i LAB 7 (skaner zatrzymuje Pillow 12.3.0) zakładają krok 1 LAB 4 w repo
+  perl -pi -e 's/^# *(pillow==)/$1/' app/meme-gen/requirements.txt
   build 2.0.0 12.3.0; fresh meme-gen
-  sed 's/"UZUPELNIJ"/"dogon"/; s/meme-gen:1.0.0/meme-gen:2.0.0/; s/value: "1.0.0"/value: "2.0.0"/; s/value: svg/value: png/; s/memory: 128Mi/memory: 256Mi/' \
+  sed 's/"UZUPELNIJ"/"start-lab"/; s/meme-gen:1.0.0/meme-gen:2.0.0/; s/value: "1.0.0"/value: "2.0.0"/; s/value: svg/value: png/; s/memory: 128Mi/memory: 256Mi/' \
     labs/lab03-funkcja-python/meme-gen.yaml | kubectl apply -f - >/dev/null
 fi
 if [ "$N" -ge 6 ]; then fresh meme-gen; kubectl apply -f labs/lab05-keynote/autoscaling.yaml >/dev/null; fi

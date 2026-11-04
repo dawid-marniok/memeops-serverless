@@ -1,0 +1,22 @@
+# Demo 09, krok 2: „drobna zmiana” przed weekendem: nowy obraz i ktoś „uporządkował” komendę startową.
+# W obrazie jest main.py, a komenda wskazuje app.py, więc kontener kończy się błędem zaraz po starcie.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: rollout
+  namespace: demo
+spec:
+  template:
+    metadata:
+      name: rollout-v2
+      annotations:
+        serving.knative.dev/progress-deadline: "45s"   # po ilu sekundach uznać rewizję za nieudaną (domyślnie 600 s)
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - name: user-container
+          image: localhost:5001/meme-api:v2
+          command: ["python", "app.py"]
+          readinessProbe:
+            httpGet: {path: /healthz}
+            successThreshold: 1

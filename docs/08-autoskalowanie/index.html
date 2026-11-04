@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autoskalowanie w Knative</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Ten sam system co activator-tbc i knative-vs-k8s: kolor = rola (tryb stabilny / panika / Knative), jedna kolumna tekstu, interaktywne bloki pełnej szerokości. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --traffic: #0f6d6a;
+  --traffic-bg: #e3f2f0;
+  --cold: #b0306a;
+  --cold-bg: #f9e6ef;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.prose { max-width: 760px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; text-wrap: balance; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+.answer .v { font-weight: 700; }
+.answer .v.no { color: var(--cold); }
+.answer .v.yes { color: var(--traffic); }
+
+/* Diagramy */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-top: 16px; }
+.scroll svg { display: block; width: 100%; min-width: 720px; height: auto; }
+svg text { font-family: var(--sans); }
+.box rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.3; }
+.box.act rect { fill: var(--cold-bg); stroke: var(--cold); }
+.box.pod > rect { fill: var(--traffic-bg); stroke: var(--traffic); }
+.box.kn rect { fill: var(--kn-bg); stroke: var(--kn); }
+.box.opt rect { fill: var(--surface); stroke: var(--muted); stroke-dasharray: 5 4; }
+.box .t { font-size: 14px; font-weight: 650; fill: var(--text); }
+.box .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.a { fill: none; stroke-width: 2.4; }
+.a.cold { stroke: var(--cold); }
+.a.traffic { stroke: var(--traffic); }
+.a.kn { stroke: var(--kn); }
+.a.opt { stroke: var(--muted); stroke-dasharray: 5 4; stroke-width: 1.6; }
+.mk-cold { fill: var(--cold); }
+.mk-traffic { fill: var(--traffic); }
+.mk-kn { fill: var(--kn); }
+.mk-opt { fill: var(--muted); }
+.lbl { font-size: 12px; font-weight: 700; }
+.lbl.cold { fill: var(--cold); }
+.lbl.traffic { fill: var(--traffic); }
+.lbl.kn { fill: var(--kn); }
+.lbl.opt { fill: var(--muted); font-weight: 600; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+
+/* Wzór i panele interaktywne */
+.formula { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-family: var(--mono); font-size: 15px; margin: 16px 0; overflow-x: auto; }
+.formula .r { display: block; color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 18px; min-width: 0; }
+.calc h3 { margin: 0 0 12px; }
+.calc .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 16px; }
+.calc label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); min-width: 0; }
+.calc label .val { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 700; }
+.calc input[type="number"], .calc select { font: inherit; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 0; }
+.calc input[type="range"] { accent-color: var(--accent); width: 100%; min-width: 0; }
+.calc input:focus-visible, .calc select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.calc .hint { font-weight: 400; font-size: 12px; }
+.result { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.result .why { font-size: 14.5px; color: var(--muted); flex: 1 1 320px; }
+.big { display: flex; flex-direction: column; min-width: 120px; }
+.big b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.big span { font-size: 12.5px; color: var(--muted); }
+.big.conc b { color: var(--accent); }
+.big.rps b { color: var(--kn); }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.presets button, .btn { font: inherit; font-size: 13px; cursor: pointer; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.presets button:hover, .btn:hover { border-color: var(--accent); }
+.presets button[aria-pressed="true"] { border-color: var(--accent); background: var(--traffic-bg); color: var(--accent); font-weight: 650; }
+.presets button:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 650; }
+
+/* Oś czasu concurrency */
+.lt-svg { min-width: 560px !important; }
+.lt-req { fill: var(--traffic-bg); stroke: var(--traffic); stroke-width: 1; }
+.lt-req.on { fill: var(--traffic); }
+.lt-grid { stroke: var(--line); stroke-width: 1; }
+.lt-tick { fill: var(--muted); font-size: 11px; }
+.lt-cursor { stroke: var(--cold); stroke-width: 2; }
+.lt-cnt { fill: var(--cold); font-size: 13px; font-weight: 700; }
+
+/* Symulator */
+.sim-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); margin: 12px 0 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 10px; border-radius: 2px; display: inline-block; }
+.sw.demand { background: var(--surface-2); border: 1px solid var(--muted); }
+.sw.stable { height: 3px; background: var(--traffic); }
+.sw.panic { height: 2px; background: var(--cold); }
+.sw.cap { height: 0; border-top: 2px dashed var(--kn); }
+.sw.ready { background: var(--traffic-bg); border: 1.5px solid var(--traffic); }
+.sw.desired { height: 0; border-top: 2px dashed var(--kn); }
+.sw.band { background: var(--cold-bg); }
+#simchart { min-width: 640px; cursor: crosshair; touch-action: pan-y; }
+.ch-grid { stroke: var(--line); stroke-width: 1; }
+.ch-tick { fill: var(--muted); font-size: 11px; }
+.ch-title { fill: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .04em; }
+.ch-demand { fill: var(--surface-2); stroke: var(--muted); stroke-width: 1; }
+.ch-stable { fill: none; stroke: var(--traffic); stroke-width: 2.6; }
+.ch-panic { fill: none; stroke: var(--cold); stroke-width: 1.6; }
+.ch-cap { fill: none; stroke: var(--kn); stroke-width: 1.4; stroke-dasharray: 5 4; }
+.ch-ready { fill: var(--traffic-bg); stroke: var(--traffic); stroke-width: 2; }
+.ch-desired { fill: none; stroke: var(--kn); stroke-width: 2; stroke-dasharray: 6 4; }
+.ch-band { fill: var(--cold-bg); }
+.ch-bandlbl { fill: var(--cold); font-size: 11px; font-weight: 700; }
+.ch-cursor { stroke: var(--text); stroke-width: 1.2; }
+.scrub { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.scrub input { flex: 1; accent-color: var(--accent); min-width: 0; }
+.scrub output { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 64px; text-align: right; }
+.state { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; margin-top: 14px; }
+@media (max-width: 720px) { .state { grid-template-columns: 1fr; } }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.stat { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-width: 0; }
+.stat span { display: block; font-size: 12px; color: var(--muted); }
+.stat b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.mode { font-weight: 800; font-size: 14px; padding: 3px 12px; border-radius: 999px; display: inline-block; }
+.mode.stable { background: var(--traffic-bg); color: var(--traffic); border: 1.5px solid var(--traffic); }
+.mode.panic { background: var(--cold-bg); color: var(--cold); border: 1.5px solid var(--cold); }
+.mode.zero { background: var(--surface-2); color: var(--muted); border: 1.5px solid var(--line); }
+.podrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; min-height: 48px; margin: 10px 0; }
+.pod { width: 30px; height: 40px; border-radius: 6px; border: 1.5px solid var(--traffic); background: var(--surface); position: relative; overflow: hidden; }
+.pod i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--traffic); opacity: .55; }
+.pod.over { border-color: var(--cold); }
+.pod.over i { background: var(--cold); }
+.pod.pending { border-style: dashed; border-color: var(--kn); background: var(--kni-bg); }
+.actchip { font-size: 12.5px; font-weight: 700; color: var(--cold); background: var(--cold-bg); border: 1.5px solid var(--cold); border-radius: 6px; padding: 8px 10px; }
+.zerochip { font-size: 12.5px; color: var(--muted); border: 1.5px dashed var(--line); border-radius: 6px; padding: 8px 10px; }
+.narr { font-size: 14.5px; line-height: 1.55; margin: 0; }
+.events { list-style: none; margin: 0; padding: 0; font-size: 13.5px; max-height: 210px; overflow-y: auto; border-top: 1px solid var(--line); }
+.events li { display: flex; gap: 10px; padding: 5px 2px; border-bottom: 1px solid var(--line); }
+.events time { font-family: var(--mono); color: var(--muted); min-width: 52px; font-variant-numeric: tabular-nums; }
+.events .p { color: var(--cold); font-weight: 700; }
+.events .u { color: var(--traffic); font-weight: 700; }
+.events li.past { opacity: 1; }
+.events li.future { opacity: .45; }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 720px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 22%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code, summary code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.tag.yes { background: var(--traffic-bg); color: var(--traffic); }
+.tag.no { background: var(--cold-bg); color: var(--cold); }
+.tag.mid { background: var(--kn-bg); color: var(--kn); }
+
+/* Zakładki z YAML */
+.tabs { margin-top: 16px; }
+.tablist { display: flex; flex-wrap: wrap; gap: 6px; }
+.tablist button { font: inherit; font-size: 13.5px; cursor: pointer; background: var(--surface); color: var(--muted); border: 1px solid var(--line); border-radius: 8px 8px 0 0; padding: 6px 12px; }
+.tablist button[aria-selected="true"] { color: var(--text); font-weight: 650; border-color: var(--accent); background: var(--traffic-bg); }
+.tablist button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tabpanel p { font-size: 15px; }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; margin: 10px 0 0; }
+pre .c { color: var(--code-comment); }
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+.callout.cold { border-left-color: var(--cold); background: var(--cold-bg); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.src { font-size: 13.5px; color: var(--muted); }
+ol.steps { padding-left: 22px; }
+ol.steps li { margin-bottom: 8px; }
+.verify { font-size: 12px; font-weight: 700; color: var(--kn); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="prose">
+  <div class="eyebrow">Serverless na Kubernetes · notatka do nauki</div>
+  <h1>Autoskalowanie w Knative</h1>
+  <p class="lede">Na podstawie czego wstają kolejne pody, czym jest concurrency, jak działają stable window i panika, i co zrobić, gdy chcesz skalować po metryce z Prometheusa. Z symulatorem, w którym widać każdą decyzję autoskalera.</p>
+  <div class="meta">
+    <span class="pill">Knative Serving 1.23.0</span>
+    <span class="pill">KPA (Knative Pod Autoscaler)</span>
+    <span class="pill">KEDA 2.21</span>
+    <span class="pill">stan na 02.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#wspolbieznosc">Concurrency</a>
+    <a href="#przeplyw">Skąd liczby</a>
+    <a href="#wzor">Ile podów</a>
+    <a href="#symulator">Symulator</a>
+    <a href="#metryki">Inne metryki</a>
+    <a href="#prometheus">Prometheus</a>
+    <a href="#wybor">Co wybrać</a>
+    <a href="#klaster">Zobacz na klastrze</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2><span class="num">1</span>W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Na podstawie czego wstają pody?</div><p>Domyślnie na podstawie <span class="v yes">concurrency</span>: ile żądań jest naraz w toku. Autoskaler dzieli ją przez cel na pod (100 × 70% = 70) i zaokrągla w górę.</p></div>
+    <div class="answer"><div class="q">Co to jest concurrency?</div><p>Liczba żądań obsługiwanych w tej samej chwili. Średnio: <b>RPS × czas odpowiedzi</b>. 200 żądań/s po 50 ms to 10 żądań naraz.</p></div>
+    <div class="answer"><div class="q">Jak szybko reaguje?</div><p>Liczy dwie średnie: z <b>60 s</b> (normalnie) i z <b>6 s</b> (panika). Gdy krótka średnia wymaga 2× więcej podów niż jest, przechodzi w panikę i dokłada od razu.</p></div>
+    <div class="answer"><div class="q">Czy KPA bierze metryki z Prometheusa?</div><p><span class="v no">Nie.</span> Czyta queue-proxy bezpośrednio co sekundę. Po metryce z Prometheusa skalujesz przez <b>KEDA</b> albo HPA z adapterem metryk.</p></div>
+  </div>
+</section>
+
+<section id="wspolbieznosc">
+  <h2><span class="num">2</span>Concurrency, czyli ile żądań naraz</h2>
+  <div class="prose">
+    <p>Wyobraź sobie kasę w sklepie. RPS mówi, ilu klientów przychodzi na sekundę. Concurrency mówi, ilu stoi przy kasach <em>w tej chwili</em>. Te dwie liczby różnią się o czas obsługi: szybka kasa przy dużym ruchu może mieć przy sobie tylko jedną osobę, a wolna przy małym ruchu cały tłum.</p>
+    <p>Dla serwera to samo. Każde żądanie zajmuje miejsce od przyjścia do odpowiedzi. Policz, ile takich odcinków przecina pionowa linia w danym momencie: to jest concurrency. Średnią daje prawo Little'a:</p>
+  </div>
+  <div class="formula prose">concurrency = RPS × czas odpowiedzi [s]
+    <span class="r">50 RPS × 0,007 s = 0,35 (meme-api z próby: jeden pod wystarczy z ogromnym zapasem)</span>
+    <span class="r">20 RPS × 0,8 s = 16 (meme-gen: ten sam rząd RPS, a obciążenie 45× większe)</span>
+  </div>
+
+  <div class="calc">
+    <h3>Zobacz to na osi czasu</h3>
+    <div class="grid">
+      <label for="lt-rps">Żądania na sekundę <span class="val" id="lt-rps-v"></span><input type="range" id="lt-rps" min="1" max="20" value="8"></label>
+      <label for="lt-lat">Czas odpowiedzi <span class="val" id="lt-lat-v"></span><input type="range" id="lt-lat" min="50" max="1500" step="50" value="400"></label>
+      <label for="lt-cur">Moment pomiaru <span class="val" id="lt-cur-v"></span><input type="range" id="lt-cur" min="0" max="3000" step="10" value="1500"></label>
+    </div>
+    <div class="scroll"><svg id="ltsvg" class="lt-svg" viewBox="0 0 900 250" role="img" aria-label="Żądania jako odcinki na osi czasu, z linią pomiaru"></svg></div>
+    <div class="result">
+      <div class="big conc"><b id="lt-now">0</b><span>w toku w tej chwili</span></div>
+      <div class="big"><b id="lt-avg">0</b><span>średnio (RPS × czas)</span></div>
+      <p class="why" id="lt-why"></p>
+    </div>
+  </div>
+  <p class="src prose">Queue-proxy w każdym podzie mierzy właśnie to: ile żądań przeszło przez niego i jeszcze nie dostało odpowiedzi. Liczy też żądania czekające w jego kolejce, więc przeciążony pod pokazuje wysoką concurrency, nawet jeśli aplikacja przetwarza jedno żądanie naraz.</p>
+</section>
+
+<section id="przeplyw">
+  <h2><span class="num">3</span>Skąd autoskaler bierze liczby</h2>
+  <div class="prose">
+    <p>Decyzję podejmuje jeden komponent, <code>autoscaler</code> w namespace <code>knative-serving</code>. Nie pyta Kubernetesa o CPU ani Prometheusa o metryki. Ma własny, szybki kanał:</p>
+    <ol class="steps">
+      <li><b>queue-proxy</b> (sidecar w każdym podzie) liczy concurrency i RPS swojego poda.</li>
+      <li><b>autoscaler</b> co sekundę pobiera te statystyki z queue-proxy (port 9090). Przy wielu podach odpytuje próbkę i przelicza na całość.</li>
+      <li>Gdy podów jest zero, ruch trzyma <b>activator</b> i sam wysyła statystyki do autoskalera. Pierwsze żądanie budzi usługę od razu, bez czekania na kolejny cykl.</li>
+      <li>Co <b>2 s</b> autoskaler liczy liczbę podów i zapisuje ją w obiekcie <code>PodAutoscaler</code> (<code>kubectl get kpa</code>). Kontroler przepisuje ją do <code>replicas</code> Deploymentu rewizji.</li>
+    </ol>
+  </div>
+  <figure style="margin:0">
+    <div class="scroll">
+      <svg viewBox="0 0 900 350" role="img" aria-label="Przepływ statystyk: queue-proxy i activator do autoskalera, autoskaler do PodAutoscalera i Deploymentu">
+        <defs>
+          <marker id="m-tr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-traffic"/></marker>
+          <marker id="m-co" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-cold"/></marker>
+          <marker id="m-kn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-kn"/></marker>
+          <marker id="m-op" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-opt"/></marker>
+        </defs>
+        <!-- górny rząd: sterowanie -->
+        <g class="box opt"><rect x="20" y="36" width="200" height="58" rx="8"/><text class="t" x="34" y="60">Prometheus</text><text class="s" x="34" y="80">opcjonalnie, tylko wykresy</text></g>
+        <g class="box kn"><rect x="330" y="36" width="210" height="58" rx="8"/><text class="t" x="344" y="60">autoscaler</text><text class="s" x="344" y="80">decyzja co 2 s</text></g>
+        <g class="box"><rect x="600" y="36" width="140" height="58" rx="8"/><text class="t" x="614" y="60">PodAutoscaler</text><text class="s" x="614" y="80">kpa: desired</text></g>
+        <g class="box"><rect x="770" y="36" width="115" height="58" rx="8"/><text class="t" x="784" y="60">Deployment</text><text class="s" x="784" y="80">replicas</text></g>
+        <!-- dolny rząd: ruch -->
+        <g class="box"><rect x="20" y="222" width="100" height="50" rx="8"/><text class="t" x="34" y="252">klient</text></g>
+        <g class="box"><rect x="160" y="222" width="130" height="50" rx="8"/><text class="t" x="174" y="244">Kourier</text><text class="s" x="174" y="262">Envoy</text></g>
+        <g class="box act"><rect x="330" y="222" width="150" height="50" rx="8"/><text class="t" x="344" y="244">activator</text><text class="s" x="344" y="262">przy zerze podów</text></g>
+        <g class="box pod"><rect x="560" y="200" width="325" height="94" rx="10"/><text class="s" x="574" y="218">pod rewizji</text>
+          <g class="box"><rect x="574" y="226" width="140" height="54" rx="7"/><text class="t" x="588" y="250">queue-proxy</text><text class="s" x="588" y="268">liczy w toku</text></g>
+          <g class="box"><rect x="728" y="226" width="143" height="54" rx="7"/><text class="t" x="742" y="250">user-container</text><text class="s" x="742" y="268">Twój kod</text></g>
+        </g>
+        <!-- ruch -->
+        <path class="a traffic" d="M120,247 L158,247" marker-end="url(#m-tr)"/>
+        <path class="a cold" d="M290,247 L328,247" marker-end="url(#m-co)"/>
+        <path class="a cold" d="M480,247 L572,247" marker-end="url(#m-co)"/>
+        <path class="a traffic" d="M225,272 L225,322 L644,322 L644,282" marker-end="url(#m-tr)"/>
+        <text class="lbl traffic" x="300" y="316">gdy są pody z zapasem: prosto do poda</text>
+        <!-- statystyki -->
+        <path class="a kn" d="M644,224 C644,160 520,150 480,96" marker-end="url(#m-kn)"/>
+        <text class="lbl kn" x="560" y="150">pobiera co 1 s</text>
+        <path class="a cold" d="M380,222 L380,96" marker-end="url(#m-co)"/>
+        <text class="lbl cold" x="388" y="160">wysyła statystyki</text>
+        <text class="lbl cold" x="388" y="176">i budzi przy zerze</text>
+        <path class="a kn" d="M540,65 L598,65" marker-end="url(#m-kn)"/>
+        <path class="a kn" d="M740,65 L768,65" marker-end="url(#m-kn)"/>
+        <path class="a kn" d="M828,94 L828,198" marker-end="url(#m-kn)"/>
+        <text class="lbl kn" x="836" y="140">nowe</text>
+        <text class="lbl kn" x="836" y="155">pody</text>
+        <path class="a opt" d="M220,65 L328,65" marker-end="url(#m-op)"/>
+        <text class="lbl opt" x="228" y="56">co 15–30 s</text>
+        <text class="lbl opt" x="20" y="116">nie bierze udziału w decyzji</text>
+      </svg>
+    </div>
+    <figcaption>Kolor pomarańczowy to sterowanie skalą, różowy ścieżka przez activator, zielony ruch prosto do poda. Prometheus tylko obserwuje.</figcaption>
+  </figure>
+  <div class="callout prose">Dlatego autoskalowanie działa, choć w <code>config-observability</code> metryki są domyślnie wyłączone (<code>metrics-protocol: none</code>). To dwa osobne kanały: statystyki dla autoskalera zawsze płyną, eksport do Prometheusa włączasz tylko do wykresów.</div>
+</section>
+
+<section id="wzor">
+  <h2><span class="num">4</span>Ile podów: wzór i kalkulator</h2>
+  <div class="prose">
+    <p>Autoskaler zakłada, że na każdy pod przypada <code>target × target-utilization</code> żądań naraz. Resztę liczy prostym dzieleniem:</p>
+  </div>
+  <div class="formula prose">pody = ⌈ concurrency ÷ (target × utilization) ⌉
+    <span class="r">domyślnie: target 100, utilization 70% → 70 żądań naraz na pod</span>
+    <span class="r">metryka rps: pody = ⌈ RPS ÷ (200 × 70%) ⌉</span>
+  </div>
+  <div class="prose">
+    <p><code>target</code> to cel miękki. Autoskaler do niego dąży, ale pod może chwilowo dostać więcej. Twardy limit to <code>containerConcurrency</code>: nadmiar czeka w queue-proxy albo w activatorze. Gdy ustawisz tylko <code>containerConcurrency</code>, autoskaler bierze go też jako <code>target</code>.</p>
+  </div>
+
+  <div class="calc">
+    <h3>Policz dla swojej usługi</h3>
+    <div class="presets" id="calc-presets">
+      <button type="button" data-rps="50" data-lat="7" data-t="100" data-u="70">meme-api: 50 RPS × 7 ms</button>
+      <button type="button" data-rps="20" data-lat="800" data-t="100" data-u="70">meme-gen: 20 RPS × 800 ms</button>
+      <button type="button" data-rps="300" data-lat="400" data-t="100" data-u="70">wolna baza: 300 RPS × 400 ms</button>
+      <button type="button" data-rps="5" data-lat="2000" data-t="1" data-u="70">miniatury, cc = 1</button>
+    </div>
+    <div class="grid">
+      <label for="c-rps">Żądania na sekundę (RPS)<input type="number" id="c-rps" min="0" step="1" value="20"></label>
+      <label for="c-lat">Czas odpowiedzi [ms]<input type="number" id="c-lat" min="1" step="1" value="800"></label>
+      <label for="c-t">target (concurrency na pod)<input type="number" id="c-t" min="1" step="1" value="100"></label>
+      <label for="c-u">target-utilization [%]<input type="number" id="c-u" min="1" max="100" step="1" value="70"></label>
+      <label for="c-rt">target dla metryki rps<input type="number" id="c-rt" min="1" step="1" value="200"><span class="hint">domyślnie 200</span></label>
+    </div>
+    <div class="result">
+      <div class="big conc"><b id="c-conc">0</b><span>concurrency</span></div>
+      <div class="big conc"><b id="c-pc">0</b><span>pody wg concurrency</span></div>
+      <div class="big rps"><b id="c-pr">0</b><span>pody wg rps</span></div>
+      <p class="why" id="c-why"></p>
+    </div>
+  </div>
+</section>
+
+<section id="symulator">
+  <h2><span class="num">5</span>Dwa okna i panika: symulator</h2>
+  <div class="prose">
+    <p>Autoskaler nie reaguje na pojedynczy pomiar. Co 2 s liczy dwie średnie concurrency:</p>
+    <ul>
+      <li><b>stable window</b> (<code>stable-window</code>, 60 s). Z niego bierze liczbę podów w normalnym trybie. Wygładza szum, ale reaguje powoli.</li>
+      <li><b>okno paniki</b> (<code>panic-window-percentage</code>, 10% stable window = 6 s). Gdy pody wyliczone z tej średniej to co najmniej <code>panic-threshold-percentage</code> (200%) gotowych podów, autoskaler wchodzi w <b>panikę</b>: bierze wynik z krótkiego okna i <b>nie zmniejsza skali</b>. Wychodzi, gdy przez całe stable window warunek paniki się nie powtórzy.</li>
+    </ul>
+    <p>Do tego dwa hamulce: w jednym kroku najwyżej 1000× więcej podów (<code>max-scale-up-rate</code>) i najwyżej o połowę mniej (<code>max-scale-down-rate: 2</code>). Zwróć uwagę na małą skalę: przy jednym gotowym podzie wystarczy, że krótka średnia wymaga dwóch, i to już jest 200%. Dlatego wyjście z jednego poda prawie zawsze zaczyna się od paniki.</p>
+    <p>Zmieniaj ustawienia i przesuwaj suwak czasu albo klikaj w wykres. Wszystko przelicza się od razu.</p>
+  </div>
+
+  <div class="calc">
+    <div class="sim-head">
+      <div class="presets" id="sim-presets" style="margin:0">
+        <button type="button" data-p="spike" aria-pressed="true">Skok ruchu (demo 06)</button>
+        <button type="button" data-p="ramp" aria-pressed="false">Powolna rampa</button>
+        <button type="button" data-p="zero" aria-pressed="false">Od zera i do zera</button>
+        <button type="button" data-p="spikes" aria-pressed="false">Krótkie szpilki</button>
+      </div>
+      <button type="button" class="btn primary" id="sim-play">▶ Odtwórz</button>
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <label for="s-target">target <span class="val" id="s-target-v"></span><input type="range" id="s-target" min="1" max="50" value="10"><span class="hint">adnotacja <code>target</code></span></label>
+      <label for="s-util">utilization <span class="val" id="s-util-v"></span><input type="range" id="s-util" min="10" max="100" step="5" value="70"></label>
+      <label for="s-window">stable window <span class="val" id="s-window-v"></span><input type="range" id="s-window" min="6" max="120" step="2" value="60"><span class="hint">adnotacja <code>window</code></span></label>
+      <label for="s-thr">próg paniki <span class="val" id="s-thr-v"></span><input type="range" id="s-thr" min="110" max="500" step="10" value="200"></label>
+      <label for="s-start">start poda <span class="val" id="s-start-v"></span><input type="range" id="s-start" min="1" max="30" value="4"><span class="hint">obraz w cache ≈ 1–2 s, bez cache dłużej</span></label>
+      <label for="s-min">min-scale <span class="val" id="s-min-v"></span><input type="range" id="s-min" min="0" max="5" value="0"></label>
+      <label for="s-max">max-scale <span class="val" id="s-max-v"></span><input type="range" id="s-max" min="0" max="20" value="0"></label>
+      <label for="s-delay">scale-down-delay <span class="val" id="s-delay-v"></span><input type="range" id="s-delay" min="0" max="120" step="5" value="0"></label>
+    </div>
+    <div class="legend">
+      <span><i class="sw demand"></i>ruch: concurrency</span>
+      <span><i class="sw stable"></i>średnia stabilna</span>
+      <span><i class="sw panic"></i>średnia paniki</span>
+      <span><i class="sw cap"></i>pojemność: gotowe × target</span>
+      <span><i class="sw ready"></i>gotowe pody</span>
+      <span><i class="sw desired"></i>pody, których chce autoskaler</span>
+      <span><i class="sw band"></i>panika</span>
+    </div>
+    <div class="scroll"><svg id="simchart" viewBox="0 0 900 420" role="img" aria-label="Wykres symulacji: ruch, średnie, pody i okresy paniki"></svg></div>
+    <div class="scrub">
+      <label for="s-t" class="src" style="font-weight:600">Czas</label>
+      <input type="range" id="s-t" min="0" max="239" value="35">
+      <output id="s-t-v" for="s-t">35 s</output>
+    </div>
+    <div class="state">
+      <div>
+        <div class="stats">
+          <div class="stat"><span>ruch teraz</span><b id="st-c">0</b></div>
+          <div class="stat"><span id="st-sa-l">średnia 60 s</span><b id="st-sa">0</b></div>
+          <div class="stat"><span id="st-pa-l">średnia 6 s</span><b id="st-pa">0</b></div>
+          <div class="stat"><span>chce / gotowe / startuje</span><b id="st-p">0</b></div>
+        </div>
+        <div class="podrow" id="st-pods" aria-label="Pody w wybranej chwili"></div>
+        <p style="margin:0 0 6px"><span class="mode stable" id="st-mode">stabilny</span></p>
+        <p class="narr" id="st-narr"></p>
+      </div>
+      <div>
+        <div class="src" style="font-weight:600;margin-bottom:4px">Zdarzenia (jak w logu autoskalera)</div>
+        <ul class="events" id="st-events"></ul>
+      </div>
+    </div>
+  </div>
+  <p class="src prose">Model jest uproszczony: ruch podany wprost jako concurrency, start poda jako stały czas, bez <code>target-burst-capacity</code> i bez próbkowania podów. Algorytm decyzji (dwie średnie, próg, trzymanie maksimum w panice, hamulce, wyjście po pełnym oknie) odpowiada temu z kodu autoskalera. W próbie demo 06 panika zaczęła się 1 s po skoku, 1 → 6 podów w 7 s, wyjście po 62 s.</p>
+</section>
+
+<section id="pokretla">
+  <h2><span class="num">6</span>Pokrętła w YAML-u</h2>
+  <div class="prose">
+    <p>Globalnie w ConfigMapie <code>config-autoscaler</code> (namespace <code>knative-serving</code>), per rewizja adnotacjami w <code>spec.template.metadata.annotations</code>. Każda zmiana adnotacji tworzy nową rewizję.</p>
+  </div>
+<pre><span class="c"># meme-gen: wolne żądania, więc mały target</span>
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata: {name: meme-gen, namespace: demo}
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/metric: "concurrency"          <span class="c"># albo "rps"</span>
+        autoscaling.knative.dev/target: "10"                   <span class="c"># miękki cel na pod</span>
+        autoscaling.knative.dev/target-utilization-percentage: "70"
+        autoscaling.knative.dev/window: "60s"                  <span class="c"># stable window, 6s–1h</span>
+        autoscaling.knative.dev/panic-window-percentage: "10"  <span class="c"># 6 s przy 60 s</span>
+        autoscaling.knative.dev/panic-threshold-percentage: "200"
+        autoscaling.knative.dev/min-scale: "0"                 <span class="c"># 1+ = brak cold startu, płacisz za warm pody</span>
+        autoscaling.knative.dev/max-scale: "20"                <span class="c"># bezpiecznik kosztowy</span>
+        autoscaling.knative.dev/scale-down-delay: "30s"        <span class="c"># trzymaj pody po szczycie</span>
+    spec:
+      containerConcurrency: 0                                  <span class="c"># twardy limit, 0 = bez limitu</span>
+      containers:
+        - image: localhost:5001/meme-gen:2.0.0</pre>
+</section>
+
+<section id="metryki">
+  <h2><span class="num">7</span>Inne metryki w Knative</h2>
+  <div class="prose">
+    <p>Knative ma dwie klasy autoskalera. Klasa wybiera mechanizm, metryka wybiera liczbę, po której skaluje.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Klasa i metryka</th><th>Skąd liczba</th><th>Zero podów</th><th>Reakcja</th><th>Kiedy</th></tr></thead>
+      <tbody>
+        <tr><th>KPA, <code>concurrency</code><br><span class="src">domyślnie</span></th><td>queue-proxy, żądania w toku</td><td><span class="tag yes">tak</span></td><td>sekundy, panika</td><td>Większość usług HTTP. Uwzględnia czas odpowiedzi.</td></tr>
+        <tr><th>KPA, <code>rps</code></th><td>queue-proxy, żądania na sekundę</td><td><span class="tag yes">tak</span></td><td>sekundy, panika</td><td>Krótkie i równe żądania, gdy łatwiej myśleć o przepustowości. Nie widzi, że żądania zwalniają.</td></tr>
+        <tr><th>HPA, <code>cpu</code></th><td>metrics-server, % CPU z <code>requests</code></td><td><span class="tag no">nie</span></td><td>15 s cykl, w dół po 5 min</td><td>Praca obciążająca CPU z warm minimum.</td></tr>
+        <tr><th>HPA, <code>memory</code></th><td>metrics-server, pamięć (target w Mi)</td><td><span class="tag no">nie</span></td><td>jak wyżej</td><td>Rzadko ma sens: pamięć zwykle nie spada po spadku ruchu.</td></tr>
+        <tr><th>HPA, własna metryka</th><td>Custom Metrics API, np. prometheus-adapter</td><td><span class="tag no">nie</span></td><td>scrape + cykl HPA</td><td>Gdy musisz zostać przy ksvc, a liczba jest w Prometheusie. <span class="verify">[nie testowane na 1.23]</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Klasę HPA włączasz adnotacją <code>autoscaling.knative.dev/class: hpa.autoscaling.knative.dev</code>. Wymaga <code>serving-hpa.yaml</code> z wydania. Knative tworzy wtedy zwykły obiekt <code>HorizontalPodAutoscaler</code> i oddaje mu decyzję, więc panika, okna i scale-to-zero przestają działać.</p>
+    <p>Wzór HPA wygląda podobnie, ale bazuje na bieżącej liczbie replik: <code>pody = ⌈ obecne × (metryka ÷ cel) ⌉</code>, z tolerancją 10% i oknem stabilizacji w dół 300 s.</p>
+  </div>
+</section>
+
+<section id="prometheus">
+  <h2><span class="num">8</span>Skalowanie po metryce z Prometheusa</h2>
+  <div class="prose">
+    <p><b>KPA nie umie czytać Prometheusa i to celowo.</b> Prometheus zbiera metryki co 15–30 s, a zapytanie <code>rate(...[1m])</code> uśrednia kolejną minutę. Panika działa na oknie 6 s, więc dane z Prometheusa przychodziłyby za późno. Gdy chcesz skalować po czymś, czego queue-proxy nie widzi (długość kolejki, opóźnienie konsumenta Kafki, liczba zadań w bazie, metryka biznesowa), masz trzy drogi.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Droga</th><th>Jak działa</th><th>Scale-to-zero</th><th>Trzyma żądanie HTTP przy zerze</th><th>Uwagi</th></tr></thead>
+      <tbody>
+        <tr><th>KEDA, trigger <code>prometheus</code></th><td>KEDA co <code>pollingInterval</code> wykonuje PromQL. 0 ↔ 1 robi sama, 1 ↔ N oddaje HPA jako metrykę zewnętrzną.</td><td><span class="tag yes">tak</span></td><td><span class="tag no">nie</span></td><td>Najprostsza i najczęstsza droga dla workerów. Ma też kilkadziesiąt innych triggerów (Kafka, Redis, RabbitMQ, cron).</td></tr>
+        <tr><th>HPA + prometheus-adapter</th><td>Adapter wystawia PromQL jako Custom/External Metrics API. HPA skaluje Deployment albo ksvc klasy HPA.</td><td><span class="tag no">nie</span></td><td><span class="tag no">nie</span></td><td>Bez KEDA, ale reguły adaptera są nieczytelne. Zero replik w HPA to nadal funkcja alfa (<code>HPAScaleToZero</code>).</td></tr>
+        <tr><th>Knative + rozszerzenie <code>autoscaler-keda</code></th><td>Zastępuje komponent <code>autoscaler-hpa</code>: ksvc zostaje w klasie <code>hpa.autoscaling.knative.dev</code>, a zapytanie PromQL w adnotacji <code>query</code> zamienia się w ScaledObject KEDA.</td><td><span class="tag mid">nieopisane</span></td><td><span class="tag mid">nieopisane</span></td><td>Projekt w <code>knative-extensions</code>, status ALPHA, bez tabeli zgodności wersji. Przykład w dokumentacji ma <code>minScale: "1"</code>. Na szkoleniu jako ciekawostka.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Jak KEDA liczy pody</h3>
+  <div class="prose">
+    <ol class="steps">
+      <li>Co <code>pollingInterval</code> (domyślnie 30 s) wykonuje zapytanie.</li>
+      <li>Wynik powyżej <code>activationThreshold</code> przy zerze replik: KEDA sama ustawia 1.</li>
+      <li>Od 1 do N decyduje HPA, który KEDA utworzyła: <code>pody = ⌈ wynik ÷ threshold ⌉</code> (typ <code>AverageValue</code>).</li>
+      <li>Wynik na poziomie aktywacji lub niższym przez <code>cooldownPeriod</code> (domyślnie 300 s): KEDA schodzi z 1 do 0.</li>
+    </ol>
+    <p>W demo 11 to samo robi trigger <code>redis</code>: 100 zadań, <code>listLength: 20</code>, więc 5 podów.</p>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tablist" role="tablist" aria-label="Przykłady konfiguracji">
+      <button type="button" role="tab" id="tab-keda" aria-controls="panel-keda" aria-selected="true">KEDA + PromQL</button>
+      <button type="button" role="tab" id="tab-hpa" aria-controls="panel-hpa" aria-selected="false" tabindex="-1">ksvc klasy HPA + adapter</button>
+      <button type="button" role="tab" id="tab-ext" aria-controls="panel-ext" aria-selected="false" tabindex="-1">autoscaler-keda</button>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="panel-keda" aria-labelledby="tab-keda">
+<pre><span class="c"># Worker skalowany po metryce Twojej aplikacji w Prometheusie (kube-prometheus-stack, release kps)</span>
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: {name: generator, namespace: demo}
+spec:
+  scaleTargetRef: {name: generator}          <span class="c"># zwykły Deployment, nie ksvc</span>
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  pollingInterval: 10
+  cooldownPeriod: 60
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc:9090
+        query: sum(memy_w_kolejce{namespace="demo"})   <span class="c"># jedna liczba</span>
+        threshold: "20"                               <span class="c"># 20 zadań na pod</span>
+        activationThreshold: "0"                      <span class="c"># &gt; 0 budzi z zera</span></pre>
+      <p>Zapytanie musi zwracać jedną wartość. Gdy Prometheus nie odpowiada, KEDA może ustawić awaryjną liczbę replik (<code>fallback</code>). Bez niej skala zamarza na ostatniej wartości.</p>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="panel-hpa" aria-labelledby="tab-hpa" hidden>
+<pre><span class="c"># 1) prometheus-adapter: reguła robi z licznika metrykę per pod</span>
+rules:
+  custom:
+    - seriesQuery: 'http_requests_total{namespace!="",pod!=""}'
+      resources: {overrides: {namespace: {resource: namespace}, pod: {resource: pod}}}
+      name: {matches: "^(.*)_total$", as: "${1}_per_second"}
+      metricsQuery: 'sum(rate(&lt;&lt;.Series&gt;&gt;{&lt;&lt;.LabelMatchers&gt;&gt;}[1m])) by (&lt;&lt;.GroupBy&gt;&gt;)'
+
+<span class="c"># 2) ksvc oddaje decyzję zwykłemu HPA</span>
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/class: "hpa.autoscaling.knative.dev"
+        autoscaling.knative.dev/metric: "http_requests_per_second"  <span class="c"># nazwa z adaptera</span>
+        autoscaling.knative.dev/target: "50"                        <span class="c"># średnio na pod</span>
+        autoscaling.knative.dev/min-scale: "1"                      <span class="c"># HPA nie zejdzie do zera</span></pre>
+      <p>Sprawdzisz adapter przez <code>kubectl get --raw /apis/custom.metrics.k8s.io/v1beta1</code>. Pusta lista oznacza, że HPA nie dostanie liczby i nie będzie skalować. <span class="verify">[nie testowane na 1.23]</span></p>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="panel-ext" aria-labelledby="tab-ext" hidden>
+<pre><span class="c"># Rozszerzenie knative-extensions/autoscaler-keda: ksvc pisze ScaledObject za Ciebie</span>
+<span class="c"># Instalowane zamiast autoscaler-hpa, dlatego klasa zostaje "hpa"</span>
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/class: "hpa.autoscaling.knative.dev"
+        autoscaling.knative.dev/metric: "http_requests_total"
+        autoscaling.knative.dev/target: "5"
+        autoscaling.knative.dev/query: "sum(rate(http_requests_total{}[1m]))"
+        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/max-scale: "10"</pre>
+      <p>Adnotacje za <code>DEVELOPMENT.md</code> repozytorium (sprawdzone 02.11.2026). Adresu Prometheusa nie podaje się w ksvc. Własny ScaledObject podłączysz adnotacją <code>autoscaling.knative.dev/scaled-object-auto-create: "false"</code>. Projekt ma status ALPHA, przykład instaluje Knative 1.14 i nie opisuje scale-to-zero. <span class="verify">[nie testowane na 1.23]</span></p>
+    </div>
+  </div>
+
+  <div class="callout cold prose"><b>Pułapka:</b> KEDA bez dodatku HTTP nie przytrzyma żądania, gdy podów jest zero. Klient dostanie błąd połączenia. Dla HTTP od zera zostaje activator w Knative albo interceptor z KEDA HTTP Add-on (beta).</div>
+</section>
+
+<section id="wybor" class="prose">
+  <h2><span class="num">9</span>Co wybrać</h2>
+  <div class="table-wrap">
+    <table style="min-width:600px">
+      <thead><tr><th>Sytuacja</th><th>Mechanizm</th></tr></thead>
+      <tbody>
+        <tr><th>API HTTP, ruch zmienny, może spać</th><td>KPA, <code>concurrency</code>. Ustaw <code>target</code> pod czas odpowiedzi i <code>max-scale</code>.</td></tr>
+        <tr><th>Wolne, ciężkie żądania (generowanie obrazów)</th><td>KPA z <code>containerConcurrency: 1</code> albo kilka. Pod nie dostanie więcej żądań naraz, niż mieści. Przy 70% wykorzystania autoskaler trzyma ok. 40% podów zapasu.</td></tr>
+        <tr><th>Kolejka, Kafka, Redis, zadania wsadowe</th><td>KEDA z triggerem tego źródła. Prometheus dopiero wtedy, gdy liczba jest tylko tam.</td></tr>
+        <tr><th>Metryka biznesowa z Prometheusa</th><td>KEDA, trigger <code>prometheus</code>.</td></tr>
+        <tr><th>Stały ruch, obciąża CPU, zawsze warm</th><td>Zwykły Deployment z HPA albo ksvc klasy HPA, jeśli zależy Ci na rewizjach.</td></tr>
+        <tr><th>Zdarzenia przez Knative Eventing z Kafki</th><td>Usługa jako ksvc (KPA). Źródło <code>KafkaSource</code> można skalować przez KEDA.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="klaster" class="prose">
+  <h2><span class="num">10</span>Zobacz na klastrze</h2>
+<pre><span class="c"># decyzje autoskalera na żywo: DESIRED, ACTUAL</span>
+kubectl get kpa -n demo -w
+
+<span class="c"># wejście i wyjście z paniki</span>
+kubectl -n knative-serving logs deploy/autoscaler -f | grep -E "PANICKING|Un-panicking"
+
+<span class="c"># globalne ustawienia (klucze z przykładami są w _example)</span>
+kubectl -n knative-serving get cm config-autoscaler -o yaml
+
+<span class="c"># KEDA: aktywność i HPA, który utworzyła</span>
+kubectl get scaledobject,hpa -n demo
+kubectl describe scaledobject generator -n demo</pre>
+  <p>Po włączeniu <code>metrics-protocol: prometheus</code> (robi to <code>platform.sh --monitoring</code>) autoskaler wystawia swoje liczby. Te zapytania pokazują w Grafanie to samo, co symulator:</p>
+<pre>kn_revision_concurrency_stable{kn_service_name="meme-gen"}   <span class="c"># średnia z 60 s</span>
+kn_revision_concurrency_panic{kn_service_name="meme-gen"}    <span class="c"># średnia z 6 s</span>
+kn_revision_pods_desired{kn_service_name="meme-gen"}
+kn_revision_pods_count{kn_service_name="meme-gen"}
+kn_revision_panic_mode{kn_service_name="meme-gen"}           <span class="c"># 1 = panika</span></pre>
+</section>
+
+<section id="sprawdz" class="prose">
+  <h2><span class="num">11</span>Sprawdź się</h2>
+  <details><summary>Usługa ma 400 RPS i odpowiada w 50 ms. Ustawienia domyślne. Ile podów?</summary><p>Jeden. Concurrency to 400 × 0,05 = 20, a pod mieści 100 × 70% = 70. Wysoki RPS nie oznacza wielu podów, jeśli żądania są krótkie. Sprawdzisz to w LAB 5.</p></details>
+  <details><summary>Ruch spadł po skoku, a pody wiszą jeszcze ponad minutę. Dlaczego?</summary><p>Dwa powody. W panice autoskaler nie zmniejsza skali i wychodzi z niej dopiero po pełnym stable window bez warunku paniki. Potem liczy z 60-sekundowej średniej, która opada powoli. Hamulec <code>max-scale-down-rate</code> (najwyżej połowa podów na krok co 2 s) prawie nic tu nie dokłada.</p></details>
+  <details><summary>Szpilka trwa 2 s i ma 10× normalny ruch. Czy wywoła panikę?</summary><p>Zależy od zapasu. Średnia z 6 s wyniesie około (2 × 10 + 4 × 1) ÷ 6 = 4× normalnego ruchu. Próg 200% dotyczy jednak podów: panika zaczyna się, gdy pody potrzebne według tej średniej to co najmniej 2× gotowe pody. Jeśli pody pracują blisko celu, tak. Jeśli mają zapas, nie: 10 żądań naraz na 1 podzie (cel 70) skacze średnio do 40, a to nadal 1 pod. Gdy panika się zacznie, pody zostaną przez co najmniej 60 s. Jeśli takie szpilki są normalne, podnieś <code>panic-threshold-percentage</code> albo wydłuż <code>panic-window-percentage</code>.</p></details>
+  <details><summary>Chcesz, żeby ksvc skalował się po <code>rate(http_requests_total[1m])</code> z Prometheusa. Wpisujesz to w adnotację <code>metric</code> klasy KPA. Co się stanie?</summary><p>Nic dobrego. KPA zna tylko <code>concurrency</code> i <code>rps</code> mierzone w queue-proxy, webhook odrzuci inną wartość. Potrzebujesz klasy HPA z prometheus-adapterem, rozszerzenia autoscaler-keda albo Deploymentu z KEDA.</p></details>
+  <details><summary>Generator miniatur przetwarza jedno zdjęcie naraz przez 2 s. Co ustawić?</summary><p><code>containerConcurrency: 1</code>. Wtedy target też wynosi 1, ale wykorzystanie 70% nadal działa: cel to 0,7 na pod, więc 10 żądań w toku daje ⌈10 ÷ 0,7⌉ = 15 podów. Dokładnie pod na żądanie da dopiero <code>target-utilization-percentage: "100"</code>. Dobrze jest też ustawić <code>target-burst-capacity: "-1"</code>, żeby activator wysyłał żądania tylko do wolnych podów (notatka o activatorze).</p></details>
+  <details><summary>Zadania wpadają do Redisa i nikt nie czeka na odpowiedź HTTP. Knative czy KEDA?</summary><p>KEDA z triggerem <code>redis</code>, jak w demo 11. Knative skaluje po żądaniach HTTP, a tu żądań nie ma, jest kolejka. KEDA odczyta jej długość bezpośrednio, bez Prometheusa.</p></details>
+  <details><summary>Ustawiłeś KEDA z <code>minReplicaCount: 0</code> dla API HTTP. Pierwszy klient po nocy dostaje błąd. Czemu?</summary><p>Przy zerze replik Service nie ma żadnego endpointu, a KEDA nie przytrzyma żądania. Dowie się o ruchu dopiero z metryki, a tej nie ma, bo żądanie nie doszło. Rozwiązania: Knative (activator), KEDA HTTP Add-on albo <code>minReplicaCount: 1</code>.</p></details>
+</section>
+
+<p class="src prose" style="margin-top:48px">Źródła: dokumentacja Knative Serving (Autoscaling: Concurrency, RPS, Scale bounds, Additional configuration), kod <code>pkg/autoscaler/scaling/autoscaler.go</code>, dokumentacja KEDA (Scaling Deployments, Prometheus scaler), próby demo 06 i 11 z 01.11.2026. Punkty oznaczone <span class="verify">[nie testowane]</span> nie były testowane na klastrze szkoleniowym.</p>
+
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n, d = 1) => Number(n).toLocaleString('pl-PL', { maximumFractionDigits: d });
+  const podWord = (n) => {
+    if (n === 1) return 'pod';
+    const d = n % 10, h = n % 100;
+    return (d >= 2 && d <= 4 && !(h >= 12 && h <= 14)) ? 'pody' : 'podów';
+  };
+  const podGen = (n) => n === 1 ? 'poda' : 'podów';
+
+  /* ---------- 1. Oś czasu concurrency ---------- */
+  function drawTimeline() {
+    const rps = +$('lt-rps').value, lat = +$('lt-lat').value, cur = +$('lt-cur').value;
+    $('lt-rps-v').textContent = rps + '/s';
+    $('lt-lat-v').textContent = lat + ' ms';
+    $('lt-cur-v').textContent = fmt(cur / 1000, 2) + ' s';
+    const W = 900, x0 = 40, x1 = 880, span = 3000;
+    const X = (ms) => x0 + (ms / span) * (x1 - x0);
+    // przyjścia z lekkim, powtarzalnym rozrzutem; start wcześniej, żeby oś była już „rozgrzana”
+    const gap = 1000 / rps, reqs = [];
+    let i = 0;
+    for (let t = -lat; t < span; t += gap, i++) {
+      const jitter = (Math.sin(i * 12.9898) * 43758.5453) % 1;
+      const s = t + jitter * gap * 0.6;
+      reqs.push({ s, e: s + lat });
+    }
+    // przydział torów: pierwszy wolny
+    const lanes = [];
+    reqs.forEach(r => {
+      let k = lanes.findIndex(end => end <= r.s);
+      if (k < 0) { k = lanes.length; lanes.push(0); }
+      lanes[k] = r.e; r.lane = k;
+    });
+    const top = 16, bottom = 214, lh = Math.min(14, (bottom - top) / Math.max(lanes.length, 1));
+    let out = '';
+    for (let s = 0; s <= span; s += 500) {
+      out += `<line class="lt-grid" x1="${X(s)}" y1="${top - 6}" x2="${X(s)}" y2="${bottom + 4}"/>`;
+      out += `<text class="lt-tick" x="${X(s)}" y="${bottom + 22}" text-anchor="middle">${fmt(s / 1000, 1)} s</text>`;
+    }
+    let now = 0;
+    reqs.forEach(r => {
+      if (r.e < 0 || r.s > span) return;
+      const on = r.s <= cur && cur < r.e;
+      if (on) now++;
+      const a = Math.max(0, r.s), b = Math.min(span, r.e);
+      out += `<rect class="lt-req${on ? ' on' : ''}" x="${X(a)}" y="${top + r.lane * lh}" width="${Math.max(2, X(b) - X(a))}" height="${Math.max(2, lh - 2)}" rx="2"/>`;
+    });
+    out += `<line class="lt-cursor" x1="${X(cur)}" y1="${top - 10}" x2="${X(cur)}" y2="${bottom + 6}"/>`;
+    const lx = X(cur) > 760 ? X(cur) - 8 : X(cur) + 8;
+    out += `<text class="lt-cnt" x="${lx}" y="${top - 1}" text-anchor="${X(cur) > 760 ? 'end' : 'start'}">${now} w toku</text>`;
+    $('ltsvg').innerHTML = out;
+    const avg = rps * lat / 1000;
+    $('lt-now').textContent = now;
+    $('lt-avg').textContent = fmt(avg);
+    $('lt-why').textContent = `${rps} żądań/s, każde trwa ${lat} ms, więc średnio ${fmt(avg)} naraz. Chwilowa liczba skacze wokół średniej, dlatego autoskaler uśrednia pomiary w oknie zamiast reagować na każdy.`;
+  }
+  ['lt-rps', 'lt-lat', 'lt-cur'].forEach(id => $(id).addEventListener('input', drawTimeline));
+  drawTimeline();
+
+  /* ---------- 2. Kalkulator ---------- */
+  function calc() {
+    const rps = Math.max(0, +$('c-rps').value || 0), lat = Math.max(0, +$('c-lat').value || 0);
+    const t = Math.max(1, +$('c-t').value || 1), u = Math.min(100, Math.max(1, +$('c-u').value || 70));
+    const rt = Math.max(1, +$('c-rt').value || 200);
+    const conc = rps * lat / 1000;
+    const perPod = t * u / 100;
+    const pc = conc > 0 ? Math.ceil(conc / perPod) : 0;
+    const pr = rps > 0 ? Math.ceil(rps / (rt * u / 100)) : 0;
+    $('c-conc').textContent = fmt(conc, 2);
+    $('c-pc').textContent = pc;
+    $('c-pr').textContent = pr;
+    let why = `Na pod przypada ${fmt(perPod)} żądań naraz (${t} × ${u}%). `;
+    if (pc === pr) why += `Obie metryki dają ${pc} ${podWord(pc)}.`;
+    else if (pc > pr) why += `Metryka rps nie widzi, że żądania trwają ${lat} ms, i dałaby za mało podów: ${pr} zamiast ${pc}.`;
+    else why += `Żądania są krótkie, więc concurrency jest mała. Metryka rps dałaby ${pr} ${podWord(pr)}, czyli więcej, niż potrzeba.`;
+    $('c-why').textContent = why;
+  }
+  ['c-rps', 'c-lat', 'c-t', 'c-u', 'c-rt'].forEach(id => $(id).addEventListener('input', calc));
+  $('calc-presets').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    $('c-rps').value = b.dataset.rps; $('c-lat').value = b.dataset.lat;
+    $('c-t').value = b.dataset.t; $('c-u').value = b.dataset.u;
+    calc();
+  });
+  calc();
+
+  /* ---------- 3. Symulator KPA ---------- */
+  const T = 240, ZERO_DELAY = 4;
+  const wobble = (t) => 1 + 0.08 * Math.sin(t * 1.7) + 0.05 * Math.sin(t * 0.37 + 1);
+  const PRESETS = {
+    spike: { start: 1, f: (t) => t < 20 ? 3 : t < 100 ? 45 : t < 160 ? 3 : 0 },
+    ramp: { start: 2, f: (t) => t < 150 ? 14 + 46 * t / 150 : t < 200 ? 60 : 60 - 40 * (t - 200) / 40 },
+    zero: { start: 0, f: (t) => t < 30 ? 0 : t < 60 ? 10 : t < 170 ? 0 : 30 },
+    spikes: { start: 1, f: (t) => ([40, 110, 180].some(s => t >= s && t < s + 3) ? 60 : 5) }
+  };
+  let preset = 'spike', sim = null;
+
+  function params() {
+    return {
+      target: +$('s-target').value, util: +$('s-util').value, window: +$('s-window').value,
+      thr: +$('s-thr').value, startup: +$('s-start').value, min: +$('s-min').value,
+      max: +$('s-max').value, delay: +$('s-delay').value
+    };
+  }
+
+  function simulate(p) {
+    const C = [];
+    for (let t = 0; t < T; t++) {
+      const v = PRESETS[preset].f(t);
+      C.push(v > 0 ? Math.round(v * wobble(t) * 10) / 10 : 0);
+    }
+    const cap = p.target * p.util / 100;
+    const PW = Math.max(1, Math.round(p.window * 0.1));
+    let pods = [];
+    const start = Math.max(p.min, PRESETS[preset].start);
+    for (let i = 0; i < start; i++) pods.push(0);
+    let panicking = false, panicTime = -1, maxPanic = 0, zeroSince = null;
+    let desired = start, dS = 0, dP = 0;
+    const hist = [], out = [], events = [];
+    const avg = (t, w) => { let s = 0, n = 0; for (let i = Math.max(0, t - w + 1); i <= t; i++) { s += C[i]; n++; } return s / n; };
+    let prevReady = pods.length;
+
+    for (let t = 0; t < T; t++) {
+      const ready = pods.filter(r => r <= t).length;
+      const sA = avg(t, p.window), pA = avg(t, PW);
+      const poke = pods.length === 0 && C[t] > 0;
+      if (poke && (t === 0 || C[t - 1] === 0)) events.push({ t, cls: '', txt: 'Żądanie przy zerze podów: activator je trzyma i budzi autoskaler.' });
+      if (t % 2 === 0 || poke) {
+        const rr = Math.max(1, ready);
+        const up = Math.ceil(1000 * rr), down = Math.floor(rr / 2);
+        dS = sA > 0 ? Math.ceil(sA / cap) : 0;
+        dP = pA > 0 ? Math.ceil(pA / cap) : 0;
+        dS = Math.min(Math.max(dS, down), up);
+        dP = Math.min(Math.max(dP, down), up);
+        const over = dP / rr >= p.thr / 100;
+        if (over) {
+          if (!panicking) { panicking = true; maxPanic = 0; events.push({ t, cls: 'p', txt: `PANICKING. Średnia z ${PW} s wymaga ${dP} ${podGen(dP)}, gotowych ${ready}.` }); }
+          panicTime = t;
+        } else if (panicking && t - panicTime >= p.window) {
+          panicking = false; maxPanic = 0;
+          events.push({ t, cls: 'u', txt: `Un-panicking. ${p.window} s bez warunku paniki.` });
+        }
+        let d = dS;
+        if (panicking) { if (dP > maxPanic) maxPanic = dP; d = maxPanic; }
+        hist.push([t, d]);
+        if (p.delay > 0) for (const [ht, hd] of hist) if (ht > t - p.delay && hd > d) d = hd;
+        if (p.max > 0) d = Math.min(d, p.max);
+        d = Math.max(d, p.min);
+        desired = d;
+      }
+      // uzgadnianie z Deploymentem
+      if (desired === 0 && pods.length > 0) {
+        if (zeroSince === null) zeroSince = t;
+        if (t - zeroSince >= ZERO_DELAY) { pods = []; events.push({ t, cls: '', txt: 'Skala 0. Ruch znowu przechodzi przez activator.' }); }
+      } else {
+        zeroSince = null;
+        if (desired > pods.length) { const n = desired - pods.length; for (let i = 0; i < n; i++) pods.push(t + p.startup); }
+        else if (desired < pods.length) { pods.sort((a, b) => a - b); pods = pods.slice(0, desired); }
+      }
+      const readyNow = pods.filter(r => r <= t).length;
+      if (prevReady === 0 && readyNow > 0 && t > 0) events.push({ t, cls: 'u', txt: 'Pierwszy pod gotowy, activator przekazuje żądania.' });
+      if (p.max > 0 && dS > p.max && !(out[t - 1] && out[t - 1].capped)) events.push({ t, cls: 'p', txt: `Potrzeba ${dS} ${podGen(dS)}, max-scale obcina do ${p.max}.` });
+      prevReady = readyNow;
+      out.push({ C: C[t], sA, pA, dS, dP, desired, ready: readyNow, pending: pods.length - readyNow, panicking, PW, capped: p.max > 0 && dS > p.max });
+    }
+    return { out, events, PW, cap };
+  }
+
+  const G = { x0: 46, x1: 884, t0: 18, t1: 210, b0: 250, b1: 380 };
+  const X = (t) => G.x0 + (t / (T - 1)) * (G.x1 - G.x0);
+  function niceMax(v) {
+    if (v <= 5) return 5;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+    return 10 * p;
+  }
+
+  function drawChart() {
+    const p = params(), { out } = sim;
+    const maxC = niceMax(Math.max(...out.map(o => Math.max(o.C, o.sA, o.pA, o.ready * p.target))) * 1.08);
+    const maxP = Math.max(4, ...out.map(o => Math.max(o.desired, o.ready + o.pending))) + 1;
+    const YC = (v) => G.t1 - (Math.min(v, maxC) / maxC) * (G.t1 - G.t0);
+    const YP = (v) => G.b1 - (v / maxP) * (G.b1 - G.b0);
+    let s = '';
+    // pasy paniki
+    let st = null;
+    out.forEach((o, t) => {
+      if (o.panicking && st === null) st = t;
+      if ((!o.panicking || t === T - 1) && st !== null) {
+        const end = o.panicking ? t : t - 1;
+        s += `<rect class="ch-band" x="${X(st)}" y="${G.t0 - 4}" width="${Math.max(2, X(end + 1) - X(st))}" height="${G.b1 - G.t0 + 4}"/>`;
+        s += `<text class="ch-bandlbl" x="${X(st) + 4}" y="${G.b0 - 10}">panika</text>`;
+        st = null;
+      }
+    });
+    // siatka i osie
+    for (let i = 0; i <= 4; i++) {
+      const v = maxC * i / 4, y = YC(v);
+      s += `<line class="ch-grid" x1="${G.x0}" y1="${y}" x2="${G.x1}" y2="${y}"/><text class="ch-tick" x="${G.x0 - 6}" y="${y + 4}" text-anchor="end">${fmt(v, 0)}</text>`;
+    }
+    const pStep = maxP > 12 ? Math.ceil(maxP / 4) : maxP > 6 ? 2 : 1;
+    for (let v = 0; v <= maxP; v += pStep) {
+      const y = YP(v);
+      s += `<line class="ch-grid" x1="${G.x0}" y1="${y}" x2="${G.x1}" y2="${y}"/><text class="ch-tick" x="${G.x0 - 6}" y="${y + 4}" text-anchor="end">${v}</text>`;
+    }
+    for (let t = 0; t < T; t += 30) s += `<text class="ch-tick" x="${X(t)}" y="${G.b1 + 18}" text-anchor="middle">${t} s</text>`;
+    s += `<text class="ch-title" x="${G.x0}" y="${G.t0 - 6}">CONCURRENCY</text>`;
+    s += `<text class="ch-title" x="${G.x0}" y="${G.b0 - 26}">PODY</text>`;
+    // ruch (pole)
+    let a = `M${X(0)},${YC(0)}`;
+    out.forEach((o, t) => { a += ` L${X(t)},${YC(o.C)}`; });
+    a += ` L${X(T - 1)},${YC(0)} Z`;
+    s += `<path class="ch-demand" d="${a}"/>`;
+    const line = (fn, cls, step) => {
+      let d = '';
+      out.forEach((o, t) => {
+        const y = fn(o);
+        if (!d) d = `M${X(t)},${y}`;
+        else if (step) d += ` L${X(t)},${fn(out[t - 1])} L${X(t)},${y}`;
+        else d += ` L${X(t)},${y}`;
+      });
+      return `<path class="${cls}" d="${d}"/>`;
+    };
+    s += line(o => YC(o.ready * p.target), 'ch-cap', true);
+    s += line(o => YC(o.pA), 'ch-panic');
+    s += line(o => YC(o.sA), 'ch-stable');
+    // pody: gotowe jako pole schodkowe
+    let r = `M${X(0)},${YP(0)} L${X(0)},${YP(out[0].ready)}`;
+    out.forEach((o, t) => { if (t) r += ` L${X(t)},${YP(out[t - 1].ready)} L${X(t)},${YP(o.ready)}`; });
+    r += ` L${X(T - 1)},${YP(0)} Z`;
+    s += `<path class="ch-ready" d="${r}"/>`;
+    s += line(o => YP(o.desired), 'ch-desired', true);
+    s += `<line class="ch-cursor" id="ch-cur" x1="0" y1="${G.t0 - 4}" x2="0" y2="${G.b1}"/>`;
+    $('simchart').innerHTML = s;
+  }
+
+  function showAt(t) {
+    const p = params(), o = sim.out[t];
+    $('s-t').value = t;
+    $('s-t-v').textContent = t + ' s';
+    const cur = $('ch-cur');
+    if (cur) { cur.setAttribute('x1', X(t)); cur.setAttribute('x2', X(t)); }
+    $('st-c').textContent = fmt(o.C);
+    $('st-sa-l').textContent = `średnia ${p.window} s`;
+    $('st-pa-l').textContent = `średnia ${o.PW} s`;
+    $('st-sa').textContent = fmt(o.sA);
+    $('st-pa').textContent = fmt(o.pA);
+    $('st-p').textContent = `${o.desired} / ${o.ready} / ${o.pending}`;
+    // pody
+    const row = $('st-pods');
+    let h = '';
+    const per = o.ready ? o.C / o.ready : 0;
+    for (let i = 0; i < o.ready; i++) {
+      const pct = Math.min(100, per / p.target * 100);
+      h += `<div class="pod${per > p.target ? ' over' : ''}" title="gotowy, ${fmt(per)} żądań w toku"><i style="height:${pct}%"></i></div>`;
+    }
+    for (let i = 0; i < o.pending; i++) h += `<div class="pod pending" title="startuje"></div>`;
+    const act = o.ready === 0 && o.C > 0;
+    if (act) h += `<span class="actchip">activator trzyma ${fmt(o.C)} żądań</span>`;
+    if (!o.ready && !o.pending && !act) h += `<span class="zerochip">0 podów</span>`;
+    row.innerHTML = h;
+    // tryb
+    const mode = $('st-mode');
+    if (o.panicking) { mode.className = 'mode panic'; mode.textContent = 'PANIKA'; }
+    else if (!o.ready && !o.pending) { mode.className = 'mode zero'; mode.textContent = 'zero podów'; }
+    else { mode.className = 'mode stable'; mode.textContent = 'stabilny'; }
+    // opis
+    const cap = fmt(p.target * p.util / 100);
+    let n;
+    if (act) n = `Nie ma gotowego poda. Żądania czekają w activatorze, który od razu zgłosił je autoskalerowi. Pod startuje ${p.startup} s, tyle trwa tu cold start.`;
+    else if (o.panicking) n = `Panika. Średnia z ${o.PW} s (${fmt(o.pA)}) wymaga ${o.dP} ${podGen(o.dP)}. Autoskaler trzyma największą liczbę z całej paniki (${o.desired}) i nie zmniejsza skali, dopóki przez ${p.window} s nie minie warunek paniki.`;
+    else if (!o.ready && !o.pending) n = `Usługa śpi i nic nie kosztuje. Pierwsze żądanie obudzi ją przez activator.`;
+    else if (o.desired === 0) n = `Średnia z ${p.window} s spadła do zera. Autoskaler chce 0 podów. Pod zniknie, gdy activator wróci do ścieżki (tu ${ZERO_DELAY} s, najwyżej scale-to-zero-grace-period = 30 s).`;
+    else if (o.desired < o.ready) n = `Ruch spadł, ale średnia z ${p.window} s opada powoli. Autoskaler zdejmuje pody stopniowo, najwyżej połowę w jednym kroku.`;
+    else if (o.pending > 0) n = `Autoskaler chce ${o.desired} ${podWord(o.desired)}, ${o.pending} jeszcze startuje. Do tego czasu ruch obsługują gotowe pody${per > p.target ? ', ponad target, więc żądania czekają w queue-proxy' : ''}.`;
+    else if (p.delay > 0 && o.desired > o.dS) n = `scale-down-delay trzyma ${o.desired} ${podWord(o.desired)} jeszcze przez chwilę, choć średnia wystarczyłaby na ${o.dS}.`;
+    else n = `Tryb stabilny: ${fmt(o.sA)} ÷ ${cap} = ${fmt(o.sA / (p.target * p.util / 100), 2)} → ${o.desired} ${podWord(o.desired)}.`;
+    $('st-narr').textContent = n;
+    document.querySelectorAll('#st-events li').forEach(li => { li.className = (+li.dataset.t <= t) ? 'past' : 'future'; });
+  }
+
+  function renderEvents() {
+    const ul = $('st-events');
+    ul.innerHTML = sim.events.length ? sim.events.map(e => `<li data-t="${e.t}"><time>${e.t} s</time><span class="${e.cls}">${e.txt}</span></li>`).join('') : '<li><span>Brak zdarzeń: autoskaler cały czas w trybie stabilnym.</span></li>';
+  }
+
+  function labels() {
+    const p = params();
+    $('s-target-v').textContent = p.target;
+    $('s-util-v').textContent = p.util + '%';
+    $('s-window-v').textContent = p.window + ' s (panika ' + Math.max(1, Math.round(p.window * 0.1)) + ' s)';
+    $('s-thr-v').textContent = p.thr + '%';
+    $('s-start-v').textContent = p.startup + ' s';
+    $('s-min-v').textContent = p.min;
+    $('s-max-v').textContent = p.max ? p.max : 'bez limitu';
+    $('s-delay-v').textContent = p.delay + ' s';
+  }
+
+  function rerun() {
+    labels();
+    sim = simulate(params());
+    drawChart();
+    renderEvents();
+    showAt(+$('s-t').value);
+  }
+
+  ['s-target', 's-util', 's-window', 's-thr', 's-start', 's-min', 's-max', 's-delay'].forEach(id => $(id).addEventListener('input', rerun));
+  $('s-t').addEventListener('input', () => showAt(+$('s-t').value));
+  $('sim-presets').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    preset = b.dataset.p;
+    document.querySelectorAll('#sim-presets button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    rerun();
+  });
+  const chart = $('simchart');
+  const fromPointer = (e) => {
+    const r = chart.getBoundingClientRect();
+    const vx = (e.clientX - r.left) / r.width * 900;
+    const t = Math.round((vx - G.x0) / (G.x1 - G.x0) * (T - 1));
+    showAt(Math.max(0, Math.min(T - 1, t)));
+  };
+  let dragging = false;
+  chart.addEventListener('pointerdown', (e) => { dragging = true; stop(); fromPointer(e); });
+  window.addEventListener('pointermove', (e) => { if (dragging) fromPointer(e); });
+  window.addEventListener('pointerup', () => { dragging = false; });
+
+  let timer = null;
+  function stop() { if (timer) { clearInterval(timer); timer = null; $('sim-play').textContent = '▶ Odtwórz'; } }
+  $('sim-play').addEventListener('click', () => {
+    if (timer) return stop();
+    let t = +$('s-t').value;
+    if (t >= T - 1) t = 0;
+    $('sim-play').textContent = '❚❚ Pauza';
+    timer = setInterval(() => {
+      showAt(t);
+      t++;
+      if (t >= T) stop();
+    }, 60);
+  });
+
+  rerun();
+
+  /* ---------- 4. Zakładki ---------- */
+  const tabs = Array.from(document.querySelectorAll('#tabs [role="tab"]'));
+  function select(tab) {
+    tabs.forEach(t => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      $(t.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => select(t));
+    t.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      select(n); n.focus();
+    });
+  });
+})();
+</script>

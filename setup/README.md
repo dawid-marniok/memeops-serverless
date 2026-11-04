@@ -28,6 +28,19 @@ Opcje `platform.sh` (można dołożyć później, skrypt jest idempotentny):
 | `--cert-manager` | HTTPS dla funkcji (LAB 6, dla chętnych) |
 | `--bez-obrazow` | ponowne uruchomienie bez budowania `meme-api` |
 
+## Narzędzia
+
+| Narzędzie | Do czego | Gdzie |
+|---|---|---|
+| `kind` | klaster Kubernetes w kontenerach Dockera | `platform.sh` |
+| `kubectl` | praca z klastrem: zasoby, logi, `describe` | wszystkie laby |
+| `helm` | instalacja kube-prometheus-stack | `platform.sh --monitoring` |
+| `kn` | CLI Knative: `kn service create/update`, rewizje, traffic split | od LAB 1 |
+| `func` | Knative Functions: funkcja z szablonu, obraz bez Dockerfile, wdrożenie jako Knative Service | LAB 3 |
+| `k6` | test obciążeniowy (scenariusz w JS, `tools/keynote.js`) | LAB 5, LAB 6 |
+| `stern` | logi z wielu podów naraz, także tych, które dopiero wstają | LAB 8 |
+| Trivy | skaner podatności obrazów; nie instalujemy go, `ci/pipeline.sh` uruchamia kontener `aquasec/trivy` | LAB 7 |
+
 ## Wersje
 
 Wszystkie wersje są przypięte w [`versions.env`](versions.env): Knative 1.23 (wymaga Kubernetesa ≥ 1.34, klaster ma 1.35), k6 2.x, Trivy 0.75.

@@ -1,8 +1,8 @@
 # lab08 — Awaria w piątek 16:55
 
-| Dzień | Czas | Po bloku |
-|---|---|---|
-| 2 | 40 min | 2.4 Monitoring, logi i troubleshooting |
+| Dzień | Po bloku |
+|---|---|
+| 2 | 2.4 Monitoring, logi i troubleshooting |
 
 > **Zgłoszenie od PO:** „Piątek, 16:55. Zespół wypchnął trzy zmiany przed weekendem. Telefony od organizatora się urywają.”
 
@@ -13,7 +13,7 @@
 ## Przed startem
 
 ```bash
-tools/dogon.sh lab08            # tylko jeśli LAB 7 nie skończony
+tools/start-lab.sh lab08            # tylko jeśli LAB 7 nie skończony
 labs/lab08-awaria/sprawdz.sh    # → SUKCES: 4/4 (zdrowy stan przed awariami)
 ```
 
