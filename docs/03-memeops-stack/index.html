@@ -335,7 +335,7 @@ pre .c { color: var(--code-comment); }
   <text class="note" x="900" y="736">Aplikacja MemeOps nie ma bazy.</text>
 
   <!-- rząd 3 -->
-  <g class="ns kn opt"><rect x="366" y="782" width="240" height="108" rx="10"/><text class="nsl" x="380" y="801">knative-eventing</text><text class="t" x="380" y="824">Knative Eventing 1.23</text><text class="s" x="380" y="844">tylko na demo 04</text><text class="s" x="380" y="862">demo/04-eventing/prepare.sh</text></g>
+  <g class="ns kn opt"><rect x="366" y="782" width="240" height="108" rx="10"/><text class="nsl" x="380" y="801">knative-eventing</text><text class="t" x="380" y="824">Knative Eventing 1.23</text><text class="s" x="380" y="844">tylko na demo 04</text><text class="s" x="380" y="862">instalacja: README dema 04</text></g>
   <g class="ns opt"><rect x="622" y="782" width="244" height="108" rx="10"/><text class="nsl" x="636" y="801">monitoring</text><text class="t" x="636" y="824">Prometheus + Grafana</text><text class="s" x="636" y="844">opcja: --monitoring</text><text class="s" x="636" y="862">Grafana: localhost:3000</text></g>
   <g class="ns k8s"><rect x="882" y="782" width="242" height="108" rx="10"/><text class="nsl" x="896" y="801">kube-system</text><text class="t" x="896" y="824">zwykły Kubernetes</text><text class="s" x="896" y="844">apiserver · etcd · scheduler</text><text class="s" x="896" y="862">CoreDNS · kube-proxy · kindnet</text></g>
 
@@ -415,7 +415,7 @@ pre .c { color: var(--code-comment); }
         <tr><th scope="row">Obrazy startowe</th><td><code>meme-api:v1</code> i <code>meme-api:v2</code>, gotowe na LAB 2.</td><td>krok 5/6</td><td><code>localhost:5001/meme-api</code></td></tr>
         <tr><th scope="row"><span class="tag opt">opcja</span> Monitoring</th><td>kube-prometheus-stack: Prometheus i Grafana z dashboardem „MemeOps — funkcja Knative”. Login <code>admin</code> / <code>memeops</code>. Przydaje się w LAB 5 i LAB 8.</td><td><code>platform.sh --monitoring</code></td><td><code>monitoring</code>, <code>http://localhost:3000</code></td></tr>
         <tr><th scope="row"><span class="tag opt">opcja</span> cert-manager</th><td>Własne CA i HTTPS dla usług. Tylko w LAB 6, dla chętnych.</td><td><code>platform.sh --cert-manager</code></td><td><code>cert-manager</code></td></tr>
-        <tr><th scope="row"><span class="tag opt">demo</span> Knative Eventing 1.23</th><td>Eventing core, InMemoryChannel i broker. Potrzebny tylko w demo 04 (mem dnia). Ten sam skrypt z <code>--delete</code> go usuwa.</td><td><code>demo/04-eventing/prepare.sh</code></td><td><code>knative-eventing</code></td></tr>
+        <tr><th scope="row"><span class="tag opt">demo</span> Knative Eventing 1.23</th><td>Eventing core, InMemoryChannel i broker. Potrzebny tylko w demo 04 (mem dnia). Instalacja i usunięcie: sekcje „Przygotowanie” i „Sprzątanie” w README dema.</td><td><code>demo/04-eventing/README.md</code></td><td><code>knative-eventing</code></td></tr>
       </tbody>
     </table>
   </div>

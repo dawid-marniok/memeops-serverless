@@ -1,10 +1,5 @@
-# Demo 12: aplikacja Spin (WebAssembly) jako zwykły Deployment z RuntimeClass.
-apiVersion: node.k8s.io/v1
-kind: RuntimeClass
-metadata:
-  name: wasmtime-spin-v2
-handler: spin            # nazwa runtime'u w containerd (containerdConfigPatches w prepare.sh)
----
+# Demo 12, krok 2: ta sama prosta aplikacja HTTP dwa razy — jako moduł Wasm (Spin) i jako kontener Pythona.
+# wasm-hello: runtimeClassName wskazuje Spin; obraz OCI zawiera moduł .wasm i spin.toml.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -1,0 +1,10 @@
+# Demo 12: konfiguracja klastra kind „wasm” z runtime'em Spin.
+# Obraz węzła (ghcr.io/spinframework/containerd-shim-spin/kind) ma już binarkę shima,
+# ale containerd trzeba powiedzieć, że runtime „spin” istnieje. Bez tego pod nie wstanie:
+# „no runtime for "spin" is configured”.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.spin]
+    runtime_type = "io.containerd.spin.v2"

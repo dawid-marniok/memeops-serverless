@@ -1,0 +1,6 @@
+# Demo 04, krok 1: Broker — skrzynka zdarzeń w namespace demo. Nadawcy znają tylko jej adres.
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  name: default
+  namespace: demo

@@ -24,8 +24,8 @@
 ```bash
 cd ~ && func create -l python hello-fn && cd hello-fn
 ls -R; cat func.yaml
-func deploy --builder=host --registry localhost:5001 --registry-insecure --namespace memeops
-curl http://hello-fn.memeops.127.0.0.1.sslip.io/
+func deploy --builder=host --registry localhost:5001 --registry-insecure --namespace memeops   # ok. 1 min
+curl http://hello-fn.memeops.127.0.0.1.sslip.io/             # → OK
 kubectl get ksvc hello-fn -n memeops -o jsonpath='{.spec.template.spec.containers[0].image}'; echo
 cd ~/memeops
 ```
@@ -101,9 +101,11 @@ docker push localhost:5001/meme-gen:1.0.0 && docker push localhost:5001/meme-gen
 curl -s localhost:5001/v2/meme-gen/tags/list
 ```
 
-W `labs/lab03-funkcja-python/meme-gen.yaml` wpisz SHA w adnotacji `memeops/git-sha`, potem:
+Wpisz SHA w adnotacji `memeops/git-sha` w `labs/lab03-funkcja-python/meme-gen.yaml` (w miejsce `UZUPELNIJ`) i wdróż. Możesz to zrobić w edytorze albo jedną komendą:
 
 ```bash
+sed -i "s/UZUPELNIJ/$SHA/" labs/lab03-funkcja-python/meme-gen.yaml
+grep git-sha labs/lab03-funkcja-python/meme-gen.yaml      # memeops/git-sha: "<Twój SHA>"
 kubectl apply -f labs/lab03-funkcja-python/meme-gen.yaml
 kn service describe meme-gen -n memeops
 ```
@@ -154,6 +156,6 @@ tools/start-lab.sh lab03            # tylko jeśli LAB 2 nie skończony (usuwa i
 | Objaw | Co zrobić |
 |---|---|
 | `func deploy`: błąd rejestru | czy jest `--registry-insecure`; `curl localhost:5001/v2/` |
-| `func`: `python3 not found` | builder `host` potrzebuje Pythona 3 na VM: `sudo apt install -y python3 python3-venv` albo pomiń część A |
+| `func deploy`: `ensurepip is not available` / `apt install python3.12-venv` albo `python3 not found` | builder `host` tworzy virtualenv i potrzebuje pakietu venv: `sudo apt install -y python3-venv`, potem `rm -rf .func` w katalogu funkcji i `func deploy` jeszcze raz |
 | nowa rewizja `hello-fn` w `CrashLoopBackOff`, w logach `cannot import name 'new'` | z `func.py` zniknęła funkcja `new()`; wklej plik z kroku A jeszcze raz i `func deploy` |
 | `git rev-parse` nie działa | jesteś poza repo: `cd ~/memeops` |

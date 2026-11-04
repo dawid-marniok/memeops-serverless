@@ -1,0 +1,28 @@
+# Demo 04, krok 3: Triggery — filtr po typie zdarzenia + adresat. Nowy odbiorca = nowy Trigger, nadawcy bez zmian.
+# Trigger 1: zdarzenia z harmonogramu → mem-dnia
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: harmonogram
+  namespace: demo
+spec:
+  broker: default
+  filter:
+    attributes:
+      type: dev.knative.sources.ping
+  subscriber:
+    ref: {apiVersion: serving.knative.dev/v1, kind: Service, name: mem-dnia}
+---
+# Trigger 2: zdarzenia „nowy mem” wysłane przez dowolną aplikację → też mem-dnia
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: nowy-mem
+  namespace: demo
+spec:
+  broker: default
+  filter:
+    attributes:
+      type: memeops.mem.nowy
+  subscriber:
+    ref: {apiVersion: serving.knative.dev/v1, kind: Service, name: mem-dnia}

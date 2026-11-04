@@ -44,14 +44,20 @@ Przeczytaj `meme-gen.yaml`: `secretKeyRef`, `envFrom`, `securityContext`. Ostrze
 U=http://meme-gen.memeops.127.0.0.1.sslip.io
 curl -s -XPOST $U/api/memes -d '{"top":"anonim"}' -w ' → %{http_code}\n'
 export JWT_SECRET=$(kubectl -n memeops get secret meme-jwt -o jsonpath='{.data.JWT_SECRET}' | base64 -d)
-TOKEN=$(tools/token.py ania 120)
+TOKEN=$(tools/token.py ania 120)     # token dla loginu „ania”, ważny 120 minut
 curl -s -XPOST $U/api/memes -H "Authorization: Bearer $TOKEN" -d '{"top":"z tokenem"}' -w ' → %{http_code}\n'
 curl -s $U/api/memes        # galeria bez tokenu
 ```
 
 ✅ `401` bez tokenu, `201` z tokenem, galeria działa bez tokenu. Wklej token w polu na stronie i wygeneruj mema w przeglądarce — znak wodny `#MemeOpsConf 2026` jest z ConfigMap.
 
-Uruchom keynote z tokenem: `k6 run -e TOKEN=$TOKEN tools/keynote.js` (wystarczy 30 s, potem Ctrl+C).
+Krótki test obciążeniowy z tokenem (10 użytkowników przez 30 s, potem k6 sam wypisze podsumowanie):
+
+```bash
+k6 run --vus 10 --duration 30s -e TOKEN=$TOKEN tools/keynote.js
+```
+
+Ostrzeżenie `"cli" level configuration overrode scenarios` jest w porządku: opcje z linii poleceń zastępują scenariusz z pliku. Sprawdź w podsumowaniu `http_req_failed: 0.00%`, czyli wszystkie żądania z tokenem przeszły.
 
 ### 4. Co widzi każdy, kto ma dostęp do namespace'u
 
@@ -79,7 +85,8 @@ kubectl patch cm config-certmanager -n knative-serving --type merge \
   -p '{"data":{"issuerRef":"kind: ClusterIssuer\nname: memeops-ca\n"}}'
 kubectl patch cm config-network -n knative-serving --type merge \
   -p '{"data":{"external-domain-tls":"Enabled","http-protocol":"Redirected"}}'
-kn service list -n memeops          # adresy https://, po ok. 30 s READY True
+kubectl -n knative-serving rollout restart deploy/controller   # kontroler wczytuje integrację z cert-managerem przy starcie
+kn service list -n memeops          # adresy https://, po ok. 1 min READY True (bez restartu: CertificateNotReady bez końca)
 kubectl -n cert-manager get secret memeops-ca -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/memeops-ca.crt
 curl --cacert /tmp/memeops-ca.crt https://meme-gen.memeops.127.0.0.1.sslip.io/api/info
 curl -sI http://meme-gen.memeops.127.0.0.1.sslip.io/ | head -2     # 301 → https

@@ -22,7 +22,14 @@
 
 ### 1. Pillow w `requirements.txt`
 
-W `app/meme-gen/requirements.txt` odkomentuj linię `pillow==12.3.0`. Sprawdź, co by się stało bez tego kroku:
+W `app/meme-gen/requirements.txt` odkomentuj linię `pillow==12.3.0` (usuń `# ` z początku). W edytorze albo komendą:
+
+```bash
+sed -i 's/^# pillow/pillow/' app/meme-gen/requirements.txt
+cat app/meme-gen/requirements.txt        # ostatnia linia: pillow==12.3.0 (bez #)
+```
+
+Sprawdź, co by się stało bez tego kroku (obraz `1.0.0` z LAB 3 nie ma Pillow):
 
 ```bash
 docker run --rm -e MEME_FORMAT=png localhost:5001/meme-gen:1.0.0

@@ -1,4 +1,4 @@
-# Demo 10: funkcja do dema, meme-api v1 z rejestru szkolenia, skaluje do zera po ok. 30 s bez ruchu
+# Demo 10: funkcja do dema, meme-api v1 z rejestru szkolenia, schodzi do zera ok. 30 s po ostatnim żądaniu
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata: {name: meme-trace, namespace: demo}
@@ -9,5 +9,6 @@ spec:
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "0s"
         autoscaling.knative.dev/window: "10s"
     spec:
+      timeoutSeconds: 15     # czas na dokończenie żądań przy wyłączaniu poda (domyślnie 300 s) — pod znika szybciej
       containers:
         - image: localhost:5001/meme-api:v1

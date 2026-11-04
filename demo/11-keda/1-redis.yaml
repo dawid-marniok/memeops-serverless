@@ -1,0 +1,21 @@
+# Demo 11, krok 1: Redis — kolejka zadań (lista „memy”). Zwykły Deployment + Service.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis, namespace: demo}
+spec:
+  selector: {matchLabels: {app: redis}}
+  template:
+    metadata: {labels: {app: redis}}
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.2-alpine
+          ports: [{containerPort: 6379}]
+          resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {memory: 128Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis, namespace: demo}
+spec:
+  selector: {app: redis}
+  ports: [{port: 6379}]

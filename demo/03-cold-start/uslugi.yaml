@@ -11,7 +11,7 @@ spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/window: "10s"
+        autoscaling.knative.dev/window: "30s"   # krótsze okno niż domyślne 60 s, żeby gaśnięcie było widać na pokazie
     spec:
       timeoutSeconds: 15
       containers:
@@ -26,7 +26,7 @@ spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/window: "10s"
+        autoscaling.knative.dev/window: "30s"   # krótsze okno niż domyślne 60 s, żeby gaśnięcie było widać na pokazie
         autoscaling.knative.dev/target-burst-capacity: "0"   # nie trzymaj zapasu na skoki ruchu w activatorze
     spec:
       timeoutSeconds: 15

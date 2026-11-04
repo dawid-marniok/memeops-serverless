@@ -23,7 +23,7 @@
 
 ### 1. Przeczytaj pipeline
 
-Otwórz `ci/pipeline.sh`. Dla każdego etapu odpowiedz: co go zatrzyma? Porównaj z `ci/github-actions.yml` — czym różni się przypięcie akcji po SHA od tagu `@v0.36.0`?
+Otwórz `ci/pipeline.sh` (np. `pluma ci/pipeline.sh &`). Dla każdego etapu odpowiedz: co go zatrzyma? Porównaj z `ci/github-actions.yml` — czym różni się przypięcie akcji po SHA od tagu `@v0.36.0`?
 
 ### 2. Pierwsze uruchomienie
 
@@ -35,7 +35,7 @@ Pierwsze uruchomienie pobiera bazę Trivy (ok. 1 min). Czy pipeline doszedł do 
 
 ### 3. Naprawa i ponowne uruchomienie
 
-Napraw przyczynę **w jednym pliku** (podpowiedź: wróć do tego, co dodałeś w LAB 4), zacommituj i uruchom ponownie:
+Napraw przyczynę **w jednym pliku** (podpowiedź: wróć do tego, co dodałeś w LAB 4). W tabeli Trivy kolumna *Fixed Version* mówi, do jakiej wersji podbić pakiet. Zacommituj i uruchom ponownie:
 
 ```bash
 git config user.name >/dev/null || git config user.name "Uczestnik MemeOps"

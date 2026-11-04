@@ -1,4 +1,4 @@
-# 06 — Keynote na domyślnych ustawieniach
+# 07 — Keynote na domyślnych ustawieniach
 
 **Cel:** zobaczyć, jak `meme-gen` zachowuje się pod obciążeniem z keynote'a, **zanim** dostroisz autoskalowanie. To punkt wyjścia do LAB 5.
 
@@ -26,9 +26,11 @@ kubectl get pods -n memeops -l serving.knative.dev/service=meme-gen -w
 ```
 
 ```bash
-# terminal 2: cisza 20 s → 100 żądań/s przez minutę → cisza
+# terminal 2
 k6 run -e PEAK=100 tools/keynote.js
 ```
+
+`keynote.js` to scenariusz k6: 20 s pojedyncze żądania → w 10 s wzrost do `PEAK` nowych żądań na sekundę → 60 s szczytu → 20 s spadku. `-e PEAK=100` nadpisuje domyślne 40. Próg testu: p95 < 1 s i mniej niż 1% błędów.
 
 Patrz na trzy rzeczy: liczba podów (terminal 1), p95 na dashboardzie, podsumowanie k6.
 

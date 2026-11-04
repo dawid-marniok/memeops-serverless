@@ -36,6 +36,6 @@ REV="meme-gen-$(echo "$VERSION" | tr . -)"
 kn service update meme-gen -n "$NS" --image "$IMAGE" --revision-name "$REV" \
   --env APP_VERSION="$VERSION" --env THEME="$THEME" --annotation-revision "memeops/git-sha=${SHA}" \
   --traffic "$CURRENT=$((100 - PERCENT))" --traffic "@latest=$PERCENT" --tag "@latest=canary"
-kn revision list -n "$NS" -s meme-gen | head -4
+kn revision list -n "$NS" -s meme-gen | sed -n 1,4p   # sed, nie head: head zamyka potok i przy pipefail kn kończy się SIGPIPE
 echo; echo "Canary: $(kubectl get ksvc meme-gen -n $NS -o jsonpath='{.status.traffic[?(@.tag=="canary")].url}')"
 echo "Promocja: kn service update meme-gen -n $NS --traffic $REV=100   Rollback: --traffic $CURRENT=100"

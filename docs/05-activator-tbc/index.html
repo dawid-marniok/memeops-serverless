@@ -328,7 +328,8 @@ spec:
   <h2><span class="num">7</span>Zobacz na klastrze</h2>
   <p>Demo <code>demo/03-cold-start</code> ma dwie identyczne usługi różniące się tylko TBC.</p>
 <pre><span class="c"># tryb SKS na żywo (kolumna MODE) i skala z KPA</span>
-while true; do clear; kubectl get kpa,sks -n demo; sleep 1; done   <span class="c"># -w obsługuje tylko jeden typ zasobu</span>
+kubectl get kpa -n demo -w      <span class="c"># terminal 1: ile podów chce autoskaler / ile jest</span>
+kubectl get sks -n demo -w      <span class="c"># terminal 2: -w obsługuje tylko jeden typ obiektu</span>
 
 <span class="c"># za publicznym Service: IP activatora (Proxy) czy podów (Serve)?</span>
 kubectl get endpointslices -n demo -o wide

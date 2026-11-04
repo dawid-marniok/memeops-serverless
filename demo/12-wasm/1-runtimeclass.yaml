@@ -1,0 +1,6 @@
+# Demo 12, krok 1: RuntimeClass — nazwa, pod którą pody wybierają runtime Spin zamiast domyślnego runc.
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: wasmtime-spin-v2
+handler: spin            # nazwa runtime'u w containerd (containerdConfigPatches w kind-wasm.yaml)

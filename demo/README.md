@@ -23,19 +23,18 @@ Wymagają postawionej platformy: `setup/platform.sh` (z `--monitoring` dla dem 0
 
 - Dema mają własną numerację, niezależną od labów: numer dema to kolejność pokazu, a nie numer labu: np. demo 07 (keynote) należy do LAB 5.
 - Dema używają namespace'u `demo` ([`00-namespace.yaml`](00-namespace.yaml)), więc nie mieszają się z labami (`memeops`). Wyjątki: demo 07 działa na `meme-gen` z LAB 5 (dashboard Grafany pokazuje namespace `memeops`), demo 02 instaluje OpenFaaS w `openfaas`/`openfaas-fn`, demo 10 dokłada namespace `observability`, a demo 12 stawia osobny klaster kind `wasm`.
-- Dema 02, 04, 10, 11 i 12 instalują dodatkowe komponenty skryptem `prepare.sh`. Każdy taki skrypt ma `--delete`, który sprząta po sobie.
+- Każdy krok dema to jedna albo kilka komend, opisanych w README: co robią i co zobaczysz. Skrypty są tylko tam, gdzie generują ruch (k6 w demach 06 i 07).
+- Dema 02, 04, 10, 11 i 12 potrzebują dodatkowych komponentów. Komendy instalacji są w sekcji „Przygotowanie” README dema, a komendy usunięcia — w „Sprzątaniu”.
 - Usługi w demach mają `timeoutSeconds: 15`. Knative ustawia tyle samo czasu na wyłączenie poda, więc pody znikają po kilkunastu sekundach, a nie po 5 minutach (domyślne 300 s).
+- Powtarzasz demo na VM-ce DaDesktop? Ctrl+C nie przerywa tam komend. Komendy, które same się nie kończą (`-w`, `port-forward`), poprzedź `timeout 300` (np. `timeout 300 kubectl get pods -n demo -w`) albo uruchom je w osobnej karcie terminala (File → Open Tab) i zamknij ją (×), gdy skończysz.
 - Wyniki „z próby” pochodzą z laptopa prowadzącego (kind, 8 CPU) z 01.11.2026. Na VM-ce liczby będą inne, proporcje podobne.
 
 ## Sprzątanie
 
+Najpierw sekcja „Sprzątanie” z README każdego dema, którego używałeś (dema 02, 04, 10, 11 i 12 usuwają tam też zainstalowane komponenty). Sprawdź, że flaga z dema 08 jest wyłączona:
+
 ```bash
-demo/02-openfaas/prepare.sh --delete
-demo/04-eventing/prepare.sh --delete
-demo/10-tracing/prepare.sh --delete
-demo/11-keda/prepare.sh --delete
-demo/12-wasm/prepare.sh --delete
-demo/08-bezpieczne-pody/flaga.sh Disabled
+kubectl get configmap config-features -n knative-serving -o jsonpath='{.data.secure-pod-defaults}'; echo   # ma być Disabled
 kubectl delete ns demo --wait=false
 ```
 

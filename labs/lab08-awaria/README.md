@@ -25,7 +25,7 @@ kn revision list -n memeops -s meme-gen
 kubectl get pods -n memeops -l serving.knative.dev/service=meme-gen
 kubectl describe pod -n memeops <pod>
 kubectl get events -n memeops --sort-by=.lastTimestamp | tail -20
-stern -n memeops meme-gen -c user-container
+timeout 120 stern -n memeops meme-gen -c user-container   # logi wszystkich podów na żywo przez 2 min
 ```
 
 Z `--monitoring`: dashboard **MemeOps — funkcja Knative** (kody odpowiedzi, restarty i OOMKilled).
@@ -52,7 +52,15 @@ curl -s -XPOST http://meme-gen.memeops.127.0.0.1.sslip.io/api/memes \
   -H "Authorization: Bearer $(tools/token.py test 10)" -d '{"top":"HD","scale":8}' -w ' → %{http_code}\n'
 ```
 
-Naprawiasz, jak chcesz: `kn service update …`, `kubectl edit ksvc meme-gen -n memeops` albo poprawiony manifest. Po każdej naprawie: `labs/lab08-awaria/sprawdz.sh`.
+Naprawiasz, jak chcesz: `kn service update …`, `kubectl edit ksvc meme-gen -n memeops` albo poprawiony manifest.
+
+**Ważne:** `awaria.sh` nadaje rewizji własną nazwę (`meme-gen-zgloszenie-N-…`, ta sama pułapka co w LAB 7). Każda poprawka musi więc dać rewizji **nową nazwę**, inaczej Knative odrzuci zmianę błędem `Saw the following changes without a name change`. Z `kn` dopisz `--revision-name`, np.:
+
+```bash
+kn service update meme-gen -n memeops <Twoja poprawka> --revision-name meme-gen-naprawa-1   # przy kolejnej: naprawa-2, naprawa-3
+```
+
+W `kubectl edit` zmień pole `spec.template.metadata.name` (albo je usuń). `kubectl edit` domyślnie otwiera vim; prościej z nano: `export KUBE_EDITOR=nano` (zapis **F3** + Enter, wyjście **F2**). Po każdej naprawie: `labs/lab08-awaria/sprawdz.sh`.
 
 ## Dziennik
 
@@ -79,5 +87,5 @@ Skopiuj do `labs/lab08-awaria/dziennik.md`:
 
 | Objaw | Co zrobić |
 |---|---|
-| `kubectl apply`: `Saw the following changes without a name change` | zmień albo usuń `spec.template.metadata.name` (pułapka z LAB 7) |
+| `kn service update` albo `kubectl apply`: `Saw the following changes without a name change` | rewizja potrzebuje nowej nazwy: `kn … --revision-name meme-gen-naprawa-2`, a w YAML-u zmień albo usuń `spec.template.metadata.name` (pułapka z LAB 7) |
 | `sprawdz.sh` czeka długo | pod po OOMKilled się restartuje — poczekaj 20 s i powtórz |

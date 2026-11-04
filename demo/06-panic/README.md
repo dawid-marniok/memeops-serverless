@@ -1,4 +1,4 @@
-# 07 — Tryb panic
+# 06 — Tryb panic
 
 **Cel:** zobaczyć, jak autoskaler Knative reaguje na nagły skok ruchu: przechodzi w tryb panic, liczy ruch z ostatnich 6 s zamiast 60 s i dokłada pody od razu.
 
@@ -26,15 +26,21 @@ kubectl get kpa -n demo panika-00001 -w
 ```
 
 ```bash
-# terminal 2: 20 s spokoju (1 użytkownik), potem nagle 40 naraz przez 40 s
+# terminal 2
 k6 run demo/06-panic/skok.js
 ```
+
+`skok.js` to scenariusz k6 (generator ruchu): 20 s jeden użytkownik, potem w 1 s skok do 40 równoczesnych użytkowników na 40 s. Każdy w pętli tworzy mema PNG (`POST /api/memes`).
+
+👀 W terminalu 1 `DESIREDSCALE` skacze z 1 do 6 w kilka sekund, `ACTUALSCALE` goni.
 
 Po teście:
 
 ```bash
 kubectl logs -n knative-serving deploy/autoscaler --since=5m | grep panika | grep -i panick
 ```
+
+Logi autoskalera z ostatnich 5 min → tylko linie o usłudze `panika` → tylko te o panice. 👀 `PANICKING.` sekundę po skoku i `Un-panicking.` ok. minutę później.
 
 ## Wynik z próby
 

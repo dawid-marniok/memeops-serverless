@@ -8,6 +8,8 @@
 
 **Cel:** sprawdzasz, że klaster z Knative Serving działa, i rozumiesz, z jakich komponentów się składa.
 
+**Zanim zaczniesz:** przeczytaj w [README](../../README.md#praca-na-vm-ce-dadesktop-przeczytaj-przed-lab-1) tabelę „Praca na VM-ce DaDesktop” (kopiowanie komend, Ctrl+C, edytor) i [słowniczek](../../README.md#słowniczek).
+
 **Platforma już stoi.** Twoja VM-ka to klon z gotowym klasterem kind, rejestrem, Knative Serving i Kourierem (postawił je `setup/platform.sh` przed szkoleniem). Nic nie instalujesz, tylko sprawdzasz i czytasz.
 
 ## Kroki
@@ -31,7 +33,7 @@ Nie masz 13/13? Uruchom `setup/platform.sh` (skrypt jest idempotentny, można go
 
 ### 2. Co postawił `setup/platform.sh`
 
-Otwórz `setup/platform.sh` w edytorze i przeczytaj, co robi każdy z 6 kroków (rejestr, klaster kind, Knative Serving, Kourier z domeną, obrazy `meme-api`, sprawdzenie). Zwróć uwagę na dwie rzeczy, które nie są oczywiste:
+Otwórz `setup/platform.sh` w edytorze (`pluma setup/platform.sh &` albo `nano setup/platform.sh`, wyjście z nano: **F2**) i przeczytaj, co robi każdy z 6 kroków (rejestr, klaster kind, Knative Serving, Kourier z domeną, obrazy `meme-api`, sprawdzenie). Zwróć uwagę na dwie rzeczy, które nie są oczywiste:
 - `config-domain` — skąd wezmą się adresy usług (`*.127.0.0.1.sslip.io`),
 - `registries-skipping-tag-resolving` — co Knative normalnie robi z tagiem obrazu (wrócimy do tego w bloku 1.5).
 

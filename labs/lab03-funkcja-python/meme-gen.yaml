@@ -1,5 +1,6 @@
 # LAB 3: meme-gen v1 — memy w SVG, bez zależności.
-# Obraz wskazujemy tagiem semver; Knative i tak zapisze w rewizji, co faktycznie uruchomił.
+# Obraz wskazujemy tagiem semver. Uwaga: dla localhost:5001 Knative NIE zamienia tagu na digest
+# (registries-skipping-tag-resolving w setup/platform.sh) — patrz krok D labu.
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:

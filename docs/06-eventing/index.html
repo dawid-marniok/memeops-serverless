@@ -233,7 +233,7 @@ details p { margin: 10px 0 4px; }
     <li><b>Serving</b> uruchamia usługi HTTP: <code>ksvc</code>, rewizje, traffic split, skalowanie od zera. Dokumentacja: „HTTP-triggered autoscaling container runtime”.</li>
     <li><b>Eventing</b> dostarcza zdarzenia: przyjmuje je od źródeł i rozsyła do odbiorców. Dokumentacja: „CloudEvents-over-HTTP asynchronous routing layer”.</li>
   </ul>
-  <p><b>Eventing instaluje się osobno.</b> <code>platform.sh</code> go nie instaluje. Eventing dokłada dopiero <code>demo/04-eventing/prepare.sh</code>: CRD, rdzeń, InMemoryChannel i broker (cztery pliki z wydania <code>knative-v1.23.0</code>). Dokumentacja mówi wprost, że moduły można używać razem albo osobno.</p>
+  <p><b>Eventing instaluje się osobno.</b> <code>platform.sh</code> go nie instaluje. Eventing instaluje się czterema komendami <code>kubectl apply</code> z sekcji „Przygotowanie” w <code>demo/04-eventing/README.md</code>: CRD, rdzeń, InMemoryChannel i broker (cztery pliki z wydania <code>knative-v1.23.0</code>). Dokumentacja mówi wprost, że moduły można używać razem albo osobno.</p>
   <p><b>Zdarzenie to po prostu HTTP POST.</b> Atrybuty zdarzenia (id, typ, źródło) jadą w nagłówkach <code>Ce-*</code>, a dane w treści. Taki format to CloudEvents (standard CNCF). Dlatego odbiorcą może być każda usługa HTTP, także zwykły Service Kubernetesa, a nie tylko ksvc.</p>
 </section>
 
@@ -541,7 +541,7 @@ Data,
   <h2 class="prose"><span class="num">6</span>Jak powstaje i jak działa Trigger</h2>
   <div class="prose">
     <h3>Tworzysz go jak każdy obiekt w Kubernetesie</h3>
-    <p>Trigger z demo (<code>eventing.yaml</code>) z opisem każdej linii:</p>
+    <p>Trigger z demo (<code>demo/04-eventing/3-triggery.yaml</code>) z opisem każdej linii:</p>
 <pre>apiVersion: eventing.knative.dev/v1
 kind: Trigger
 metadata:
@@ -570,7 +570,7 @@ spec:
     <marker id="t-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ctrl" d="M0 0L10 5L0 10z"/></marker>
   </defs>
 
-  <g class="b proc p-ext"><rect x="20" y="40" width="200" height="110" rx="3"/><text class="k" x="32" y="57">TY · RAZ</text><text class="t" x="32" y="77">kubectl apply</text><text class="s" x="32" y="96">-f eventing.yaml</text><text class="s" x="32" y="114">albo</text><text class="s" x="32" y="131">kn trigger create</text></g>
+  <g class="b proc p-ext"><rect x="20" y="40" width="200" height="110" rx="3"/><text class="k" x="32" y="57">TY · RAZ</text><text class="t" x="32" y="77">kubectl apply</text><text class="s" x="32" y="96">-f 3-triggery.yaml</text><text class="s" x="32" y="114">albo</text><text class="s" x="32" y="131">kn trigger create</text></g>
   <g class="b k8s"><rect x="260" y="40" width="200" height="110" rx="10"/><text class="k" x="272" y="57">API KUBERNETESA</text><text class="t" x="272" y="77">zapisuje Trigger</text><text class="s" x="272" y="96">eventing-webhook</text><text class="s" x="272" y="114">sprawdza pola</text><text class="s" x="272" y="131">(broker, subscriber…)</text></g>
   <g class="b proc p-ev"><rect x="500" y="40" width="200" height="110" rx="3"/><text class="k" x="512" y="57">POD · KNATIVE-EVENTING</text><text class="t" x="512" y="77">mt-broker-controller</text><text class="s" x="512" y="96">1. Broker gotowy?</text><text class="s" x="512" y="114">2. adres odbiorcy</text><text class="s" x="512" y="131">3. tworzy Subscription</text></g>
   <g class="b proc p-ev"><rect x="740" y="40" width="200" height="110" rx="3"/><text class="k" x="752" y="57">POD · KNATIVE-EVENTING</text><text class="t" x="752" y="77">eventing-controller</text><text class="s" x="752" y="96">dopisuje Subscription</text><text class="s" x="752" y="114">do listy odbiorców</text><text class="s" x="752" y="131">kanału</text></g>
@@ -826,7 +826,7 @@ subscription.messaging.knative.dev/default-nowy-mem-60acc3ba-e785-4724-afef-5fe4
 <!-- ============ KLASTER ============ -->
 <section id="klaster" class="prose">
   <h2><span class="num">10</span>Zobacz na klastrze (tylko odczyt)</h2>
-  <p>Działa dopiero po <code>demo/04-eventing/prepare.sh</code>. Bez Eventingu <code>kubectl</code> odpowie, że nie zna typu <code>broker</code> (brak CRD).</p>
+  <p>Działa dopiero po instalacji Eventingu (README dema 04, „Przygotowanie”). Bez Eventingu <code>kubectl</code> odpowie, że nie zna typu <code>broker</code> (brak CRD).</p>
 <pre><span class="c"># czy Eventing w ogóle jest zainstalowany</span>
 kubectl get crd | grep eventing.knative.dev
 

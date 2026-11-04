@@ -31,7 +31,7 @@ Na początku labu prowadzący pokazuje [demo 07 „Keynote na domyślnych ustawi
 | 5 | Decyzja na keynote |
 | 6 | Zagadka galerii |
 
-Otwórz **dwa terminale**. W drugim przez cały lab:
+Otwórz **drugi terminal** (w oknie terminala: File → Open Tab) i uruchom w nim podgląd na cały lab. Gdy skończysz, zamknij tę kartę (×): w terminalu DaDesktop Ctrl+C nie przerywa komend.
 
 ```bash
 watch -n2 'kubectl get kpa -n memeops; echo; kubectl get pods -n memeops -l serving.knative.dev/service=meme-gen'
@@ -54,7 +54,7 @@ docker run --rm -v "$PWD/app/meme-gen:/src:ro" -w /src python:3.12-slim \
 k6 run tools/keynote.js
 ```
 
-Ten sam test widziałeś w demie 07 — powtórz go u siebie, bo na VM-ce liczby będą inne i to one są Twoim punktem odniesienia. Zapisz: maks. liczbę podów, p95 czasu odpowiedzi, odsetek błędów. Domyślny cel to 100 równoczesnych żądań na pod (`kubectl get cm config-autoscaler -n knative-serving -o yaml | grep container-concurrency-target-default`).
+Ten sam test widziałeś w demie 07 — powtórz go u siebie, bo na VM-ce liczby będą inne i to one są Twoim punktem odniesienia. Zapisz: maks. liczbę podów, p95 czasu odpowiedzi (`http_req_duration … p(95)`), odsetek błędów (`http_req_failed`). Czerwone `thresholds … have been crossed` na końcu oznacza tylko, że test przekroczył progi z `keynote.js` (p95 < 1 s, błędy < 1%). To też jest wynik, zapisz go. Domyślny cel to 100 równoczesnych żądań na pod (`kubectl get cm config-autoscaler -n knative-serving -o yaml | grep container-concurrency-target-default`).
 
 ### 3. Przebieg 2: `target: 5`
 
@@ -73,7 +73,7 @@ Wybierz **jedną** zmianę w `autoscaling.yaml`, przewidź wynik, wdróż, spraw
 - `target: "1"` (przesadnie agresywnie),
 - `metric: rps` + `target: "20"`,
 - `max-scale: "2"` (bezpiecznik kosztowy za ciasny),
-- `k6 run -e PEAK=200 -e SCALE=4 tools/keynote.js` (większy szczyt, cięższe memy).
+- `k6 run -e PEAK=100 tools/keynote.js` (2,5× większy szczyt). Uwaga: na VM-ce to już przeciąża węzeł (p95 kilka-kilkanaście sekund, błędy) nawet przy `target: 5`. Dlaczego dodawanie podów nie pomaga, gdy brakuje CPU na węźle?
 
 | Przebieg | Zmiana | Maks. podów | p95 | Błędy | Przewidywanie trafione? |
 |---|---|---|---|---|---|

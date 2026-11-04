@@ -1,0 +1,12 @@
+# Demo 04, krok 4: źródło zdarzeń — harmonogram. Co minutę wysyła do brokera zdarzenie typu dev.knative.sources.ping.
+apiVersion: sources.knative.dev/v1
+kind: PingSource
+metadata:
+  name: mem-co-minute
+  namespace: demo
+spec:
+  schedule: "* * * * *"
+  contentType: application/json
+  data: '{"top": "mem dnia", "bottom": "z harmonogramu"}'
+  sink:
+    ref: {apiVersion: eventing.knative.dev/v1, kind: Broker, name: default}

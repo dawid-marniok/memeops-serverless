@@ -1,0 +1,16 @@
+# Demo 04, krok 2: odbiorca. event_display z Knative wypisuje w logach każde otrzymane zdarzenie (CloudEvent).
+# To zwykła usługa Knative, więc między zdarzeniami schodzi do zera.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: mem-dnia
+  namespace: demo
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/window: "10s"
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - image: gcr.io/knative-releases/knative.dev/eventing/cmd/event_display@sha256:e991bf5c8c0d37ec1660eb8b340a893c2525ef5b35203ffc236ee39fb7edae6c

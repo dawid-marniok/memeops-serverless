@@ -1,14 +1,14 @@
 // k6: symulacja keynote — cisza, nagły szczyt, powrót do ciszy.
 // Uruchom: k6 run tools/keynote.js
 //   -e URL=http://meme-gen.memeops.127.0.0.1.sslip.io   (domyślnie)
-//   -e PEAK=100       żądań na sekundę w szczycie
+//   -e PEAK=40        żądań na sekundę w szczycie (40 to tyle, ile VM-ka szkoleniowa 8 vCPU obsłuży bez błędów; 100 ją przeciąża)
 //   -e SCALE=3        wielkość mema 1-8 (większy = więcej CPU na żądanie)
 //   -e TOKEN=<JWT>    gdy funkcja wymaga logowania (LAB 6+)
 import http from 'k6/http';
 import { check } from 'k6';
 
 const URL = __ENV.URL || 'http://meme-gen.memeops.127.0.0.1.sslip.io';
-const PEAK = parseInt(__ENV.PEAK || '100');
+const PEAK = parseInt(__ENV.PEAK || '40');
 const SCALE = parseInt(__ENV.SCALE || '3');
 const TEXTS = ['Kiedy keynote się kończy', 'Deploy w piątek', 'Scale to zero', 'Cold start', 'Działa u mnie'];
 

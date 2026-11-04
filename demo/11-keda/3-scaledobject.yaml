@@ -1,0 +1,20 @@
+# Demo 11, krok 3: ScaledObject — mówi KEDA, co skalować (generator) i według czego (długość listy w Redisie).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: {name: generator, namespace: demo}
+spec:
+  scaleTargetRef: {name: generator}
+  minReplicaCount: 0                 # scale-to-zero, jak w Knative
+  maxReplicaCount: 10                # bezpiecznik kosztowy
+  pollingInterval: 5                 # co ile sekund KEDA sprawdza kolejkę (domyślnie 30)
+  cooldownPeriod: 20                 # ile sekund po opróżnieniu kolejki zejść z 1 do 0 (domyślnie 300)
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown: {stabilizationWindowSeconds: 15}   # HPA domyślnie czeka 300 s przed zmniejszeniem
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.demo:6379
+        listName: memy
+        listLength: "5"              # cel: 5 zadań w kolejce na jeden pod

@@ -365,11 +365,11 @@ curl localhost:3000</pre>
     <h3>Trzy elementy, które musisz mieć</h3>
     <ol>
       <li><b>Binarka shima na węźle.</b> W demo jest w obrazie węzła kind <code>containerd-shim-spin/kind:v0.26.0</code>. Na prawdziwym klastrze instaluje ją <b>runtime-class-manager</b> ze SpinKube.</li>
-      <li><b>Wpis w konfiguracji containerd</b>, który łączy nazwę handlera z shimem. Bez niego dostaniesz <code>no runtime for "spin" is configured</code> (pułapka z próby 29.10, dlatego <code>prepare.sh</code> ma <code>containerdConfigPatches</code>).</li>
+      <li><b>Wpis w konfiguracji containerd</b>, który łączy nazwę handlera z shimem. Bez niego dostaniesz <code>no runtime for "spin" is configured</code> (pułapka z próby 29.10, dlatego <code>demo/12-wasm/kind-wasm.yaml</code> ma <code>containerdConfigPatches</code>).</li>
       <li><b>RuntimeClass</b> w API i <code>runtimeClassName</code> w podzie.</li>
     </ol>
   </div>
-<pre><span class="c"># demo/12-wasm/wasm.yaml (fragment)</span>
+<pre><span class="c"># demo/12-wasm/1-runtimeclass.yaml i 2-aplikacje.yaml (fragment)</span>
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
@@ -521,36 +521,39 @@ spec:
 
 <section id="klaster">
   <h2 class="prose"><span class="num">10</span>Zobacz na klastrze</h2>
-<pre><span class="c"># osobny klaster kind z shimem Spin (ok. 1,5 min)</span>
-demo/12-wasm/prepare.sh
+<pre><span class="c"># osobny klaster kind z shimem Spin (ok. 25 s; kind przełącza kontekst na kind-wasm)</span>
+kind create cluster --name wasm --image ghcr.io/spinframework/containerd-shim-spin/kind:v0.26.0 \
+  --config demo/12-wasm/kind-wasm.yaml
+kubectl apply -f demo/12-wasm/1-runtimeclass.yaml -f demo/12-wasm/2-aplikacje.yaml
 
 <span class="c"># RuntimeClass i binarka shima na węźle</span>
-kubectl --context kind-wasm get runtimeclass
+kubectl get runtimeclass
 docker exec wasm-control-plane ls /usr/local/bin | grep shim
 
 <span class="c"># które pody używają którego runtime'u</span>
-kubectl --context kind-wasm get pods -o custom-columns=POD:.metadata.name,RUNTIME:.spec.runtimeClassName
+kubectl get pods -o custom-columns=POD:.metadata.name,RUNTIME:.spec.runtimeClassName
 
-<span class="c"># działa jak zwykły pod</span>
-kubectl --context kind-wasm port-forward deploy/wasm-hello 18099:80 &amp;
-curl -s localhost:18099/hello; echo; kill %1
+<span class="c"># działa jak zwykły pod (port-forward w osobnym terminalu)</span>
+kubectl port-forward deploy/wasm-hello 18099:80
+curl -s localhost:18099/hello; echo
 
-<span class="c"># pomiar startu poda: Wasm vs Python</span>
-demo/12-wasm/start.sh wasm-hello
-demo/12-wasm/start.sh python-hello
+<span class="c"># pomiar startu poda: od scale 1 do gotowego poda (powtórz dla python-hello)</span>
+kubectl scale deploy/wasm-hello --replicas=0
+time (kubectl scale deploy/wasm-hello --replicas=1 &amp;&amp; kubectl rollout status deploy/wasm-hello)
 
 <span class="c"># porównaj rozmiary obrazów na węźle</span>
 docker exec wasm-control-plane crictl images | grep -E 'spin-rust-hello|python'
 
 <span class="c"># sprzątanie, powrót do kind-memeops</span>
-demo/12-wasm/prepare.sh --delete</pre>
+kind delete cluster --name wasm
+kubectl config use-context kind-memeops</pre>
 </section>
 
 <section id="sprawdz" class="prose">
   <h2><span class="num">11</span>Sprawdź się</h2>
   <details><summary>Czym Wasm na Kubernetesie różni się od kontenera i dlaczego pod nie startuje szybciej?</summary><p>Pod jest ten sam: kubelet, sandbox, sieć, cgroupy, probe'y. Zmienia się tylko to, co containerd uruchamia w środku. Zamiast <code>runc</code> i procesu Linuksa z własnym systemem plików shim Spin ładuje moduł <code>.wasm</code> do wasmtime. Moduł ma kilka MB, działa na każdym CPU i domyślnie nie ma dostępu do niczego. Start poda to głównie koszty kubeleta, więc wynik jest ten sam: 1,0 s vs 0,99 s. Wasm wygrywa startem instancji w działającym runtime, gęstością i rozmiarem.</p></details>
   <details><summary>Co jest w obrazie OCI aplikacji Spin?</summary><p>Moduł <code>.wasm</code> i <code>spin.toml</code> (manifest: trasy HTTP, uprawnienia, np. <code>allowed_outbound_hosts</code>). Nie ma dystrybucji Linuksa, <code>/bin</code> ani interpretera. Obraz ma kilka MB.</p></details>
-  <details><summary>Dodajesz <code>runtimeClassName: wasmtime-spin-v2</code>, ale pod wisi z błędem <code>no runtime for "spin" is configured</code>. Co brakuje?</summary><p>Wpisu w konfiguracji containerd na węźle, który łączy handler <code>spin</code> z <code>io.containerd.spin.v2</code>. Sama binarka shima i RuntimeClass nie wystarczą. W demo robi to <code>containerdConfigPatches</code> w <code>prepare.sh</code>, w SpinKube robi to runtime-class-manager.</p></details>
+  <details><summary>Dodajesz <code>runtimeClassName: wasmtime-spin-v2</code>, ale pod wisi z błędem <code>no runtime for "spin" is configured</code>. Co brakuje?</summary><p>Wpisu w konfiguracji containerd na węźle, który łączy handler <code>spin</code> z <code>io.containerd.spin.v2</code>. Sama binarka shima i RuntimeClass nie wystarczą. W demo robi to <code>containerdConfigPatches</code> w <code>demo/12-wasm/kind-wasm.yaml</code>, w SpinKube robi to runtime-class-manager.</p></details>
   <details><summary>Ktoś mówi: „przenieśmy nasz serwis w Pythonie z Pillow na Wasm, będzie 1000× szybciej”. Co odpowiesz?</summary><p>Po pierwsze, Pillow ma kod natywny w C, więc nie przeniesie się wprost. Po drugie, „1000×” nie ma pierwotnego źródła, a w Kubernetesie start poda się nie zmienia (demo: 1,0 s vs 0,99 s). Jeśli problemem jest cold start, pomoże <code>min-scale</code> i mniejszy obraz. Wasm rozważ dla nowych, małych funkcji.</p></details>
   <details><summary>Dlaczego Spin może tworzyć nową instancję na każde żądanie, a Python nie?</summary><p>Bo instancja Wasm powstaje w milisekundach albo szybciej: moduł jest już skompilowany, trzeba tylko przydzielić pamięć liniową. Start interpretera Pythona z importami trwa dziesiątki do setek ms, więc proces musi żyć długo. Skutek uboczny w Spinie: brak stanu w pamięci między żądaniami, stan trzymasz w key-value albo bazie.</p></details>
   <details><summary>Czy Wasm jest bezpieczniejszy niż kontener?</summary><p>Ma mniejszą powierzchnię ataku: brak syscalli, pamięć ograniczona do jednej tablicy, uprawnienia nadawane jawnie. Ale runtime też może mieć błędy, a w Kubernetesie moduł działa i tak w podzie z cgroupami. To dodatkowa warstwa obrony, nie zamiennik izolacji.</p></details>

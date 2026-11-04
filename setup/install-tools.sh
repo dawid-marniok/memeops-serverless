@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instaluje narzędzia szkolenia do ~/.local/bin (bez sudo). Linux i macOS, amd64 i arm64.
+# Instaluje narzędzia szkolenia do ~/.local/bin (bez sudo; wyjątek: python3-venv z apt, jeśli brakuje). Linux i macOS, amd64 i arm64.
 # Docker musi być zainstalowany wcześniej (na VM szkoleniowej jest).
 # Użycie: setup/install-tools.sh   potem: export PATH="$HOME/.local/bin:$PATH"
 set -euo pipefail
@@ -24,6 +24,11 @@ if ! have k6; then
     (cd "$TMP" && unzip -q k6.zip); install -m 755 "$TMP/k6-${K6_VERSION}-macos-${ARCH}/k6" "$BIN/k6"
   else get k6.tgz "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-${ARCH}.tar.gz"
     tar -xzf "$TMP/k6.tgz" -C "$TMP"; install -m 755 "$TMP/k6-${K6_VERSION}-linux-${ARCH}/k6" "$BIN/k6"; fi
+fi
+# LAB 3: `func deploy --builder=host` tworzy virtualenv — na Ubuntu/Debian potrzebny pakiet python3-venv
+if [ "$OS" = linux ] && ! python3 -c 'import ensurepip' 2>/dev/null; then
+  if command -v apt-get >/dev/null && sudo -n true 2>/dev/null; then echo "→ python3-venv (apt)"; sudo apt-get install -y -qq python3-venv >/dev/null
+  else echo "UWAGA: brak python3-venv (LAB 3, func). Zainstaluj: sudo apt install -y python3-venv"; fi
 fi
 case $PATH in *"$BIN"*) ;; *) echo; echo "Dodaj do PATH:  export PATH=\"$BIN:\$PATH\"  (najlepiej do ~/.bashrc)";; esac
 echo "Gotowe. Dalej: setup/platform.sh"

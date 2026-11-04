@@ -39,7 +39,11 @@ kubectl get deploy,pods -n memeops
 kubectl get pods -n memeops -o jsonpath='{.items[0].spec.containers[*].name}'; echo
 ```
 
-Odpowiedz: ile kontenerów ma pod i po co jest drugi (`queue-proxy`)? Co się stanie z Deploymentem po ok. 90 s bez ruchu? Sprawdź `kubectl get pods -n memeops -w`.
+Odpowiedz: ile kontenerów ma pod i po co jest drugi (`queue-proxy`)? Co się stanie z Deploymentem po ok. 90 s bez ruchu? Sprawdź (komenda obserwuje 2,5 min i sama się kończy):
+
+```bash
+timeout 150 kubectl get pods -n memeops -w
+```
 
 ### 3. v2 z emoji dla 20% ruchu
 
@@ -48,7 +52,7 @@ kn service update meme-api -n memeops \
   --image localhost:5001/meme-api:v2 --revision-name meme-api-v2 \
   --traffic meme-api-v1=80 --traffic meme-api-v2=20
 kn revision list -n memeops
-for i in $(seq 1 20); do curl -s http://meme-api.memeops.127.0.0.1.sslip.io/ | tail -1; done | cut -d'·' -f1 | sort | uniq -c
+for i in $(seq 1 20); do curl -s http://meme-api.memeops.127.0.0.1.sslip.io/ | tail -1; done | cut -d' ' -f1 | sort | uniq -c   # liczy, ile odpowiedzi dała każda wersja
 ```
 
 ✅ ok. 16× `[v1` i 4× `[v2`. Porównaj `kubectl get ksvc meme-api -n memeops -o yaml` → sekcja `spec.traffic`: `kn` zrobił z tego zwykły YAML.
@@ -79,7 +83,7 @@ Teraz ustaw minimum jednego poda i zmierz jeszcze raz:
 
 ```bash
 kn service update meme-api -n memeops --scale-min 1
-tools/coldstart.sh meme-api      # skrypt po 5 min się podda. Dlaczego? (możesz przerwać Ctrl+C)
+timeout 90 tools/coldstart.sh meme-api   # nie doczeka się zera podów. Dlaczego? (bez timeout czekałby 5 min)
 kn service update meme-api -n memeops --scale-min 0
 ```
 
