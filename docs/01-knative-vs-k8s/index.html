@@ -654,7 +654,7 @@ details p { margin: 10px 0 4px; }
         <li>Autoscaler: <code>desiredScale</code> 0 → 1; reconciler KPA ustawia <code>replicas: 1</code> w Deploymencie.</li>
         <li>Dalej zwykły Kubernetes: ReplicaSet → Pod → scheduler → kubelet pobiera obraz, start, readiness.</li>
         <li>Activator widzi gotowy pod (Endpoints <code>-private</code>) i oddaje wstrzymane żądanie do queue-proxy.</li>
-        <li>Gdy zapas pojemności przekroczy <code>target-burst-capacity</code> (domyślnie 211), SKS przechodzi w Serve i activator wypada ze ścieżki.</li>
+        <li>Gdy zapas pojemności przekroczy <code>target-burst-capacity</code> (domyślnie 211), SKS przechodzi w Serve i activator wypada ze ścieżki. Szczegóły: <a href="../05-activator-tbc/index.html">Activator i target-burst-capacity</a>.</li>
       </ol>
     </div>
   </div>
@@ -679,7 +679,7 @@ details p { margin: 10px 0 4px; }
       <ol>
         <li>queue-proxy w każdym podzie liczy żądania w locie (concurrency) i RPS.</li>
         <li>autoscaler pobiera te liczby z queue-proxy (przy wielu podach z próbki). Gdy activator jest w ścieżce, dostaje też dane od niego.</li>
-        <li>Liczy pody = concurrency / (cel × 70%), osobno dla okna 60 s i 6 s.</li>
+        <li>Liczy pody = concurrency / (cel × 70%), osobno dla okna 60 s i 6 s. Szczegóły i symulator: <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a>.</li>
         <li>Zapisuje <code>desiredScale</code> w PodAutoscaler. Reconciler KPA ustawia <code>replicas</code> w Deploymencie i tryb SKS.</li>
       </ol>
     </div>

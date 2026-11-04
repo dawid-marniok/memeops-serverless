@@ -102,6 +102,11 @@ Wpisz SHA w adnotacji `memeops/git-sha` w `labs/lab03-funkcja-python/meme-gen.ya
 ```bash
 sed -i "s/UZUPELNIJ/$SHA/" labs/lab03-funkcja-python/meme-gen.yaml
 grep git-sha labs/lab03-funkcja-python/meme-gen.yaml      # memeops/git-sha: "<Twój SHA>"
+```
+
+⚠️ Jeśli `grep` pokazuje `UZUPELNIJ` albo pusty SHA (`""`), **nie wdrażaj**. Zmienna `$SHA` jest pusta, np. po otwarciu nowego terminala. Uruchom ponownie `SHA=$(git rev-parse --short HEAD)`, przywróć plik (`git checkout labs/lab03-funkcja-python/meme-gen.yaml`) i powtórz `sed`. Knative wdroży usługę także bez SHA, ale rewizji nie da się potem powiązać z commitem. Uzupełnienie adnotacji po wdrożeniu utworzy dodatkową rewizję i numery w kroku C przestaną się zgadzać.
+
+```bash
 kubectl apply -f labs/lab03-funkcja-python/meme-gen.yaml
 kn service describe meme-gen -n memeops
 ```

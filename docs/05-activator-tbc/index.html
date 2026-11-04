@@ -203,8 +203,8 @@ details p { margin: 10px 0 4px; }
   </div>
   <div class="prose">
     <ul>
-      <li><b>Pojemność poda</b> to cel concurrency <i>przed</i> <code>target-utilization</code>: <code>containerConcurrency</code>, jeśli jest ustawione, albo adnotacja <code>autoscaling.knative.dev/target</code>, albo domyślne <code>100</code>.</li>
-      <li><b>Bieżąca concurrency</b> pochodzi z krótkiego okna paniki, żeby decyzja reagowała szybko.</li>
+      <li><b>Pojemność poda</b> to cel concurrency <i>przed</i> <code>target-utilization</code>: adnotacja <code>autoscaling.knative.dev/target</code> (gdy jest też <code>containerConcurrency</code>, liczy się mniejsza z tych dwóch wartości), samo <code>containerConcurrency</code> albo domyślne <code>100</code>.</li>
+      <li><b>Bieżąca concurrency</b> pochodzi z krótkiego okna paniki, żeby decyzja reagowała szybko. Czym są concurrency, target i okna: <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a>.</li>
       <li><b>Dwa przypadki szczególne:</b> przy <code>TBC = 0</code> zapas jest na sztywno <code>0</code> (Serve, gdy autoskaler chce choć jeden pod), a przy <code>TBC = -1</code> na sztywno ujemny (zawsze Proxy).</li>
       <li><b>Klasa HPA</b> (<code>autoscaling.knative.dev/class: hpa.autoscaling.knative.dev</code>): SKS na stałe w Serve, TBC nie ma znaczenia. HPA nie skaluje do zera, więc activator nie jest potrzebny.</li>
     </ul>
@@ -242,7 +242,7 @@ details p { margin: 10px 0 4px; }
       <tr><th>1 pod, mały ruch</th><td><span class="tag proxy">Proxy</span> 100 − 0 − 211 &lt; 0</td><td><span class="tag serve">Serve</span></td><td><span class="tag proxy">Proxy</span></td></tr>
       <tr><th>3 pody, mały ruch</th><td><span class="tag serve">Serve</span> 300 − 10 − 211 ≥ 0</td><td><span class="tag serve">Serve</span></td><td><span class="tag proxy">Proxy</span></td></tr>
       <tr><th>nagły skok ruchu</th><td><span class="tag proxy">Proxy</span> zapas spada poniżej zera, activator buforuje</td><td><span class="tag serve">Serve</span> skok trafia prosto w pody i czeka w ich queue-proxy, aż wstaną nowe</td><td><span class="tag proxy">Proxy</span></td></tr>
-      <tr><th>brak ruchu → 0 podów</th><td><span class="tag proxy">Proxy</span> pod znika zaraz po oknie (<code>window</code>)</td><td><span class="tag proxy">Proxy</span> najpierw <code>Serve → Proxy</code>, potem czeka <code>scale-to-zero-grace-period</code> (30 s): w demo 03 ok. 42 s zamiast 12 s</td><td><span class="tag proxy">Proxy</span> jak przy 211</td></tr>
+      <tr><th>brak ruchu → 0 podów</th><td><span class="tag proxy">Proxy</span> pod znika zaraz po oknie (<code>window</code>)</td><td><span class="tag proxy">Proxy</span> najpierw <code>Serve → Proxy</code>, potem czeka <code>scale-to-zero-grace-period</code> (30 s): w demo 03 (<code>window: "30s"</code>) ok. 60 s zamiast 30 s</td><td><span class="tag proxy">Proxy</span> jak przy 211</td></tr>
     </tbody>
   </table></div>
   <p class="prose">Pierwszy i ostatni wiersz są identyczne we wszystkich kolumnach: <b>TBC nie dotyka cold startu</b>. Różnice są tylko wtedy, gdy pody już działają.</p>
@@ -307,7 +307,7 @@ spec:
     <div class="answer"><div class="q">Buforowanie skoków</div><p>Nadmiar czeka w activatorze, który widzi wszystkie pody, a nie w <code>queue-proxy</code> jednego przeciążonego poda. Gdy wstaje nowy pod, activator od razu kieruje na niego czekające żądania.</p></div>
     <div class="answer"><div class="q">Nowe pody szybciej dostają ruch</div><p>Activator sam śledzi gotowość podów. W trybie Serve nowy pod musi najpierw trafić do endpointów i do konfiguracji Envoya.</p></div>
     <div class="answer"><div class="q">Jedna, przewidywalna ścieżka</div><p>Nie ma przełączania <code>Serve ↔ Proxy</code> ani stanów przejściowych (np. <code>NoHealthyBackends</code> zaraz po przełączeniu). Łatwiej debugować, latencja jest stabilniejsza.</p></div>
-    <div class="answer"><div class="q">Szybsze zejście do zera</div><p>Bez czekania <code>scale-to-zero-grace-period</code>. W demo 03: ok. 12 s zamiast 42 s, czyli mniej czasu pracy podów przy rzadkim ruchu.</p></div>
+    <div class="answer"><div class="q">Szybsze zejście do zera</div><p>Bez czekania <code>scale-to-zero-grace-period</code>. W demo 03 (<code>window: "30s"</code>): ok. 30 s zamiast 60 s, czyli mniej czasu pracy podów przy rzadkim ruchu.</p></div>
   </div>
   <h3 class="prose">Minusy</h3>
   <div class="answers">
@@ -352,7 +352,7 @@ tools/coldstart.sh przez-activator demo</pre>
   <details><summary>Zmieniasz TBC adnotacją w ksvc. Co się dzieje z działającymi podami?</summary><p>Powstaje nowa rewizja, bo zmieniłeś <code>spec.template</code>. Ruch przechodzi na nią według <code>spec.traffic</code>, a stara rewizja po chwili gaśnie.</p></details>
 </section>
 
-<p class="src prose">Źródła: komentarze w <code>config-autoscaler</code> (blok <code>_example</code>) na klastrze <code>memeops</code>, Knative 1.23.0; pomiary z <code>demo/03-cold-start</code>. Dokumentacja: knative.dev → Serving → Autoscaling → Configuring target burst capacity.</p>
+<p class="src prose">Źródła: komentarze w <code>config-autoscaler</code> (blok <code>_example</code>) na klastrze <code>memeops</code>, Knative 1.23.0; pomiary z <code>demo/03-cold-start</code>. Dokumentacja: knative.dev → Serving → Autoscaling → Configuring target burst capacity. Zobacz też: <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a> (ile podów i kiedy), <a href="../01-knative-vs-k8s/index.html">Knative a zwykły Kubernetes</a> (obiekty i ścieżka żądania), <a href="../07-near-rt-skalowanie/index.html">Skalowanie near-RT</a>.</p>
 
 </div>
 

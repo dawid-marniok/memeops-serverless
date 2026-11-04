@@ -148,7 +148,7 @@ ol.plus { padding-left: 22px; } ol.plus li { margin-bottom: 8px; }
 <header class="prose">
   <div class="eyebrow">Serverless na Kubernetes · near-RT i 5G</div>
   <h1>Knative, HPA czy KEDA w aplikacji near-RT</h1>
-  <p class="lede">Co skaluje każdy z mechanizmów, kiedy który wybrać i jak złożyć aplikację near real-time (pętla 10 ms – 1 s) z komponentów Knative Serving, Knative Eventing i KEDA. Z wybieraczką i gotowym YAML-em.</p>
+  <p class="lede">Co skaluje każdy z mechanizmów, kiedy który wybrać i jak złożyć aplikację near real-time (pętla 10 ms – 1 s) z komponentów Knative Serving, Knative Eventing i KEDA. Z wybieraczką i gotowym YAML-em. Zakłada znajomość notatek <a href="../05-activator-tbc/index.html">Activator i target-burst-capacity</a> i <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a>.</p>
   <div class="meta">
     <span class="pill">Knative Serving 1.23.0</span>
     <span class="pill">KEDA 2.21</span>
@@ -392,7 +392,7 @@ spec:
       percent: 90
     - latestRevision: true                                  <span class="c"># nowa logika na 10% ruchu</span>
       percent: 10</pre>
-    <p class="prose"><code>target-burst-capacity: "0"</code> wyjmuje activator ze ścieżki, gdy są pody. Przy <code>"-1"</code> activator jest zawsze w ścieżce: lepiej rozkłada ruch, ale dokłada skok proxy.</p>
+    <p class="prose"><code>target-burst-capacity: "0"</code> wyjmuje activator ze ścieżki, gdy są pody (<a href="../05-activator-tbc/index.html">Activator i target-burst-capacity</a>). Przy <code>"-1"</code> activator jest zawsze w ścieżce: lepiej rozkłada ruch, ale dokłada skok proxy.</p>
   </div>
 
   <div class="tabpanel" role="tabpanel" id="p-a" aria-labelledby="t-a" hidden>
@@ -471,7 +471,7 @@ spec:
   <h2><span class="num">9</span>Pułapka: co zostaje z serverless</h2>
   <div class="callout kn">Po ustawieniu <code>min-scale ≥ 1</code>, <code>target-burst-capacity: 0</code> i QoS Guaranteed z „serverless” zostają głównie <b>model wdrażania</b> (rewizje, canary, URL-e) i <b>szybsze skalowanie w górę</b>. To realna wartość, ale nie oszczędność z zera.</div>
   <p>Sprawdź u siebie: <i>czy któraś z Twoich funkcji ma ruch, który naprawdę spada do zera?</i> Jeśli żadna, argumentem za Knative jest model wdrażania, a nie koszt bezczynności.</p>
-  <p class="src">Na żywo: panika — <code>demo/06-panic/</code>, Eventing — <code>demo/04-eventing/</code>, KEDA — <code>demo/11-keda/</code>. Szerzej: <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a>.</p>
+  <p class="src">Na żywo: panika — <code>demo/06-panic/</code>, Eventing — <code>demo/04-eventing/</code>, KEDA — <code>demo/11-keda/</code>. Szerzej: <a href="../05-activator-tbc/index.html">Activator i target-burst-capacity</a>, <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a>.</p>
 </section>
 
 <section id="sprawdz" class="prose">

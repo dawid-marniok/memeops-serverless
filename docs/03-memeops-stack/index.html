@@ -245,7 +245,7 @@ pre .c { color: var(--code-comment); }
   </div>
   <div class="legend">
     <div class="item"><span class="ln traffic"></span>ruch HTTP</div>
-    <div class="item"><span class="ln cold"></span>przez activator, gdy usługa ma 0 podów</div>
+    <div class="item"><span class="ln cold"></span>przez activator: przy 0 podów i przy małym zapasie pojemności</div>
     <div class="item"><span class="ln ctrl"></span>obrazy i DNS</div>
   </div>
   <figure class="diagram">
@@ -384,7 +384,7 @@ pre .c { color: var(--code-comment); }
     </div>
     <div class="flow">
       <h3><span class="dot" style="background:var(--cold)"></span>Gdy usługa ma 0 podów</h3>
-      <p>Envoy oddaje żądanie do <b>activatora</b>. Activator trzyma je i daje znać autoskalerowi. Pod wstaje (cold start), a activator przekazuje mu żądanie. Gdy pody już działają, ruch idzie prosto do nich.</p>
+      <p>Envoy oddaje żądanie do <b>activatora</b>. Activator trzyma je i daje znać autoskalerowi. Pod wstaje (cold start), a activator przekazuje mu żądanie. Ze ścieżki schodzi dopiero wtedy, gdy pody mają zapas na skok ruchu: przy domyślnych ustawieniach od ok. 3 podów. Przy jednym działającym podzie ruch dalej idzie przez activator.</p>
       <p>Szczegóły: <a href="../05-activator-tbc/index.html">Activator i target-burst-capacity</a>.</p>
     </div>
     <div class="flow">
