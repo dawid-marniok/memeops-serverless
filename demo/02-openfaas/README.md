@@ -2,11 +2,9 @@
 
 **Cel:** zobaczyć, jak instaluje się OpenFaaS, jak szybko startuje się z gotowymi funkcjami (store, CLI, UI, REST API) i gdzie kończy się wersja Community Edition. To uzasadnia, dlaczego laby robimy na Knative.
 
-`Dzień 1 · blok 1.3`
-
 Dwa terminale: **T1** komendy, **T2** port-forward (zostaje włączony).
 
-## Przygotowanie (raz, przed zajęciami)
+## Przygotowanie (raz)
 
 `faas-cli` (wersja 0.18.16) do `~/.local/bin` i repozytorium chartów Helm:
 
@@ -20,7 +18,7 @@ helm repo add openfaas https://openfaas.github.io/faas-netes/
 
 ## Kroki
 
-### 1. Instalacja (ok. 20 s)
+### 1. Instalacja
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/openfaas/faas-netes/master/namespaces.yml

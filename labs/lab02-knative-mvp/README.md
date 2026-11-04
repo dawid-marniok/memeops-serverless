@@ -1,9 +1,5 @@
 # lab02 — MVP MemeOps na Knative
 
-| Dzień | Po bloku |
-|---|---|
-| 1 | 1.4 Knative: CLI, API, rewizje, cold start |
-
 > **Zgłoszenie od PO:** „Wdrażamy MVP: mem tekstowy z adresu URL. Organizator chce nową wersję z emoji, ale tylko dla części ludzi, i chce móc zrobić rollback w sekundę.”
 
 **Cel:** wdrażasz usługę Knative z YAML i z `kn`, dzielisz ruch między rewizje, cofasz zmianę i mierzysz cold start.

@@ -2,9 +2,7 @@
 
 **Cel:** dwa ustawienia bezpieczeństwa, które działają bez zmian w kodzie: flaga `secure-pod-defaults` (Knative sam dopisuje `securityContext`) i usługa widoczna tylko wewnątrz klastra.
 
-`Dzień 2 · blok 2.2`
-
-## Przygotowanie (w przerwie przed blokiem)
+## Przygotowanie
 
 ```bash
 kubectl apply -f demo/00-namespace.yaml

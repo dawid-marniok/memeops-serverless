@@ -18,7 +18,7 @@ Stawiasz wszystko od zera (własny komputer, nowa VM)? Wtedy:
 ```bash
 git clone https://github.com/dawid-marniok/memeops-serverless memeops && cd memeops
 setup/install-tools.sh && export PATH="$HOME/.local/bin:$PATH"
-setup/platform.sh          # ok. 3–8 min: klaster kind, rejestr, Knative, obrazy startowe
+setup/platform.sh          # klaster kind, rejestr, Knative, obrazy startowe
 setup/check.sh             # → SUKCES: 13/13
 ```
 
@@ -55,18 +55,18 @@ Szczegóły i problemy: [`setup/README.md`](setup/README.md).
 | ConfigMap / Secret | Konfiguracja poza obrazem; Secret na dane wrażliwe (tylko base64, nie szyfrowanie) |
 | Canary | Nowa wersja dla małej części ruchu, żeby bezpiecznie sprawdzić ją na produkcji |
 
-## Plan
+## Laby
 
-| Dzień | Lab | Zgłoszenie od PO |
-|---|---|---|
-| 1 | [lab01 — Platforma](labs/lab01-platforma/) | „Postawcie platformę pod MemeOps” |
-| 1 | [lab02 — MVP na Knative](labs/lab02-knative-mvp/) | „Wdrażamy MVP, bez przestojów przy zmianach” |
-| 1 | [lab03 — Funkcja w Pythonie](labs/lab03-funkcja-python/) | „Chcemy własny kod i porządek w wersjach” |
-| 1 | [lab04 — Zależności natywne](labs/lab04-zaleznosci/) | „Memy ze zdjęciami, nie z tekstu!” |
-| 2 | [lab05 — Symulacja keynote](labs/lab05-keynote/) | „Po keynote przyjdzie 500 osób naraz. Wytrzymamy?” |
-| 2 | [lab06 — Sekrety i logowanie](labs/lab06-sekrety/) | „Tylko zalogowani mogą tworzyć memy” |
-| 2 | [lab07 — CI/CD i canary](labs/lab07-cicd/) | „Nowy szablon dark mode — bezpiecznie” |
-| 2 | [lab08 — Awaria w piątek 16:55](labs/lab08-awaria/) | „Memy przestały działać!” |
+| Lab | Zgłoszenie od PO |
+|---|---|
+| [lab01 — Platforma](labs/lab01-platforma/) | „Postawcie platformę pod MemeOps” |
+| [lab02 — MVP na Knative](labs/lab02-knative-mvp/) | „Wdrażamy MVP, bez przestojów przy zmianach” |
+| [lab03 — Funkcja w Pythonie](labs/lab03-funkcja-python/) | „Chcemy własny kod i porządek w wersjach” |
+| [lab04 — Zależności natywne](labs/lab04-zaleznosci/) | „Memy ze zdjęciami, nie z tekstu!” |
+| [lab05 — Symulacja keynote](labs/lab05-keynote/) | „Po keynote przyjdzie 500 osób naraz. Wytrzymamy?” |
+| [lab06 — Sekrety i logowanie](labs/lab06-sekrety/) | „Tylko zalogowani mogą tworzyć memy” |
+| [lab07 — CI/CD i canary](labs/lab07-cicd/) | „Nowy szablon dark mode — bezpiecznie” |
+| [lab08 — Awaria w piątek 16:55](labs/lab08-awaria/) | „Memy przestały działać!” |
 
 ## Co jest w repo
 

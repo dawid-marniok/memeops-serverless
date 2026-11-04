@@ -2,11 +2,9 @@
 
 **Cel:** zobaczyć na żywo dwa obiekty, które decydują o cold starcie: **KPA** mówi, ile podów ma być, a **SKS** mówi, którędy idzie ruch (przez activator czy prosto do poda).
 
-`Dzień 1 · blok 1.4`
-
 Trzy terminale: **T1** i **T2** obserwują, **T3** wykonuje.
 
-## Przygotowanie (ok. 2 min przed demem)
+## Przygotowanie
 
 ```bash
 kubectl apply -f demo/00-namespace.yaml

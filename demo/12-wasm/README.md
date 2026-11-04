@@ -2,16 +2,14 @@
 
 **Cel:** zobaczyć, że aplikacja WebAssembly działa w Kubernetesie jak zwykły pod (RuntimeClass + shim containerd), i krytycznie ocenić obietnice typu „1000× szybciej”.
 
-`Dzień 2 · blok 2.5`
-
 Dwa terminale: **T1** komendy, **T2** port-forward.
 
-## Przygotowanie (w przerwie, ok. 30 s)
+## Przygotowanie
 
 Demo działa na **osobnym klastrze** kind `wasm`, z obrazem węzła, w którym jest shim Spin. Klaster `memeops` zostaje bez zmian.
 
 ```bash
-docker pull ghcr.io/spinframework/containerd-shim-spin/kind:v0.26.0     # ok. 1 GB — najlepiej dzień wcześniej
+docker pull ghcr.io/spinframework/containerd-shim-spin/kind:v0.26.0     # ok. 1 GB
 kind create cluster --name wasm \
   --image ghcr.io/spinframework/containerd-shim-spin/kind:v0.26.0 \
   --config demo/12-wasm/kind-wasm.yaml

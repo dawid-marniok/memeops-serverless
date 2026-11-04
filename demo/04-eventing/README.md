@@ -2,8 +2,6 @@
 
 **Cel:** zobaczyć funkcję wywoływaną **zdarzeniem**, a nie żądaniem od użytkownika. Nadawca wysyła zdarzenie do brokera i nie wie, kto je odbierze. O tym decydują Triggery.
 
-`Dzień 1 · po LAB 2`
-
 ```
 PingSource (co minutę) ──┐
 curl z poda (ręcznie) ───┴──→ Broker „default” ──→ Trigger (filtr po typie) ──→ funkcja mem-dnia
@@ -11,7 +9,7 @@ curl z poda (ręcznie) ───┴──→ Broker „default” ──→ Trig
 
 Dwa terminale: **T1** obserwuje, **T2** wykonuje.
 
-## Przygotowanie (w przerwie, ok. 1,5 min): instalacja Knative Eventing
+## Przygotowanie: instalacja Knative Eventing
 
 Eventing to osobny składnik Knative, w labach go nie ma. Wersja taka sama jak Serving (1.23.0):
 

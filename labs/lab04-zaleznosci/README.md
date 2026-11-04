@@ -1,9 +1,5 @@
 # lab04 — Zależności natywne: memy ze zdjęciami
 
-| Dzień | Po bloku |
-|---|---|
-| 1 | 1.6 Zależności i rozszerzenia natywne |
-
 > **Zgłoszenie od PO:** „SVG nie działa w komunikatorach. Chcemy prawdziwe obrazki PNG.”
 
 **Cel:** dodajesz bibliotekę z kodem natywnym (Pillow), porównujesz dwa sposoby budowania obrazu i mierzysz, ile kosztuje to w cold starcie.

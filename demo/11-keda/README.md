@@ -2,8 +2,6 @@
 
 **Cel:** zobaczyć drugą drogę do serverless na Kubernetesie, bez Knative. KEDA skaluje zwykły Deployment od zera według długości kolejki, a nie według ruchu HTTP.
 
-`Dzień 2 · blok 2.5`
-
 ```
 redis-cli RPUSH (producent) ──→ lista „memy” w Redisie ──→ generator (Deployment, 0..10 podów)
                                         ↑
@@ -12,7 +10,7 @@ redis-cli RPUSH (producent) ──→ lista „memy” w Redisie ──→ gener
 
 Dwa terminale: **T1** obserwuje, **T2** wykonuje.
 
-## Przygotowanie (w przerwie obiadowej, ok. 30 s): instalacja KEDA
+## Przygotowanie: instalacja KEDA
 
 ```bash
 helm repo add kedacore https://kedacore.github.io/charts

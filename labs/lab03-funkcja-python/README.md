@@ -1,9 +1,5 @@
 # lab03 — Funkcja w Pythonie: szablony, rejestr, wersje
 
-| Dzień | Po bloku |
-|---|---|
-| 1 | 1.5 Funkcja Python, szablony, repozytoria, wersjonowanie |
-
 > **Zgłoszenie od PO:** „MVP z ASCII to za mało. Chcemy własny generator memów, zbudowany tak, jak każda funkcja w firmie — i chcemy zawsze wiedzieć, który kod działa na produkcji.”
 
 **Cel:** budujesz funkcję na dwa sposoby (`func` i szablon firmowy), publikujesz obraz w rejestrze z wersją i SHA commita, wdrażasz `meme-gen` i cofasz wersję.
@@ -24,7 +20,7 @@
 ```bash
 cd ~ && func create -l python hello-fn && cd hello-fn
 ls -R; cat func.yaml
-func deploy --builder=host --registry localhost:5001 --registry-insecure --namespace memeops   # ok. 1 min
+func deploy --builder=host --registry localhost:5001 --registry-insecure --namespace memeops
 curl http://hello-fn.memeops.127.0.0.1.sslip.io/             # → OK
 kubectl get ksvc hello-fn -n memeops -o jsonpath='{.spec.template.spec.containers[0].image}'; echo
 cd ~/memeops

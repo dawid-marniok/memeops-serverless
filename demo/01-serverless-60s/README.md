@@ -2,8 +2,6 @@
 
 **Cel:** jeden obiekt YAML daje adres HTTP. Pod pojawia się na żądanie i znika, gdy nikt nie korzysta.
 
-`Dzień 1 · blok 1.1`
-
 Dwa terminale obok siebie: **T1** obserwuje, **T2** wykonuje.
 
 ## Kroki
@@ -78,7 +76,7 @@ curl -s -o /dev/null -w 'warm: %{time_total} s\n' http://pierwsza.demo.127.0.0.1
 
 ## Po demie: krok po kroku i ściąga
 
-W [`krok-po-kroku/`](krok-po-kroku/) jest ta sama usługa rozpisana na pliki YAML: wdrożenie, canary 80/20, tagi, rollback (to, co w LAB 2 robisz przez `kn`). [`01-hello-v1.yaml`](krok-po-kroku/01-hello-v1.yaml) to też ściąga z opisem wszystkich ważniejszych opcji Knative Service. Do powtórki po LAB 2, ok. 10 minut.
+W [`krok-po-kroku/`](krok-po-kroku/) jest ta sama usługa rozpisana na pliki YAML: wdrożenie, canary 80/20, tagi, rollback (to, co w LAB 2 robisz przez `kn`). [`01-hello-v1.yaml`](krok-po-kroku/01-hello-v1.yaml) to też ściąga z opisem wszystkich ważniejszych opcji Knative Service. Do powtórki po LAB 2.
 
 ## Sprzątanie
 

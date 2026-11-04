@@ -2,8 +2,6 @@
 
 **Cel:** zobaczyć, jak autoskaler Knative reaguje na nagły skok ruchu: przechodzi w tryb panic, liczy ruch z ostatnich 6 s zamiast 60 s i dokłada pody od razu.
 
-`Dzień 2 · blok 2.1`
-
 ## Przygotowanie
 
 Wymaga obrazu `localhost:5001/meme-gen:2.0.0`. Jeśli skończyłeś LAB 4, masz go w rejestrze. W przeciwnym razie zbuduje go `tools/start-lab.sh lab05` (usuwa Twoje rewizje meme-api i meme-gen w `memeops`).

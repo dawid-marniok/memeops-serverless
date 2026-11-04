@@ -2,13 +2,11 @@
 
 **Cel:** włączyć tracing w Knative jedną ConfigMapą i zobaczyć w trace, gdzie naprawdę idzie czas cold startu. Bez zmian w kodzie funkcji.
 
-`Dzień 2 · blok 2.4`
-
 ```
 activator, queue-proxy ──OTLP──→ OTel Collector ──→ Tempo ──→ Grafana
 ```
 
-## Przygotowanie (w przerwie obiadowej, ok. 15 s)
+## Przygotowanie
 
 Wymaga platformy z `--monitoring` (Grafana).
 

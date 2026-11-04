@@ -54,4 +54,4 @@ Wszystkie wersje są przypięte w [`versions.env`](versions.env): Knative 1.23 (
 | `address already in use` na porcie 80 | `setup/teardown.sh`, potem `HTTP_PORT=8080 setup/platform.sh` |
 | DNS: `*.127.0.0.1.sslip.io` się nie rozwiązuje | sieć blokuje sslip.io: używaj `curl -H "Host: meme-api.memeops.127.0.0.1.sslip.io" http://127.0.0.1/` |
 | Knative: pody `Pending` | za mało RAM/CPU: `kubectl describe pod -n knative-serving` → zgłoś prowadzącemu |
-| Wszystko się posypało | `setup/teardown.sh && setup/platform.sh` (ok. 6 min) |
+| Wszystko się posypało | `setup/teardown.sh && setup/platform.sh` |

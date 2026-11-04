@@ -2,7 +2,7 @@
 
 **Cel:** z pustego katalogu do działającej usługi bez Dockerfile'a i bez YAML-a. I czym to się różni od zwykłego kontenera.
 
-`Dzień 1 · blok 1.5` (to samo, co część A w LAB 3)
+To samo, co część A w LAB 3.
 
 ## Kroki
 
@@ -39,7 +39,7 @@ func deploy --builder=host --registry localhost:5001 --registry-insecure --names
 | `--registry-insecure` | nasz rejestr nie ma TLS |
 | `--namespace demo` | gdzie utworzyć Knative Service |
 
-Pierwszy deploy trwa ok. 35 s: build → push → Knative Service.
+Pierwszy deploy robi kolejno: build → push → Knative Service.
 
 ### 4. Wywołaj i sprawdź obraz
 

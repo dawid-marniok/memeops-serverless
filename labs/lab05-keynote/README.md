@@ -1,9 +1,5 @@
 # lab05 — Symulacja keynote: testy, metryki, autoskalowanie
 
-| Dzień | Po bloku |
-|---|---|
-| 2 | 2.1 Testowanie, metryki i autoskalowanie |
-
 > **Zgłoszenie od PO:** „Keynote kończy się o 10:00. Przez godzinę przed — cisza. Potem 500 osób chce mema w ciągu 5 minut. Udowodnijcie, że wytrzymamy, i powiedzcie, ile to kosztuje.”
 
 **Cel:** testujesz funkcję (pytest i k6), obserwujesz skalowanie 0 → N → 0, stroisz autoskaler i podejmujesz decyzję o `min-scale` na czas keynote.

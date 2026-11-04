@@ -2,9 +2,7 @@
 
 **Cel:** zobaczyć, co się dzieje, gdy nowa wersja w ogóle nie startuje, i przejść kolejność diagnozy: usługa → rewizje → status rewizji → pod → logi.
 
-`Dzień 2 · blok 2.4`
-
-## Przygotowanie (kilka minut przed demem)
+## Przygotowanie
 
 ```bash
 kubectl apply -f demo/00-namespace.yaml

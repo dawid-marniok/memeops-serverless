@@ -1,9 +1,5 @@
 # lab08 — Awaria w piątek 16:55
 
-| Dzień | Po bloku |
-|---|---|
-| 2 | 2.4 Monitoring, logi i troubleshooting |
-
 > **Zgłoszenie od PO:** „Piątek, 16:55. Zespół wypchnął trzy zmiany przed weekendem. Telefony od organizatora się urywają.”
 
 **Cel:** diagnozujesz trzy typowe awarie funkcji na Knative — od objawu do przyczyny — i naprawiasz każdą jedną zmianą.

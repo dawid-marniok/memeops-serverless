@@ -4,20 +4,20 @@ Wszystko, co prowadzący pokazuje na ekranie, jest tutaj. Każde demo możesz po
 
 Wymagają postawionej platformy: `setup/platform.sh` (z `--monitoring` dla dem 06, 07 i 10), a potem `setup/check.sh` → SUKCES 13/13.
 
-| # | Demo | Dzień, blok | Czego dotyczy |
-|---|---|---|---|
-| 01 | [Serverless w 60 sekund](01-serverless-60s/) | 1 · 1.1 | Jedna usługa Knative: adres, scale-to-zero, cold start. Do powtórki po LAB 2: [`krok-po-kroku/`](01-serverless-60s/krok-po-kroku/) (canary, tagi, rollback w YAML-u + ściąga opcji ksvc) |
-| 02 | [OpenFaaS CE: toolchain i granice](02-openfaas/) | 1 · 1.3 | Store, CLI, UI, REST API i to, czego CE nie umie (scale-to-zero, >5 replik) |
-| 03 | [Anatomia cold startu](03-cold-start/) | 1 · 1.4 | KPA i SKS na żywo, kiedy activator jest w ścieżce żądania |
-| 04 | [Knative Eventing: mem dnia](04-eventing/) | 1 · po LAB 2 | Funkcja wywołana zdarzeniem: PingSource → Broker → Trigger |
-| 05 | [`func` od zera do URL-a](05-func/) | 1 · 1.5 | `func create` → handler → `func deploy`, obraz po digeście. Do czytania przed LAB 3: [`handler-vs-kontener.md`](05-func/handler-vs-kontener.md) |
-| 06 | [Tryb panic](06-panic/) | 2 · 2.1 | Nagły skok ruchu, okno 6 s vs 60 s, logi autoskalera |
-| 07 | [Keynote na domyślnych ustawieniach](07-keynote/) | 2 · LAB 5 | k6 + Grafana: co robi autoskaler, zanim go dostroisz |
-| 08 | [Bezpieczne pody i usługi wewnętrzne](08-bezpieczne-pody/) | 2 · 2.2 | `secure-pod-defaults`, obraz jako root, `cluster-local` |
-| 09 | [Nieudany rollout](09-nieudany-rollout/) | 2 · 2.4 | `latestCreated` ≠ `latestReady`, stara rewizja dalej działa |
-| 10 | [Trace cold startu w Tempo](10-tracing/) | 2 · 2.4 | Knative → OTel Collector → Tempo: gdzie naprawdę idzie czas |
-| 11 | [KEDA: skalowanie od kolejki](11-keda/) | 2 · 2.5 | Serverless bez Knative: Deployment 0 → N → 0 według długości kolejki |
-| 12 | [Wasm: Spin na kind](12-wasm/) | 2 · 2.5 | WebAssembly jako pod, pomiar startu, krytycznie o „1000× szybciej” |
+| # | Demo | Czego dotyczy |
+|---|---|---|
+| 01 | [Serverless w 60 sekund](01-serverless-60s/) | Jedna usługa Knative: adres, scale-to-zero, cold start. Do powtórki po LAB 2: [`krok-po-kroku/`](01-serverless-60s/krok-po-kroku/) (canary, tagi, rollback w YAML-u + ściąga opcji ksvc) |
+| 02 | [OpenFaaS CE: toolchain i granice](02-openfaas/) | Store, CLI, UI, REST API i to, czego CE nie umie (scale-to-zero, >5 replik) |
+| 03 | [Anatomia cold startu](03-cold-start/) | KPA i SKS na żywo, kiedy activator jest w ścieżce żądania |
+| 04 | [Knative Eventing: mem dnia](04-eventing/) | Funkcja wywołana zdarzeniem: PingSource → Broker → Trigger |
+| 05 | [`func` od zera do URL-a](05-func/) | `func create` → handler → `func deploy`, obraz po digeście. Do czytania przed LAB 3: [`handler-vs-kontener.md`](05-func/handler-vs-kontener.md) |
+| 06 | [Tryb panic](06-panic/) | Nagły skok ruchu, okno 6 s vs 60 s, logi autoskalera |
+| 07 | [Keynote na domyślnych ustawieniach](07-keynote/) | k6 + Grafana: co robi autoskaler, zanim go dostroisz |
+| 08 | [Bezpieczne pody i usługi wewnętrzne](08-bezpieczne-pody/) | `secure-pod-defaults`, obraz jako root, `cluster-local` |
+| 09 | [Nieudany rollout](09-nieudany-rollout/) | `latestCreated` ≠ `latestReady`, stara rewizja dalej działa |
+| 10 | [Trace cold startu w Tempo](10-tracing/) | Knative → OTel Collector → Tempo: gdzie naprawdę idzie czas |
+| 11 | [KEDA: skalowanie od kolejki](11-keda/) | Serverless bez Knative: Deployment 0 → N → 0 według długości kolejki |
+| 12 | [Wasm: Spin na kind](12-wasm/) | WebAssembly jako pod, pomiar startu, krytycznie o „1000× szybciej” |
 
 ## Zasady
 

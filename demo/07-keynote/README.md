@@ -2,8 +2,6 @@
 
 **Cel:** zobaczyć, jak `meme-gen` zachowuje się pod obciążeniem z keynote'a, **zanim** dostroisz autoskalowanie. To punkt wyjścia do LAB 5.
 
-`Dzień 2 · początek LAB 5`
-
 ## Przygotowanie
 
 Demo działa na stanie startowym LAB 5: `meme-gen` 2.0.0 w namespace `memeops`, domyślne autoskalowanie. Jeśli skończyłeś LAB 4, masz go już u siebie i nic nie uruchamiasz. W przeciwnym razie:
@@ -12,7 +10,7 @@ Demo działa na stanie startowym LAB 5: `meme-gen` 2.0.0 w namespace `memeops`, 
 tools/start-lab.sh lab05              # usuwa i tworzy od nowa meme-api i meme-gen (tracisz własne rewizje)
 ```
 
-Prowadzący robi to rano na swoim klastrze. Ty powtarzasz ten test jako przebieg 1 w [LAB 5](../../labs/lab05-keynote/).
+Ten test powtarzasz jako przebieg 1 w [LAB 5](../../labs/lab05-keynote/).
 
 Grafana wymaga platformy z `--monitoring`.
 

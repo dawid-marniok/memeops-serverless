@@ -1,6 +1,6 @@
 # Demo 01 krok po kroku: Knative Service na plikach YAML
 
-Rozszerzenie dema 01 do samodzielnej powtórki po LAB 2 albo po szkoleniu. To samo, co robisz w LAB 2 przez `kn`, tutaj zapisane w YAML-u: pierwsze wdrożenie, scale-to-zero, canary 80/20, przełączenie, rollback. Do tego ściąga ze wszystkimi ważniejszymi opcjami Knative Service. Całość zajmuje około 10 minut.
+Rozszerzenie dema 01 do samodzielnej powtórki po LAB 2 albo po szkoleniu. To samo, co robisz w LAB 2 przez `kn`, tutaj zapisane w YAML-u: pierwsze wdrożenie, scale-to-zero, canary 80/20, przełączenie, rollback. Do tego ściąga ze wszystkimi ważniejszymi opcjami Knative Service.
 
 Wymaga platformy z `setup/platform.sh` (`setup/check.sh` → 13/13) i obrazów `localhost:5001/meme-api:v1` oraz `v2` (buduje je `platform.sh`). Komendy uruchamiasz z katalogu repo. Wyniki poniżej pochodzą z próby 2026-11-04 na klastrze `memeops` (Knative 1.23).
 

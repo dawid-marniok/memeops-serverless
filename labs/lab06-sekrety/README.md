@@ -1,9 +1,5 @@
 # lab06 — Sekrety, konfiguracja i logowanie
 
-| Dzień | Po bloku |
-|---|---|
-| 2 | 2.2 Sekrety, TLS i uwierzytelnianie |
-
 > **Zgłoszenie od PO:** „Ktoś wrzuca memy anonimowo. Od teraz tylko uczestnicy z tokenem konferencji tworzą memy, galeria zostaje publiczna. I chcemy znak wodny konferencji bez budowania nowego obrazu.”
 
 **Cel:** przenosisz konfigurację do ConfigMap, klucz podpisu tokenów do Secretu, zabezpieczasz kontekst kontenera i (dla chętnych) włączasz HTTPS.

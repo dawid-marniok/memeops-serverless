@@ -1,9 +1,5 @@
 # lab01 — Platforma pod MemeOps
 
-| Dzień | Po bloku |
-|---|---|
-| 1 | 1.1 Architektura i wybór frameworka |
-
 > **Zgłoszenie od PO:** „Konferencja za dwa dni. Zanim cokolwiek wdrożymy, potrzebujemy platformy, która sama skaluje się od zera do szczytu. Wybraliśmy Knative — postawcie ją.”
 
 **Cel:** sprawdzasz, że klaster z Knative Serving działa, i rozumiesz, z jakich komponentów się składa.

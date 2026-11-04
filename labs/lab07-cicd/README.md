@@ -1,9 +1,5 @@
 # lab07 — CI/CD i canary dla dark mode
 
-| Dzień | Po bloku |
-|---|---|
-| 2 | 2.3 CI/CD i wdrażanie funkcji |
-
 > **Zgłoszenie od PO:** „Mamy szablon dark mode. Chcemy go pokazać 10% uczestników, a jeśli się nie spodoba — zrobić rollback bez dramatu. Do tego ładny adres: `memy.…` zamiast technicznego.”
 
 **Cel:** uruchamiasz pipeline test → build → skan → push → deploy, reagujesz na zatrzymanie przez skaner, wdrażasz canary 10%, promujesz albo wycofujesz i podpinasz własną domenę.
@@ -31,7 +27,7 @@ Otwórz `ci/pipeline.sh` (np. `pluma ci/pipeline.sh &`). Dla każdego etapu odpo
 ci/pipeline.sh 2.2.0 10 dark
 ```
 
-Pierwsze uruchomienie pobiera bazę Trivy (ok. 1 min). Czy pipeline doszedł do etapu 5? Jeśli nie — który etap go zatrzymał i dlaczego? Przeczytaj tabelę z wynikiem: pakiet, wersja zainstalowana, wersja z poprawką.
+Pierwsze uruchomienie pobiera bazę Trivy. Czy pipeline doszedł do etapu 5? Jeśli nie — który etap go zatrzymał i dlaczego? Przeczytaj tabelę z wynikiem: pakiet, wersja zainstalowana, wersja z poprawką.
 
 ### 3. Naprawa i ponowne uruchomienie
 

@@ -74,6 +74,7 @@ h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; l
 h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
 h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
 h3 { font-size: 18px; margin: 28px 0 8px; }
+h4 { font-size: 15.5px; margin: 20px 0 6px; }
 .lede { font-size: 18px; color: var(--muted); margin: 0; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
@@ -200,6 +201,7 @@ details p { margin: 10px 0 4px; }
     <a href="#cloudevent">CloudEvent</a>
     <a href="#dostarczanie">Ponowienia</a>
     <a href="#trigger">Jak powstaje Trigger</a>
+    <a href="#filtry">Filtry Triggera</a>
     <a href="#demo">Demo 04 krok po kroku</a>
     <a href="#kafka">Kafka a Eventing</a>
     <a href="#wybor">Eventing, KEDA czy HTTP</a>
@@ -558,7 +560,82 @@ spec:
     <p>To samo z <code>kn</code> (flagi sprawdzone w <code>kn trigger create --help</code>):</p>
 <pre>kn trigger create nowy-mem -n demo --broker default \
   --filter type=memeops.mem.nowy --sink ksvc:mem-dnia</pre>
-    <p>Filtrować możesz po każdym atrybucie koperty, np. <code>type</code> i <code>source</code> naraz. Nowsze pole <code>filters</code> pozwala na prefiksy, sufiksy, negację i wyrażenia CESQL (sekcja 5). Po treści filtrować się nie da.</p>
+
+    <h3 id="filtry">Jak działa filtr i jak dobrze filtrować</h3>
+    <p><code>broker-filter</code> porównuje z filtrem <b>tylko atrybuty koperty</b>, czyli nagłówki <code>Ce-*</code>. Do treści (<code>data</code>) nie zagląda, więc <code>{"top": …}</code> jest dla Triggera niewidoczne. Filtrować możesz po:</p>
+    <ul>
+      <li><b>atrybutach standardowych:</b> <code>type</code>, <code>source</code>, <code>id</code>, <code>specversion</code>, <code>subject</code>, <code>time</code>, <code>datacontenttype</code>, <code>dataschema</code>;</li>
+      <li><b>rozszerzeniach</b> (extension attributes): dowolny własny atrybut, np. nagłówek <code>Ce-Kategoria: koty</code> daje atrybut <code>kategoria</code>. Według CloudEvents nazwa może mieć tylko małe litery i cyfry (bez <code>-</code> i <code>_</code>).</li>
+    </ul>
+
+    <h4><code>filter.attributes</code>: dokładne dopasowanie (to jest w demo)</h4>
+<pre>filter:
+  attributes:
+    type: memeops.mem.nowy     <span class="c"># dokładnie ten tekst, wielkość liter ma znaczenie</span>
+    source: /uczestnik/ja      <span class="c"># kilka kluczy = AND: muszą pasować wszystkie</span>
+    kategoria: ""              <span class="c"># "" = dowolna wartość, ale atrybut MUSI istnieć</span></pre>
+    <ul>
+      <li>Brak prefiksów i wildcardów. Wartość albo pasuje co do znaku, albo nie.</li>
+      <li>Nie da się zapisać OR. Dwa typy do jednego odbiorcy wymagają dwóch Triggerów, jak <code>harmonogram</code> i <code>nowy-mem</code> w demo.</li>
+      <li>Trigger bez <code>filter</code> dostaje <b>wszystkie</b> zdarzenia z Brokera.</li>
+    </ul>
+
+    <h4><code>filters</code>: prefiksy, negacja, OR, CESQL</h4>
+    <p>Lista wyrażeń. Zdarzenie przechodzi, gdy pasują <b>wszystkie</b> elementy listy (AND). W 1.23 pole działa bez włączania flag (sprawdzone w <code>config-features</code> na klastrze).</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Dialekt</th><th scope="col">Przepuszcza, gdy…</th><th scope="col">Przykład</th></tr></thead>
+        <tbody>
+          <tr><th scope="row"><code>exact</code></th><td>wartość jest dokładnie równa (jak <code>attributes</code>)</td><td><code>exact: {type: memeops.mem.nowy}</code></td></tr>
+          <tr><th scope="row"><code>prefix</code></th><td>wartość zaczyna się od tekstu</td><td><code>prefix: {type: memeops.mem.}</code></td></tr>
+          <tr><th scope="row"><code>suffix</code></th><td>wartość kończy się tekstem</td><td><code>suffix: {source: /mem-co-minute}</code></td></tr>
+          <tr><th scope="row"><code>all</code></th><td>pasują wszystkie wyrażenia w środku (AND)</td><td><code>all: [{…}, {…}]</code></td></tr>
+          <tr><th scope="row"><code>any</code></th><td>pasuje co najmniej jedno (OR)</td><td><code>any: [{…}, {…}]</code></td></tr>
+          <tr><th scope="row"><code>not</code></th><td>wyrażenie w środku nie pasuje</td><td><code>not: {exact: {type: memeops.mem.usuniety}}</code></td></tr>
+          <tr><th scope="row"><code>cesql</code></th><td>wyrażenie CloudEvents SQL zwraca prawdę</td><td><code>cesql: "type LIKE 'memeops.mem.%'"</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+<pre>spec:
+  broker: default
+  filters:
+    - prefix: {type: memeops.mem.}                     <span class="c"># cała rodzina: nowy, edytowany, usuniety…</span>
+    - not: {exact: {type: memeops.mem.usuniety}}       <span class="c"># … oprócz usuniętych</span>
+    - any:                                             <span class="c"># i tylko od tych nadawców (OR)</span>
+        - exact: {source: /uczestnik/ja}
+        - suffix: {source: /pingsources/mem-co-minute}
+  subscriber:
+    ref: {apiVersion: serving.knative.dev/v1, kind: Service, name: mem-dnia}
+
+<span class="c"># dwa pierwsze warunki zapisane w CESQL:</span>
+  filters:
+    - cesql: "type LIKE 'memeops.mem.%' AND type &lt;&gt; 'memeops.mem.usuniety'"</pre>
+    <p>Gdy w jednym Triggerze ustawisz <code>filter</code> i <code>filters</code>, liczy się tylko <code>filters</code> (opis pola w <code>kubectl explain trigger.spec.filters</code>).</p>
+
+    <h4>Sprawdzone na klastrze (4.11.2026)</h4>
+    <p>Trzy Triggery na jednym Brokerze: <code>prefiks</code> (<code>prefix: memeops.mem.</code> + <code>not</code> usuniety), <code>rozszerzenie</code> (<code>attributes: {kategoria: ""}</code>) i <code>cesql</code> (<code>type LIKE 'memeops.mem.%' AND kategoria = 'koty'</code>). Każde zdarzenie dostało od Brokera 202.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Zdarzenie (<code>Ce-Type</code>, <code>Ce-Kategoria</code>)</th><th scope="col">prefiks</th><th scope="col">rozszerzenie</th><th scope="col">cesql</th></tr></thead>
+        <tbody>
+          <tr><th scope="row"><code>memeops.mem.nowy</code>, brak</th><td>✅</td><td>—</td><td>—</td></tr>
+          <tr><th scope="row"><code>memeops.mem.usuniety</code>, <code>koty</code></th><td>— (<code>not</code>)</td><td>✅</td><td>✅</td></tr>
+          <tr><th scope="row"><code>memeops.mem.edytowany</code>, <code>psy</code></th><td>✅</td><td>✅</td><td>— (nie koty)</td></tr>
+          <tr><th scope="row"><code>inny.typ</code>, brak</th><td>—</td><td>—</td><td>—</td></tr>
+          <tr><th scope="row"><code>Memeops.mem.nowy</code>, <code>koty</code></th><td>— (wielka litera)</td><td>✅</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Pierwszy wiersz pokazuje, że <code>kategoria: ""</code> nie przepuszcza zdarzenia bez tego atrybutu. Ostatni wiersz pokazuje, że porównanie rozróżnia wielkość liter.</p>
+
+    <h4>Jak dobrze filtrować</h4>
+    <ol>
+      <li><b>Nazywaj typy hierarchicznie</b> (<code>memeops.mem.nowy</code>, <code>memeops.mem.usuniety</code>). Wtedy jeden <code>prefix: memeops.mem.</code> obejmuje całą rodzinę, a nowy typ nie wymaga zmian w Triggerach.</li>
+      <li><b>Główny filtr opieraj na <code>type</code></b>, czyli na tym, co się stało. <code>source</code> (kto wysłał) służy do zawężania. Po <code>id</code> się nie filtruje.</li>
+      <li><b>Informację potrzebną do routingu umieść w rozszerzeniu, nie w <code>data</code>.</b> Chcesz kierować memy o kotach gdzie indziej? Nadawca dodaje <code>Ce-Kategoria: koty</code>.</li>
+      <li><b>Uważaj na pętle.</b> Odpowiedź odbiorcy, który zwraca 2xx z nagłówkami <code>Ce-*</code>, wraca do Brokera (w Subscription widać <code>reply: Broker default</code>). Jeśli pasuje do tego samego Triggera, zdarzenie krąży w kółko <span class="nt">[nie testowane]</span>. Odpowiedź powinna mieć więc inny <code>type</code>, np. <code>memeops.mem.przetworzony</code>. <code>event_display</code> w demo nic nie odsyła.</li>
+      <li><b>Trigger bez filtra</b> przydaje się do podglądu wszystkiego, co płynie przez Broker. Odbiorcy produkcyjnemu daj wąski filtr.</li>
+    </ol>
 
     <h3>Co się dzieje po <code>kubectl apply</code></h3>
     <p>Trigger to tylko zapis w API. Działać zaczyna dopiero wtedy, gdy kontroler zamieni go na coś, co rozumie kanał:</p>
@@ -866,6 +943,8 @@ kubectl logs -n demo -l serving.knative.dev/service=mem-dnia -c user-container -
   <details><summary>Usuwasz Trigger <code>nowy-mem</code>. Co jeszcze znika?</summary><p>Jego Subscription <code>default-nowy-mem-…</code>, bo Trigger jest jej właścicielem (ownerReference). Kanał zostaje, bo należy do Brokera. Na liście subskrybentów kanału zostaje tylko <code>harmonogram</code>.</p></details>
   <details><summary>Macie Kafkę z tematem <code>zamowienia</code>. Funkcja ma się budzić przy każdym zamówieniu. KafkaSource czy Kafka Broker?</summary><p>KafkaSource, bo wiadomości już leżą w Waszym temacie i trzeba je wpuścić do Eventingu. Kafka Broker decyduje o czym innym: gdzie Broker przechowuje zdarzenia. Te rozwiązania się nie wykluczają: KafkaSource może wysyłać do Brokera klasy Kafka.</p></details>
   <details><summary>Ile podów z <code>knative-eventing</code> dotyka jedno zdarzenie z <code>curl</code> w demo, zanim dojdzie do <code>mem-dnia</code>?</summary><p>Trzy: <code>broker-ingress</code> → <code>imc-dispatcher</code> → <code>broker-filter</code>. Potem jest już Serving (activator przy zerze podów).</p></details>
+  <details><summary>Jedna usługa ma dostawać <code>memeops.mem.nowy</code> i <code>memeops.mem.edytowany</code>. Ile Triggerów potrzebujesz?</summary><p>Z <code>filter.attributes</code> dwa, bo to tylko dokładne dopasowanie i nie ma OR. Z <code>filters</code> wystarczy jeden: <code>any</code> z dwoma <code>exact</code> albo <code>prefix: {type: memeops.mem.}</code>, jeśli mają przechodzić wszystkie typy z tej rodziny.</p></details>
+  <details><summary>Chcesz kierować do osobnej usługi tylko memy o kotach. Kategoria jest w JSON-ie w treści. Da się?</summary><p>Nie. Trigger widzi tylko atrybuty koperty (<code>Ce-*</code>). Nadawca musi dodać rozszerzenie, np. <code>Ce-Kategoria: koty</code>. Wtedy wystarczy filtr <code>exact: {kategoria: koty}</code>.</p></details>
   <details><summary><code>mem-dnia</code> zaczyna zwracać 500. Co zrobi Broker?</summary><p>5xx to błąd do ponowienia. Domyślnie w 1.23: do 10 ponowień z wykładniczo rosnącą przerwą od 0,2 s. Bez <code>deadLetterSink</code> zdarzenie po ostatniej próbie nigdzie nie trafi <span class="nt">[nie testowane]</span>.</p></details>
 </section>
 
@@ -888,7 +967,8 @@ kubectl logs -n demo -l serving.knative.dev/service=mem-dnia -c user-container -
     <li><a href="https://github.com/knative/specs/blob/main/specs/eventing/data-plane.md">Knative Eventing data plane spec</a>: POST, kody odpowiedzi i ponowienia, tryby binary/structured</li>
     <li><a href="https://github.com/knative/eventing/tree/main/docs/mt-channel-based-broker">knative/eventing: mt-channel-based-broker</a>: ingress → dispatcher kanału → filter</li>
     <li><a href="https://github.com/knative/eventing/releases/tag/knative-v1.23.0">Wydanie knative-v1.23.0</a>: <code>eventing-core.yaml</code> (<code>config-br-defaults</code>, <code>config-br-default-channel</code>)</li>
-    <li><a href="https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md">CloudEvents 1.0.2</a>: atrybuty obowiązkowe i opcjonalne</li>
+    <li><a href="https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md">CloudEvents 1.0.2</a>: atrybuty obowiązkowe i opcjonalne, nazwy rozszerzeń</li>
+    <li><a href="https://github.com/cloudevents/spec/blob/main/cesql/spec.md">CloudEvents SQL (CESQL)</a>: składnia wyrażeń w dialekcie <code>cesql</code></li>
   </ul>
 </section>
 </div>
