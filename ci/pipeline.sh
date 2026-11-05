@@ -16,8 +16,8 @@ stage 1/5 "test (pytest w kontenerze, ta sama wersja Pythona co obraz)"
 docker run --rm -v "$PWD/$APP:/src:ro" -w /src python:3.12-slim \
   sh -c "pip install -q --root-user-action=ignore pytest -r requirements.txt && python -m pytest -q -p no:cacheprovider"
 
-stage 2/5 "build ${IMAGE} (+ tag ${SHA})"
-docker build -q -f "$APP/Dockerfile.slim" -t "$IMAGE" -t "localhost:${REGISTRY_PORT}/meme-gen:${SHA}" \
+stage 2/5 "build ${IMAGE} (+ tag ${SHA}; --pull: zawsze świeży obraz bazowy z łatkami)"
+docker build -q --pull -f "$APP/Dockerfile.slim" -t "$IMAGE" -t "localhost:${REGISTRY_PORT}/meme-gen:${SHA}" \
   --label "org.opencontainers.image.revision=${SHA}" "$APP"
 
 stage 3/5 "skan Trivy ${TRIVY_VERSION}: HIGH/CRITICAL z dostępną poprawką przerywają pipeline"

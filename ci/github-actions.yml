@@ -26,7 +26,7 @@ jobs:
         working-directory: app/meme-gen
         run: pip install pytest -r requirements.txt && python -m pytest -q
       - name: build
-        run: docker build -f app/meme-gen/Dockerfile.slim -t $IMAGE:${{ github.sha }} app/meme-gen
+        run: docker build --pull -f app/meme-gen/Dockerfile.slim -t $IMAGE:${{ github.sha }} app/meme-gen
       - name: scan (Trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:

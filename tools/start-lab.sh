@@ -2,7 +2,7 @@
 # Start labu („dogoń grupę”): doprowadza klaster do stanu startowego wskazanego labu (= rozwiązanie poprzedniego).
 # Usuwa i tworzy od nowa usługi Knative, więc tracisz własne rewizje. Pliki w repo zostają, z jednym wyjątkiem:
 # od lab05 odkomentowuje Pillow w app/meme-gen/requirements.txt (krok 1 LAB 4), jeśli wciąż jest zakomentowany.
-# Użycie: tools/start-lab.sh lab03|lab04|lab05|lab06|lab07|lab08
+# Użycie: tools/start-lab.sh lab03|lab04|lab05|lab06|lab07|lab08|lab09 (lab09 = zdrowy stan po LAB 8)
 set -euo pipefail
 cd "$(dirname "$0")/.."; source setup/versions.env
 LAB=${1:?podaj lab, np. lab05}; N=${LAB#lab}; N=$((10#$N))

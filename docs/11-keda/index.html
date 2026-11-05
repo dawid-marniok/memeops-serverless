@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEDA od środka</title>
+<style>
+/* Ten sam system co pozostałe notatki: kolor = rola. Pomarańcz = KEDA, turkus = Kubernetes (HPA, Deployment), róż = ryzyko/pułapka. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --traffic: #0f6d6a;
+  --traffic-bg: #e3f2f0;
+  --cold: #b0306a;
+  --cold-bg: #f9e6ef;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 96px; }
+.prose { max-width: 760px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+.answer .v { font-weight: 700; }
+.answer .v.no { color: var(--cold); }
+.answer .v.yes { color: var(--traffic); }
+
+/* Diagram */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-top: 16px; }
+.scroll svg { display: block; width: 100%; min-width: 760px; height: auto; }
+svg text { font-family: var(--sans); }
+.box rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.3; }
+.box.kd rect { fill: var(--kn-bg); stroke: var(--kn); }
+.box.k8 rect { fill: var(--traffic-bg); stroke: var(--traffic); }
+.box .t { font-size: 14px; font-weight: 650; fill: var(--text); }
+.box .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.a { fill: none; stroke-width: 2.4; }
+.a.kd { stroke: var(--kn); }
+.a.k8 { stroke: var(--traffic); }
+.a.dash { stroke-dasharray: 6 5; }
+.mk-kd { fill: var(--kn); }
+.mk-k8 { fill: var(--traffic); }
+.lbl { font-size: 12px; font-weight: 700; }
+.lbl.kd { fill: var(--kn); }
+.lbl.k8 { fill: var(--traffic); }
+.note { font-size: 12px; fill: var(--muted); }
+figure { margin: 0; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid; }
+.legend .l-kd::before { background: var(--kn-bg); border-color: var(--kn); }
+.legend .l-k8::before { background: var(--traffic-bg); border-color: var(--traffic); }
+.legend .l-src::before { background: var(--surface-2); border-color: var(--line); }
+
+/* Kroki pętli */
+ol.steps { padding-left: 0; list-style: none; counter-reset: s; margin: 16px 0 0; }
+ol.steps li { counter-increment: s; position: relative; padding: 0 0 14px 44px; }
+ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 28px; height: 28px; border-radius: 50%; background: var(--kn-bg); color: var(--kn); font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+ol.steps li.k8::before { background: var(--traffic-bg); color: var(--traffic); }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 680px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 24%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code, summary code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; }
+.tag.no { background: var(--cold-bg); color: var(--cold); }
+.tag.yes { background: var(--traffic-bg); color: var(--traffic); }
+.tag.kd { background: var(--kn-bg); color: var(--kn); }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre .c { color: var(--code-comment); }
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+.callout.cold { border-left-color: var(--cold); background: var(--cold-bg); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.src { font-size: 13.5px; color: var(--muted); }
+
+/* Kalkulator */
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 16px; }
+.calc label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.calc input { font: 15px var(--mono); padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); width: 100%; }
+.calc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.result { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 4px; }
+.result div { background: var(--surface-2); border-radius: 9px; padding: 10px 14px; }
+.result .k { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.result .val { font-size: 26px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.result .val.kd { color: var(--kn); }
+.result .val.k8 { color: var(--traffic); }
+.result .val.no { color: var(--cold); }
+.result .x { font-size: 13px; color: var(--muted); }
+
+/* Katalog skalerów */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; align-items: center; }
+.filters input[type=search] { font: 15px var(--sans); padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 0; flex: 1 1 220px; }
+.filters input:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip { font: 600 13px var(--sans); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--kn-bg); border-color: var(--kn); color: var(--kn); }
+.count { font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+.cat-block { margin-top: 18px; }
+.cat-block h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+.grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc { font-size: 13.5px; padding: 4px 10px; border-radius: 7px; background: var(--surface); border: 1px solid var(--line); }
+.sc.hot { border-color: var(--kn); }
+.sc small { font-size: 11px; font-weight: 700; margin-left: 5px; }
+.sc small.exp { color: var(--kn); }
+.sc small.dep { color: var(--cold); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="prose">
+  <div class="eyebrow">Serverless na Kubernetes · notatka do nauki</div>
+  <h1>KEDA od środka</h1>
+  <p class="lede">Jak KEDA budzi zwykły Deployment z zera, kto liczy pody, co potrafi poza demem z Redisem i na jakich źródłach zdarzeń może nasłuchiwać. W skrócie: KEDA pyta źródło o pracę, sama przełącza 0 ↔ 1, a od 1 do N oddaje sterowanie zwykłemu HPA.</p>
+  <div class="meta">
+    <span class="pill">KEDA 2.21</span>
+    <span class="pill">80 wbudowanych skalerów</span>
+    <span class="pill">HTTP Add-on 0.16 (beta)</span>
+    <span class="pill">demo 11</span>
+    <span class="pill">stan na 05.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#architektura">Architektura</a>
+    <a href="#petla">Pętla skalowania</a>
+    <a href="#licz">Policz pody</a>
+    <a href="#scaledobject">ScaledObject</a>
+    <a href="#scaledjob">ScaledJob</a>
+    <a href="#triggery">Triggery</a>
+    <a href="#auth">Uwierzytelnianie</a>
+    <a href="#mozliwosci">Możliwości</a>
+    <a href="#knative">KEDA a Knative</a>
+    <a href="#klaster">Na klastrze</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Czym jest KEDA?</div><p><span class="v yes">Operatorem do autoskalowania.</span> Kubernetes Event-Driven Autoscaler, projekt CNCF graduated. Dokłada do HPA metryki ze źródeł zdarzeń i scale-to-zero.</p></div>
+    <div class="answer"><div class="q">Co skaluje?</div><p><span class="v yes">Twoje obiekty.</span> Deployment, StatefulSet, dowolny zasób z podzasobem <code>/scale</code> (<code>ScaledObject</code>) albo Joby (<code>ScaledJob</code>). Nie trzeba przepisywać aplikacji.</p></div>
+    <div class="answer"><div class="q">Kto liczy pody?</div><p><span class="v yes">Dwóch graczy.</span> 0 ↔ 1 przełącza <code>keda-operator</code>. Od 1 do N decyduje HPA, którego KEDA tworzy i karmi metryką.</p></div>
+    <div class="answer"><div class="q">Na czym może nasłuchiwać?</div><p><span class="v yes">80 wbudowanych skalerów</span>: kolejki (Kafka, RabbitMQ, SQS, Service Bus, Redis), bazy (PostgreSQL, MongoDB), metryki (Prometheus, Datadog), cron, CPU. Do tego własne przez gRPC.</p></div>
+    <div class="answer"><div class="q">Obsłuży HTTP od zera?</div><p><span class="v no">Sama nie.</span> Przy 0 podach nikt nie przytrzyma żądania. Potrzebny jest HTTP Add-on (beta) albo Knative z activatorem.</p></div>
+  </div>
+</section>
+
+<section id="architektura">
+  <h2 class="prose"><span class="num">1</span>Architektura: trzy pody i jeden HPA</h2>
+  <p class="prose">Po <code>helm install</code> w namespace <code>keda</code> działają trzy Deploymenty. Czwarty element, HPA, KEDA tworzy osobno dla każdego ScaledObjectu, w namespace aplikacji.</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 360" role="img" aria-label="keda-operator odpytuje źródło zdarzeń przez scaler i przełącza Deployment między 0 i 1 repliką. Tworzy też HPA. HPA co 15 sekund pyta keda-operator-metrics-apiserver o metrykę, a ten przez gRPC pyta keda-operator. HPA skaluje Deployment od 1 do N. Admission webhooks sprawdzają obiekty KEDA przy zapisie.">
+        <defs>
+          <marker id="mkd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-kd" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="mk8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-k8" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        <!-- źródło -->
+        <g class="box"><rect x="20" y="115" width="190" height="90" rx="10"/><text class="t" x="115" y="148" text-anchor="middle">Źródło zdarzeń</text><text class="s" x="115" y="170" text-anchor="middle">Redis, Kafka, SQS,</text><text class="s" x="115" y="186" text-anchor="middle">Prometheus, cron…</text></g>
+        <!-- KEDA -->
+        <g class="box kd"><rect x="320" y="40" width="240" height="90" rx="10"/><text class="t" x="440" y="72" text-anchor="middle">keda-operator</text><text class="s" x="440" y="93" text-anchor="middle">scalery, co pollingInterval</text><text class="s" x="440" y="110" text-anchor="middle">aktywny? → 0 ↔ 1</text></g>
+        <g class="box kd"><rect x="320" y="220" width="240" height="90" rx="10"/><text class="t" x="440" y="252" text-anchor="middle">keda-operator-</text><text class="t" x="440" y="270" text-anchor="middle">metrics-apiserver</text><text class="s" x="440" y="292" text-anchor="middle">External Metrics API</text></g>
+        <!-- Kubernetes -->
+        <g class="box k8"><rect x="670" y="40" width="210" height="90" rx="10"/><text class="t" x="775" y="72" text-anchor="middle">Deployment</text><text class="s" x="775" y="93" text-anchor="middle">albo StatefulSet,</text><text class="s" x="775" y="110" text-anchor="middle">CR z /scale</text></g>
+        <g class="box k8"><rect x="670" y="220" width="210" height="90" rx="10"/><text class="t" x="775" y="252" text-anchor="middle">HPA</text><text class="s" x="775" y="274" text-anchor="middle">keda-hpa-&lt;nazwa&gt;</text><text class="s" x="775" y="291" text-anchor="middle">liczy 1 ↔ N</text></g>
+        <!-- webhooks -->
+        <g class="box"><rect x="20" y="250" width="190" height="60" rx="10"/><text class="t" x="115" y="276" text-anchor="middle">keda-admission-webhooks</text><text class="s" x="115" y="295" text-anchor="middle">walidacja przy apply</text></g>
+        <!-- strzałki -->
+        <path class="a kd" d="M320 85 C270 85 260 150 216 155" marker-end="url(#mkd)"/>
+        <text class="lbl kd" x="250" y="70" text-anchor="middle">pyta o pracę</text>
+        <path class="a kd" d="M560 70 H664" marker-end="url(#mkd)"/>
+        <text class="lbl kd" x="612" y="60" text-anchor="middle">0 ↔ 1</text>
+        <path class="a kd dash" d="M560 105 C615 105 615 235 664 240" marker-end="url(#mkd)"/>
+        <text class="lbl kd" x="598" y="196" text-anchor="end">tworzy</text>
+        <path class="a kd" d="M440 220 V136" marker-end="url(#mkd)"/>
+        <text class="lbl kd" x="450" y="182">gRPC</text>
+        <path class="a k8" d="M670 265 H566" marker-end="url(#mk8)"/>
+        <text class="lbl k8" x="618" y="256" text-anchor="middle">co 15 s</text>
+        <path class="a k8" d="M775 220 V136" marker-end="url(#mk8)"/>
+        <text class="lbl k8" x="785" y="182">1 ↔ N</text>
+        <text class="note" x="20" y="345">Metryki dla HPA też liczy operator: metrics-apiserver tylko je przekazuje. Dzięki temu źródło odpytuje jedno miejsce.</text>
+      </svg>
+    </div>
+    <div class="legend"><span class="l-kd">KEDA</span><span class="l-k8">Kubernetes</span><span class="l-src">poza klastrem / pomocnicze</span></div>
+  </figure>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Komponent</th><th>Co robi</th><th>Co się stanie, gdy padnie</th></tr></thead>
+    <tbody>
+      <tr><th><code>keda-operator</code></th><td>Obserwuje ScaledObjecty i ScaledJoby, uruchamia scalery, odpytuje źródła, przełącza 0 ↔ 1, tworzy i aktualizuje HPA, tworzy Joby.</td><td>Brak budzenia z zera i brak zejścia do zera. Działający HPA trzyma ostatnią liczbę podów.</td></tr>
+      <tr><th><code>keda-operator-metrics-apiserver</code></th><td>Rejestruje się w Kubernetesie jako <code>external.metrics.k8s.io</code>. HPA pyta go o metrykę, on pyta operatora.</td><td>HPA nie dostaje metryk i nie zmienia liczby podów (status <code>FailedGetExternalMetric</code>).</td></tr>
+      <tr><th><code>keda-admission-webhooks</code></th><td>Sprawdza obiekty KEDA przy zapisie, np. czy dwa ScaledObjecty nie skalują tego samego Deploymentu albo czy obok nie stoi już twój HPA.</td><td>Zależnie od <code>failurePolicy</code>: apply nie przejdzie albo przejdzie bez sprawdzenia.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout prose">W klastrze może być <b>tylko jeden</b> serwer External Metrics API. Jeśli masz już np. prometheus-adapter wystawiający metryki zewnętrzne, KEDA się z nim pokłóci. Adapter może dalej obsługiwać Custom Metrics API, to osobny zasób.</div>
+</section>
+
+<section id="petla" class="prose">
+  <h2><span class="num">2</span>Pętla skalowania krok po kroku</h2>
+  <p>Na przykładzie z demo 11: lista <code>memy</code> w Redisie, <code>listLength: "5"</code>, <code>pollingInterval: 5</code>, <code>minReplicaCount: 0</code>.</p>
+  <ol class="steps">
+    <li>Co <code>pollingInterval</code> (domyślnie 30 s) operator wywołuje scaler, a ten pyta źródło: <code>LLEN memy</code>.</li>
+    <li>Jeśli wynik jest <b>większy</b> (nie „większy lub równy”) od progu aktywacji (<code>activationListLength</code>, domyślnie 0), trigger jest aktywny. Przy 0 replikach operator sam ustawia 1.</li>
+    <li class="k8">HPA <code>keda-hpa-generator</code> co 15 s (domyślny okres kube-controller-managera) pyta External Metrics API o wartość. Dostaje 100 i liczy <code>⌈100 ÷ 5⌉ = 20</code> podów.</li>
+    <li class="k8">HPA ucina wynik do <code>maxReplicaCount</code> i do swoich limitów tempa (<code>behavior</code>). Domyślnie w jednym kroku dodaje najwyżej 4 pody albo podwaja ich liczbę (większa z tych wartości). Stąd w demie 1 → 5.</li>
+    <li class="k8">Gdy kolejka maleje, HPA zmniejsza liczbę podów, ale nie niżej niż 1. Domyślnie czeka na to 300 s (<code>stabilizationWindowSeconds</code> dla scaleDown).</li>
+    <li>Gdy żaden trigger nie jest aktywny przez <code>cooldownPeriod</code> (domyślnie 300 s), operator schodzi z 1 do 0. <code>cooldownPeriod</code> dotyczy <b>tylko</b> zejścia do zera.</li>
+  </ol>
+  <div class="callout"><b>Dwa progi, dwie role.</b> Próg aktywacji (<code>activation…</code>) decyduje, czy w ogóle wstać z zera. Cel (<code>listLength</code>, <code>lagThreshold</code>, <code>threshold</code>…) mówi HPA, ile pracy przypada na jeden pod. Przy <code>minReplicaCount ≥ 1</code> próg aktywacji jest ignorowany.</div>
+</section>
+
+<section id="licz">
+  <h2 class="prose"><span class="num">3</span>Policz pody</h2>
+  <p class="prose">Metryka typu <code>AverageValue</code> (domyślny dla prawie wszystkich skalerów). Kalkulator pokazuje, co zrobi KEDA i HPA w <b>najbliższym</b> kroku, z domyślnym <code>behavior</code> HPA.</p>
+  <div class="calc" id="calc">
+    <label>Wartość metryki<input type="number" id="c-m" value="100" min="0" inputmode="decimal"></label>
+    <label>Cel na pod<input type="number" id="c-t" value="5" min="0.001" step="any" inputmode="decimal"></label>
+    <label>Próg aktywacji<input type="number" id="c-a" value="0" min="0" inputmode="decimal"></label>
+    <label>Obecnie podów<input type="number" id="c-r" value="1" min="0" inputmode="numeric"></label>
+    <label>minReplicaCount<input type="number" id="c-min" value="0" min="0" inputmode="numeric"></label>
+    <label>maxReplicaCount<input type="number" id="c-max" value="10" min="1" inputmode="numeric"></label>
+    <div class="result" aria-live="polite">
+      <div><div class="k">Trigger</div><div class="val" id="o-act">aktywny</div><div class="x" id="o-act-x"></div></div>
+      <div><div class="k">HPA chce (⌈metryka ÷ cel⌉)</div><div class="val k8" id="o-want">20</div><div class="x" id="o-want-x"></div></div>
+      <div><div class="k">Po suficie max</div><div class="val k8" id="o-cap">10</div><div class="x" id="o-cap-x"></div></div>
+      <div><div class="k">W najbliższym kroku</div><div class="val kd" id="o-next">5</div><div class="x" id="o-next-x"></div></div>
+    </div>
+  </div>
+  <p class="prose src">Uproszczenia: HPA pomija zmianę, gdy stosunek metryki do celu × liczby podów mieści się w tolerancji 10%. Przy zmniejszaniu liczy jeszcze okno stabilizacji (domyślnie 300 s). Liczba Kafki jest dodatkowo ograniczona liczbą partycji.</p>
+</section>
+
+<section id="scaledobject">
+  <h2 class="prose"><span class="num">4</span>ScaledObject: wszystkie ważne pola</h2>
+  <p class="prose">ScaledObject to „HPA na sterydach”. Wskazuje, co skalować (<code>scaleTargetRef</code>), i według czego (<code>triggers</code>). Nie piszesz już własnego HPA, a jeśli jakiś istnieje, webhook odrzuci ScaledObject.</p>
+<pre class="prose">apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: generator
+  namespace: demo
+spec:
+  scaleTargetRef:
+    name: generator                 <span class="c"># domyślnie apps/v1 Deployment</span>
+  pollingInterval: 30               <span class="c"># co ile s pytać źródło</span>
+  cooldownPeriod: 300               <span class="c"># po ilu s bez pracy zejść z 1 do 0</span>
+  initialCooldownPeriod: 0          <span class="c"># ochrona świeżego obiektu przed zejściem do 0</span>
+  minReplicaCount: 0
+  maxReplicaCount: 100
+  idleReplicaCount: 0               <span class="c"># opcjonalnie: 0 przy braku pracy, min=2 gdy praca jest</span>
+  fallback:                         <span class="c"># gdy źródło nie odpowiada</span>
+    failureThreshold: 3
+    replicas: 6
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:                     <span class="c"># zwykły behavior HPA</span>
+        scaleDown: {stabilizationWindowSeconds: 60}
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.demo:6379
+        listName: memy
+        listLength: "5"             <span class="c"># cel na pod</span>
+        activationListLength: "0"   <span class="c"># próg wstawania z zera</span></pre>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Pole</th><th>Domyślnie</th><th>Znaczenie</th></tr></thead>
+    <tbody>
+      <tr><th><code>pollingInterval</code></th><td>30 s</td><td>Jak często operator pyta źródło. Ma znaczenie przede wszystkim przy budzeniu z zera. Od 1 do N HPA pyta własnym rytmem (15 s).</td></tr>
+      <tr><th><code>cooldownPeriod</code></th><td>300 s</td><td>Tylko zejście 1 → 0. Zejście N → 1 reguluje HPA (<code>behavior.scaleDown</code>).</td></tr>
+      <tr><th><code>initialCooldownPeriod</code></th><td>0 s</td><td>Ile sekund po utworzeniu obiektu KEDA nie zejdzie do zera, nawet bez pracy.</td></tr>
+      <tr><th><code>minReplicaCount</code> / <code>maxReplicaCount</code></th><td>0 / 100</td><td>Granice. Przy <code>min ≥ 1</code> nie ma scale-to-zero i progi aktywacji nie działają.</td></tr>
+      <tr><th><code>idleReplicaCount</code></th><td>nie ustawione</td><td>Liczba podów, gdy nie ma pracy. Jedyna obsługiwana wartość to 0 i musi być mniejsza od <code>min</code>. Pozwala na „0 albo co najmniej 2”.</td></tr>
+      <tr><th><code>fallback</code></th><td>brak</td><td>Po <code>failureThreshold</code> nieudanych odczytach ustawia <code>replicas</code>. Tylko dla metryk <code>Value</code>/<code>AverageValue</code>, nie dla CPU i pamięci.</td></tr>
+      <tr><th><code>advanced.restoreToOriginalReplicaCount</code></th><td>false</td><td>Czy po usunięciu ScaledObjectu przywrócić liczbę replik sprzed KEDA. Przy <code>false</code> zostaje ostatnia.</td></tr>
+      <tr><th><code>advanced.scalingModifiers</code></th><td>brak</td><td>Formuła łącząca kilka triggerów w jedną metrykę (<a href="#mozliwosci">sekcja 9</a>).</td></tr>
+      <tr><th><code>triggers[].metricType</code></th><td><code>AverageValue</code></td><td><code>AverageValue</code>: cel na pod. <code>Value</code>: cel dla całości, bez dzielenia przez pody. <code>Utilization</code>: tylko CPU i pamięć.</td></tr>
+      <tr><th><code>triggers[].useCachedMetrics</code></th><td>false</td><td>HPA dostaje wartość z ostatniego odpytania zamiast nowego zapytania do źródła. Odciąża źródło. Nie dla CPU, pamięci i cron.</td></tr>
+      <tr><th><code>triggers[].authenticationRef</code></th><td>brak</td><td>Odwołanie do <code>TriggerAuthentication</code> z sekretami (<a href="#auth">sekcja 7</a>).</td></tr>
+    </tbody>
+  </table></div>
+  <p class="prose"><b>Kilka triggerów naraz.</b> Każdy trigger to osobna metryka w tym samym HPA. HPA liczy pody dla każdej i bierze <b>największą</b> wartość. Z zera KEDA wstaje, gdy aktywny jest którykolwiek trigger. Jeśli chcesz sumy, średniej albo warunku, użyj <code>scalingModifiers</code>.</p>
+</section>
+
+<section id="scaledjob" class="prose">
+  <h2><span class="num">5</span>ScaledJob: jeden Job na porcję pracy</h2>
+  <p>Zamiast skalować długo żyjący Deployment, KEDA tworzy <b>Joby</b>. Każdy Job bierze zadanie, kończy i znika. Nikt go nie zabija w połowie przy skalowaniu w dół, więc to dobry wybór dla długich zadań (transkodowanie, raporty, build) i dla workerów, które nie obsługują SIGTERM.</p>
+<pre>apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata: {name: render, namespace: demo}
+spec:
+  jobTargetRef:
+    template:
+      spec:
+        containers: [{name: render, image: ghcr.io/firma/render:1.4}]
+        restartPolicy: Never
+  pollingInterval: 30
+  maxReplicaCount: 100              <span class="c"># maks. Jobów naraz</span>
+  successfulJobsHistoryLimit: 100
+  failedJobsHistoryLimit: 100
+  scalingStrategy:
+    strategy: default               <span class="c"># default | custom | accurate | eager</span>
+  triggers:
+    - type: rabbitmq
+      metadata: {queueName: render, mode: QueueLength, value: "1"}
+      authenticationRef: {name: rabbit-auth}</pre>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Strategia</th><th>Ile nowych Jobów w cyklu</th><th>Kiedy</th></tr></thead>
+    <tbody>
+      <tr><th><code>default</code></th><td><code>maxScale − uruchomione Joby</code></td><td>Kolejka liczy też wiadomości, które Joby już przetwarzają.</td></tr>
+      <tr><th><code>accurate</code></th><td>Uwzględnia, że kolejka nie liczy zablokowanych wiadomości</td><td>Azure Storage Queue i podobne, gdzie pobrana wiadomość znika z licznika.</td></tr>
+      <tr><th><code>eager</code></th><td>Wykorzystuje wszystkie wolne miejsca do <code>maxReplicaCount</code></td><td>Gdy Joby kończą się w różnym tempie i nie chcesz czekać na „pełną” porcję.</td></tr>
+      <tr><th><code>custom</code></th><td>Według <code>customScalingQueueLengthDeduction</code> i <code>customScalingRunningJobPercentage</code></td><td>Gdy żadna z powyższych nie pasuje do semantyki kolejki.</td></tr>
+    </tbody>
+  </table></div>
+  <p>ScaledJob nie tworzy HPA: liczbę Jobów wylicza sam operator. Kilka triggerów łączy pole <code>multipleScalersCalculation</code>: <code>max</code> (domyślnie), <code>min</code>, <code>avg</code> albo <code>sum</code>.</p>
+</section>
+
+<section id="triggery">
+  <h2 class="prose"><span class="num">6</span>Na czym KEDA może nasłuchiwać</h2>
+  <p class="prose">Wersja 2.21 ma 80 wbudowanych skalerów. Podział na grupy jest nasz, dla czytelności (strona KEDA ma tylko filtry). Pomarańczowa ramka = te, które spotkasz najczęściej. „Nasłuchiwanie” to w praktyce <b>odpytywanie</b> co <code>pollingInterval</code>. Wyjątek: <code>external-push</code>, który dostaje powiadomienia strumieniem.</p>
+  <div class="filters">
+    <input type="search" id="sc-q" placeholder="Szukaj, np. kafka, azure, sql" aria-label="Szukaj skalera">
+    <div id="sc-chips" role="group" aria-label="Grupa"></div>
+  </div>
+  <div class="count" id="sc-count" aria-live="polite"></div>
+  <div id="sc-list"></div>
+
+  <h3 class="prose">Najczęstsze triggery i ich parametry</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th><code>type</code></th><th>Metryka</th><th>Cel na pod / aktywacja</th><th>Uwagi</th></tr></thead>
+    <tbody>
+      <tr><th><code>redis</code></th><td>długość listy (<code>LLEN</code>)</td><td><code>listLength</code> (5) / <code>activationListLength</code></td><td>Demo 11. Dla Redis Streams osobny <code>redis-streams</code> (oczekujące wpisy grupy).</td></tr>
+      <tr><th><code>kafka</code></th><td>lag grupy konsumentów</td><td><code>lagThreshold</code> (10) / <code>activationLagThreshold</code></td><td>Domyślnie nie więcej podów niż partycji (<code>allowIdleConsumers</code> to zmienia).</td></tr>
+      <tr><th><code>rabbitmq</code></th><td>długość kolejki albo tempo wiadomości</td><td><code>mode: QueueLength | MessageRate</code>, <code>value</code></td><td>Przez AMQP albo HTTP management API.</td></tr>
+      <tr><th><code>aws-sqs-queue</code></th><td>przybliżona liczba wiadomości</td><td><code>queueLength</code> (5)</td><td>Uwierzytelnianie zwykle przez <code>podIdentity: aws</code>.</td></tr>
+      <tr><th><code>azure-servicebus</code></th><td>wiadomości w kolejce lub subskrypcji</td><td><code>messageCount</code> (5)</td><td>Ten sam mechanizm stoi za Azure Functions na Kubernetesie.</td></tr>
+      <tr><th><code>prometheus</code></th><td>wynik zapytania PromQL</td><td><code>threshold</code> / <code>activationThreshold</code></td><td>Zapytanie musi zwrócić jedną wartość. Szerzej w <a href="../08-autoskalowanie/index.html">notatce 08</a>.</td></tr>
+      <tr><th><code>postgresql</code>, <code>mysql</code>, <code>mssql</code>, <code>mongodb</code></th><td>wynik twojego zapytania</td><td><code>targetQueryValue</code> / <code>activationTargetQueryValue</code></td><td>Kolejka zadań w tabeli: <code>SELECT count(*) … WHERE status='new'</code>.</td></tr>
+      <tr><th><code>metrics-api</code></th><td>liczba z dowolnego endpointu JSON</td><td><code>targetValue</code>, <code>valueLocation</code></td><td>Najprostszy sposób na własną metrykę bez pisania skalera.</td></tr>
+      <tr><th><code>cron</code></th><td>okno czasowe</td><td><code>start</code>, <code>end</code>, <code>timezone</code>, <code>desiredReplicas</code></td><td>Rozgrzanie przed szczytem. Łącz z innym triggerem, bo HPA weźmie większą wartość.</td></tr>
+      <tr><th><code>cpu</code>, <code>memory</code></th><td>zużycie z metrics-server</td><td><code>metricType: Utilization</code>, <code>value</code></td><td><span class="tag no">bez zera</span> HPA czyta je wprost, więc same nie zejdą do 0. Łącz z triggerem zdarzeń.</td></tr>
+      <tr><th><code>github-runner</code>, <code>azure-pipelines</code>, <code>forgejo</code></th><td>zadania CI w kolejce</td><td>zależnie od skalera</td><td>Samohostowane runnery, zwykle jako ScaledJob.</td></tr>
+      <tr><th><code>external</code>, <code>external-push</code></th><td>cokolwiek zwróci twój serwis gRPC</td><td>z twojego <code>GetMetricSpec</code></td><td>Sekcja 9. <code>external-push</code> budzi z zera bez czekania na polling.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="prose src">Wartości w nawiasach to domyślne cele z dokumentacji skalerów. Nazwy parametrów sprawdzaj na <code>keda.sh/docs/2.21/scalers/&lt;nazwa&gt;</code>, bo różnią się między skalerami.</p>
+</section>
+
+<section id="auth" class="prose">
+  <h2><span class="num">7</span>Uwierzytelnianie: TriggerAuthentication</h2>
+  <p>Hasła i tokeny nie trafiają do <code>metadata</code> triggera. Trzyma je osobny obiekt, do którego trigger odwołuje się przez <code>authenticationRef</code>. <code>TriggerAuthentication</code> działa w jednym namespace, <code>ClusterTriggerAuthentication</code> w całym klastrze (sekrety czyta wtedy z namespace'u KEDA).</p>
+<pre>apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata: {name: rabbit-auth, namespace: demo}
+spec:
+  secretTargetRef:
+    - parameter: host               <span class="c"># nazwa parametru skalera</span>
+      name: rabbit-secret           <span class="c"># Secret w tym samym namespace</span>
+      key: amqp-url
+---
+<span class="c"># w ScaledObject / ScaledJob:</span>
+triggers:
+  - type: rabbitmq
+    metadata: {queueName: render, mode: QueueLength, value: "10"}
+    authenticationRef: {name: rabbit-auth}       <span class="c"># kind: ClusterTriggerAuthentication dla wersji klastrowej</span></pre>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Źródło sekretu</th><th>Skąd KEDA bierze wartość</th></tr></thead>
+    <tbody>
+      <tr><th><code>secretTargetRef</code></th><td>Secret Kubernetesa</td></tr>
+      <tr><th><code>env</code></th><td>zmienna środowiskowa kontenera ze skalowanego obiektu</td></tr>
+      <tr><th><code>podIdentity</code></th><td>tożsamość chmurowa bez sekretów: <code>azure-workload</code>, <code>aws</code>, <code>gcp</code> (<code>aws-eks</code> jest deprecated)</td></tr>
+      <tr><th><code>hashiCorpVault</code>, <code>azureKeyVault</code>, <code>awsSecretManager</code>, <code>gcpSecretManager</code></th><td>zewnętrzny sejf, KEDA czyta sama</td></tr>
+      <tr><th><code>boundServiceAccountToken</code></th><td>token wskazanego ServiceAccounta</td></tr>
+      <tr><th><code>azureServicePrincipal</code>, <code>filePath</code></th><td>principal Azure; plik na dysku operatora (tylko klastrowa wersja)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout">Przy <code>podIdentity</code> tożsamość ma <b>pod <code>keda-operator</code></b>, a nie twoja aplikacja. To on pyta SQS czy Service Bus. Uprawnienia do odczytu długości kolejki nadajesz operatorowi albo roli, którą ten przejmuje (<code>roleArn</code>, <code>identityId</code>).</div>
+</section>
+
+<section id="mozliwosci">
+  <h2 class="prose"><span class="num">8</span>Możliwości poza podstawami</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Funkcja</th><th>Co daje</th><th>Jak włączyć</th></tr></thead>
+    <tbody>
+      <tr><th>Scale-to-zero</th><td>Zero podów, gdy nie ma pracy. Działa z każdym skalerem poza samym CPU i pamięcią.</td><td><code>minReplicaCount: 0</code></td></tr>
+      <tr><th>Fallback</th><td>Bezpieczna liczba podów, gdy źródło metryk nie odpowiada. Bez tego HPA zamarza na ostatniej wartości.</td><td><code>fallback.failureThreshold</code>, <code>replicas</code>, <code>behavior</code>: <code>static</code>, <code>currentReplicas</code>, <code>currentReplicasIfHigher</code>, <code>currentReplicasIfLower</code></td></tr>
+      <tr><th>Łączenie triggerów formułą</th><td>Np. „kolejka ÷ 2 + lag”, „lag tylko gdy CPU &lt; 80”. Wynik idzie do HPA jako jedna metryka.</td><td><code>advanced.scalingModifiers</code>: <code>formula</code>, <code>target</code>, <code>activationTarget</code>, <code>metricType</code>; triggery muszą mieć <code>name</code></td></tr>
+      <tr><th>Pauza</th><td>Zatrzymanie autoskalowania na czas migracji czy awarii źródła, bez kasowania obiektu.</td><td>Adnotacje <code>autoscaling.keda.sh/paused: "true"</code> albo <code>paused-replicas: "3"</code></td></tr>
+      <tr><th>Pauza w jedną stronę</th><td>Tylko w górę albo tylko w dół. <code>paused-scale-in</code> blokuje też zejście do 0, <code>paused-scale-out</code> wstawanie z 0.</td><td><code>autoscaling.keda.sh/paused-scale-in</code>, <code>…/paused-scale-out</code></td></tr>
+      <tr><th>Wymuszenie aktywności</th><td>Wszystkie triggery traktowane jako aktywne, np. do testów albo rozgrzania.</td><td><code>autoscaling.keda.sh/force-activation: "true"</code></td></tr>
+      <tr><th>Przejęcie istniejącego HPA</th><td>Migracja z gołego HPA bez chwili bez autoskalera.</td><td><code>scaledobject.keda.sh/transfer-hpa-ownership: "true"</code> i nazwa HPA w <code>advanced.horizontalPodAutoscalerConfig.name</code></td></tr>
+      <tr><th>Własne zasoby</th><td>Skalowanie Argo Rollouts, StatefulSetów i dowolnych CR, które mają podzasób <code>/scale</code>.</td><td><code>scaleTargetRef.apiVersion</code>, <code>kind</code></td></tr>
+      <tr><th>Zewnętrzne skalery</th><td>Własne źródło przez gRPC: <code>IsActive</code>, <code>StreamIsActive</code>, <code>GetMetricSpec</code>, <code>GetMetrics</code>.</td><td><code>type: external</code> (polling) albo <code>external-push</code> (strumień aktywności)</td></tr>
+      <tr><th>Zdarzenia CloudEvents</th><td>KEDA wysyła własne zdarzenia o stanie obiektów, np. <code>keda.scaledobject.failed.v1</code>, <code>…paused.v1</code>. Funkcja eksperymentalna.</td><td><code>CloudEventSource</code> (<code>eventing.keda.sh/v1alpha1</code>) z celem HTTP albo Azure Event Grid</td></tr>
+      <tr><th>HTTP od zera</th><td>Interceptor (reverse proxy) trzyma żądania, gdy podów jest 0, i raportuje ruch do KEDA. Status: <b>beta</b>.</td><td>Osobny chart <code>kedacore/keda-add-ons-http</code>; obiekt <code>InterceptorRoute</code> (od 0.14 zastępuje <code>HTTPScaledObject</code>)</td></tr>
+    </tbody>
+  </table></div>
+<pre class="prose"><span class="c"># scalingModifiers: skaluj po kolejce, ale tylko gdy baza nie jest przeciążona</span>
+advanced:
+  scalingModifiers:
+    formula: "db_cpu &lt; 80 ? kolejka : 0"
+    target: "5"
+    activationTarget: "0"
+triggers:
+  - {name: kolejka, type: redis, metadata: {address: redis.demo:6379, listName: memy, listLength: "5"}}
+  - {name: db_cpu, type: prometheus, metadata: {serverAddress: http://prometheus:9090, query: "avg(db_cpu_percent)", threshold: "80"}}</pre>
+  <div class="callout cold prose"><b>Pułapka:</b> KEDA skaluje, ale nie dba o to, czy zadanie dokończy się przed usunięciem poda. Worker, który zdjął wiadomość z listy i dostał SIGTERM, ją zgubi. Rozwiązania: kolejka z potwierdzeniem (ack), obsługa SIGTERM z odpowiednim <code>terminationGracePeriodSeconds</code> albo ScaledJob.</div>
+</section>
+
+<section id="knative">
+  <h2 class="prose"><span class="num">9</span>KEDA a Knative</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>KEDA</th><th>Knative Serving</th></tr></thead>
+    <tbody>
+      <tr><th>Co skaluje</th><td>Twój Deployment, StatefulSet, Job, CR z <code>/scale</code></td><td>Własny obiekt <code>Service</code> (rewizje)</td></tr>
+      <tr><th>Według czego</th><td>Praca czekająca w źródle: kolejka, lag, zapytanie</td><td>Ruch HTTP: concurrency, RPS</td></tr>
+      <tr><th>Reakcja</th><td>Polling: <code>pollingInterval</code> + 15 s HPA</td><td>Co 2 s, tryb paniki w 6 s</td></tr>
+      <tr><th>Żądanie przy 0 podach</th><td><span class="tag no">przepada</span> bez HTTP Add-on</td><td><span class="tag yes">czeka</span> w activatorze</td></tr>
+      <tr><th>Zmiana aplikacji</th><td>Żadna, tylko ScaledObject obok</td><td>Wdrożenie jako ksvc</td></tr>
+      <tr><th>Razem?</th><td colspan="2">Tak. KEDA może skalować <code>KafkaSource</code> Knative Eventing, a rozszerzenie <code>autoscaler-keda</code> pozwala ksvc skalować po PromQL (<a href="../08-autoskalowanie/index.html">notatka 08</a>). Wybór dla near-RT: <a href="../07-near-rt-skalowanie/index.html">notatka 07</a>.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="klaster" class="prose">
+  <h2><span class="num">10</span>Zobacz na klastrze</h2>
+  <p>Pełna ścieżka jest w demie 11 (<code>demo/11-keda/</code>). Polecenia do podglądania „bebechów”:</p>
+<pre><span class="c"># instalacja, jak w demie</span>
+helm upgrade --install keda kedacore/keda --version 2.21.0 -n keda --create-namespace --wait
+kubectl get deploy -n keda                     <span class="c"># operator, metrics-apiserver, admission-webhooks</span>
+
+<span class="c"># kto obsługuje External Metrics API</span>
+kubectl get apiservice v1beta1.external.metrics.k8s.io
+
+<span class="c"># stan ScaledObjectu: READY, ACTIVE, FALLBACK, PAUSED</span>
+kubectl get scaledobject -n demo
+kubectl describe scaledobject generator -n demo
+
+<span class="c"># HPA, który KEDA utworzyła, i metryka, którą widzi</span>
+kubectl get hpa keda-hpa-generator -n demo -o yaml | grep -A8 'currentMetrics'
+kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/demo/s0-redis-memy?labelSelector=scaledobject.keda.sh%2Fname%3Dgenerator"
+
+<span class="c"># pauza i wznowienie</span>
+kubectl annotate scaledobject generator -n demo autoscaling.keda.sh/paused-replicas="2"
+kubectl annotate scaledobject generator -n demo autoscaling.keda.sh/paused-replicas-
+
+<span class="c"># co się dzieje w operatorze</span>
+kubectl logs -n keda deploy/keda-operator --tail=30</pre>
+  <p>Nazwę metryki (np. <code>s0-redis-memy</code>) znajdziesz w <code>kubectl get hpa keda-hpa-generator -n demo -o yaml</code> pod <code>metric.name</code>. Prefiks <code>s0</code> to numer triggera.</p>
+</section>
+
+<section id="sprawdz" class="prose">
+  <h2><span class="num">11</span>Sprawdź się</h2>
+  <details><summary>W demie 100 zadań i <code>listLength: "5"</code>. HPA chciałby 20 podów, sufit to 10, a po 16 s było 5. Czemu nie 10?</summary><p>Domyślny <code>behavior.scaleUp</code> HPA pozwala w ciągu 15 s dodać najwyżej 4 pody albo podwoić ich liczbę (większa z wartości). Z 1 poda to 5. Zanim minął kolejny krok, 5 workerów opróżniło resztę kolejki.</p></details>
+  <details><summary><code>cooldownPeriod: 300</code>, kolejka pusta od minuty, a podów wciąż 7. Czy KEDA nie działa?</summary><p>Działa. <code>cooldownPeriod</code> dotyczy tylko zejścia 1 → 0. Z 7 do 1 schodzi HPA zgodnie ze swoim oknem stabilizacji (domyślnie 300 s). Skrócisz je w <code>advanced.horizontalPodAutoscalerConfig.behavior.scaleDown</code>.</p></details>
+  <details><summary>ScaledObject ma tylko trigger <code>cpu</code> i <code>minReplicaCount: 0</code>. Co się stanie?</summary><p>Nie zejdzie do zera: metryki CPU i pamięci HPA czyta prosto z metrics-server, a przy zerze podów nie ma czego mierzyć. Dodaj trigger zdarzeń (kolejka, cron, Prometheus), który zdecyduje o aktywności.</p></details>
+  <details><summary>Dwa triggery: kolejka chce 4 pody, cron w godzinach szczytu 10. Ile będzie podów?</summary><p>10. Każdy trigger to osobna metryka tego samego HPA, a HPA bierze największy wynik. Sumę albo inną zależność zrobisz przez <code>scalingModifiers</code>.</p></details>
+  <details><summary>Prometheus, z którego KEDA czyta metrykę, padł w środku szczytu. Co z podami?</summary><p>Bez <code>fallback</code> HPA nie dostaje metryki i zostaje przy obecnej liczbie podów. Z <code>fallback</code> po <code>failureThreshold</code> nieudanych odczytach KEDA ustawi <code>replicas</code> (albo według <code>behavior</code>, np. <code>currentReplicasIfHigher</code>).</p></details>
+  <details><summary>Skalujesz po SQS z <code>podIdentity: aws</code>. Aplikacja ma rolę IAM z prawem do kolejki, a ScaledObject pokazuje błąd dostępu. Czemu?</summary><p>Długość kolejki odczytuje pod <code>keda-operator</code>, nie aplikacja. To on potrzebuje uprawnień (własnych albo przez przejęcie roli wskazanej w TriggerAuthentication).</p></details>
+  <details><summary>Zadania renderu trwają 20 minut. ScaledObject czy ScaledJob?</summary><p>ScaledJob. Przy ScaledObject HPA może usunąć poda w połowie renderu przy skalowaniu w dół. Job dokończy zadanie, a KEDA dołoży kolejne Joby, gdy praca przybędzie.</p></details>
+  <details><summary>Chcesz, żeby KEDA obudziła worker natychmiast po wpadnięciu zdarzenia, a nie po najbliższym pollingu. Jak?</summary><p>Krótszy <code>pollingInterval</code> (koszt: częstsze zapytania do źródła) albo własny skaler <code>external-push</code>, który przez <code>StreamIsActive</code> sam powiadamia KEDA o aktywności.</p></details>
+</section>
+
+<p class="src prose">Źródła: dokumentacja KEDA 2.21 (keda.sh/docs/2.21: Concepts, Scaling Deployments, Scaling Jobs, Authentication, External Scalers, Scalers, ScaledObject i ScaledJob spec, Operate → CloudEvents), README i dokumentacja HTTP Add-on (v0.16), lista wydań kedacore/keda (v2.21.0 jako najnowsze, Liiklus deprecated), dokumentacja Kubernetes HPA (domyślny <code>behavior</code>), demo 11 (<code>demo/11-keda/</code>). Zobacz też: <a href="../08-autoskalowanie/index.html">Autoskalowanie w Knative</a> (KEDA + PromQL), <a href="../07-near-rt-skalowanie/index.html">Skalowanie near-RT</a> (KEDA, HPA czy Knative).</p>
+
+</div>
+
+<script>
+(function () {
+  // Kalkulator
+  var $ = function (id) { return document.getElementById(id); };
+  function num(id, d) { var v = parseFloat($(id).value); return isFinite(v) ? v : d; }
+  function calc() {
+    var m = Math.max(0, num('c-m', 0)), t = Math.max(0.001, num('c-t', 1)), a = Math.max(0, num('c-a', 0));
+    var r = Math.max(0, Math.round(num('c-r', 0))), mn = Math.max(0, Math.round(num('c-min', 0))), mx = Math.max(1, Math.round(num('c-max', 1)));
+    if (mn > mx) mn = mx;
+    var active = mn >= 1 || m > a;
+    $('o-act').textContent = mn >= 1 ? 'pomijany' : (active ? 'aktywny' : 'nieaktywny');
+    $('o-act').className = 'val ' + (active ? 'kd' : 'no');
+    $('o-act-x').textContent = mn >= 1 ? 'min ≥ 1, aktywacja nie ma znaczenia' : (m + (active ? ' > ' : ' ≤ ') + a);
+    var want = Math.ceil(m / t);
+    $('o-want').textContent = want;
+    $('o-want-x').textContent = m + ' ÷ ' + t;
+    var floor = Math.max(mn, active ? 1 : 0);
+    var cap = Math.min(mx, Math.max(floor, want));
+    if (!active) cap = mn;
+    $('o-cap').textContent = cap;
+    $('o-cap-x').textContent = !active ? 'brak pracy: docelowo min (' + mn + ')' : ('granice ' + Math.max(mn, 1) + '…' + mx);
+    var next, why;
+    if (!active) {
+      next = r > mn ? (r > 1 ? 'HPA → 1, potem ' + mn : String(mn)) : String(r);
+      why = r > 1 ? 'HPA schodzi po oknie stabilizacji (300 s), KEDA do 0 po cooldownPeriod' : (r === 1 && mn === 0 ? 'KEDA po cooldownPeriod' : 'bez zmian');
+    } else if (r === 0) {
+      next = '1'; why = 'KEDA budzi z zera, dalej HPA';
+    } else if (cap > r) {
+      var lim = Math.max(r + 4, r * 2);
+      next = String(Math.min(cap, lim)); why = 'HPA: najwyżej +4 albo ×2 na 15 s (limit ' + lim + ')';
+    } else if (cap < r) {
+      next = String(cap); why = 'HPA w dół po oknie stabilizacji (domyślnie 300 s)';
+    } else { next = String(r); why = 'bez zmian'; }
+    $('o-next').textContent = next;
+    $('o-next-x').textContent = why;
+  }
+  ['c-m', 'c-t', 'c-a', 'c-r', 'c-min', 'c-max'].forEach(function (id) { $(id).addEventListener('input', calc); });
+  calc();
+
+  // Katalog skalerów (KEDA 2.21, keda.sh/docs/2.21/scalers)
+  var H = 'hot', E = 'exp', D = 'dep';
+  var CATS = [
+    ['Kolejki i strumienie', [
+      ['ActiveMQ'], ['ActiveMQ Artemis'], ['Apache Kafka', H], ['Apache Kafka (Experimental)', E], ['Apache Pulsar'],
+      ['AWS Kinesis Stream'], ['AWS SQS Queue', H], ['AWS DynamoDB Streams'], ['Azure Event Hubs', H], ['Azure Service Bus', H],
+      ['Azure Storage Queue'], ['Beanstalkd'], ['Google Cloud Platform Cloud Tasks'], ['Google Cloud Platform Pub/Sub', H],
+      ['IBM MQ'], ['Liiklus Topic', D], ['NATS JetStream'], ['NATS Streaming'], ['NSQ'], ['RabbitMQ Queue', H],
+      ['Redis Lists', H], ['Redis Lists (supports Redis Cluster)'], ['Redis Lists (supports Redis Sentinel)'],
+      ['Redis Streams'], ['Redis Streams (supports Redis Cluster)'], ['Redis Streams (supports Redis Sentinel)'],
+      ['Solace PubSub+ Event Broker'], ['Solace PubSub+ Event Broker - Direct Messaging']
+    ]],
+    ['Bazy danych i storage', [
+      ['ArangoDB'], ['AWS DynamoDB'], ['Azure Blob Storage'], ['Azure Cosmos DB Change Feed'], ['Azure Data Explorer'],
+      ['Cassandra'], ['ClickHouse'], ['CouchDB'], ['Elasticsearch'], ['Etcd'], ['Google Cloud Platform Spanner'],
+      ['Google Cloud Platform Storage'], ['InfluxDB'], ['MongoDB'], ['MSSQL'], ['MySQL'], ['OpenSearch'],
+      ['OpenStack Swift'], ['PostgreSQL', H], ['Solr']
+    ]],
+    ['Metryki i monitoring', [
+      ['AWS CloudWatch'], ['Azure Application Insights'], ['Azure Log Analytics'], ['Azure Monitor'], ['Datadog'],
+      ['Dynatrace'], ['Elastic Forecast (Experimental)', E], ['Google Cloud Platform Stackdriver'], ['Graphite'],
+      ['Huawei Cloudeye'], ['Loki'], ['Metrics API', H], ['New Relic'], ['OpenStack Metric'], ['Predictkube'],
+      ['Prometheus', H], ['SolarWinds'], ['Splunk'], ['Splunk Observability'], ['Sumo Logic']
+    ]],
+    ['CI/CD i aplikacje', [
+      ['Azure Pipelines'], ['Forgejo'], ['Github Runner Scaler', H], ['Selenium Grid Scaler'], ['Temporal']
+    ]],
+    ['Kubernetes i czas', [
+      ['CPU', H], ['Memory'], ['Cron', H], ['Kubernetes Resource'], ['Kubernetes Workload']
+    ]],
+    ['Rozszerzenia', [
+      ['External'], ['External Push']
+    ]]
+  ];
+  var state = { q: '', cat: null };
+  var chips = $('sc-chips');
+  function mkChip(label, val) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = label;
+    b.setAttribute('aria-pressed', String(state.cat === val));
+    b.addEventListener('click', function () { state.cat = val; renderChips(); render(); });
+    return b;
+  }
+  function renderChips() {
+    chips.innerHTML = '';
+    chips.appendChild(mkChip('Wszystkie', null));
+    CATS.forEach(function (c) { chips.appendChild(mkChip(c[0], c[0])); });
+  }
+  function render() {
+    var list = $('sc-list'); list.innerHTML = '';
+    var q = state.q.trim().toLowerCase(), total = 0;
+    CATS.forEach(function (c) {
+      if (state.cat && state.cat !== c[0]) return;
+      var items = c[1].filter(function (s) { return !q || s[0].toLowerCase().indexOf(q) !== -1; });
+      if (!items.length) return;
+      total += items.length;
+      var block = document.createElement('div'); block.className = 'cat-block';
+      var h = document.createElement('h4'); h.textContent = c[0] + ' · ' + items.length; block.appendChild(h);
+      var g = document.createElement('div'); g.className = 'grid';
+      items.forEach(function (s) {
+        var el = document.createElement('span'); el.className = 'sc' + (s[1] === H ? ' hot' : '');
+        el.textContent = s[0];
+        if (s[1] === E) { var e = document.createElement('small'); e.className = 'exp'; e.textContent = 'eksperymentalny'; el.appendChild(e); }
+        if (s[1] === D) { var d = document.createElement('small'); d.className = 'dep'; d.textContent = 'deprecated'; el.appendChild(d); }
+        g.appendChild(el);
+      });
+      block.appendChild(g); list.appendChild(block);
+    });
+    $('sc-count').textContent = total === 80 ? 'Wszystkie 80 skalerów.' : ('Pasuje: ' + total + ' z 80.');
+  }
+  $('sc-q').addEventListener('input', function (e) { state.q = e.target.value; render(); });
+  renderChips(); render();
+})();
+</script>
+</body>
+</html>

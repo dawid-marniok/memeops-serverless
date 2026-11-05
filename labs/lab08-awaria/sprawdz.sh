@@ -7,7 +7,9 @@ created=$(kubectl get ksvc meme-gen -n $NS -o jsonpath='{.status.latestCreatedRe
 ready=$(kubectl get ksvc meme-gen -n $NS -o jsonpath='{.status.latestReadyRevisionName}')
 check "usługa meme-gen Ready" "kubectl get ksvc meme-gen -n $NS -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' | grep -qx True"
 check "ostatnia utworzona rewizja ($created) = ostatnia gotowa ($ready)" "[ -n '$created' ] && [ '$created' = '$ready' ]"
-export JWT_SECRET=$(kubectl -n $NS get secret meme-jwt -o jsonpath='{.data.JWT_SECRET}' | base64 -d)
+# klucz z Secretu, którego używa usługa (po rotacji w zgłoszeniu 3 może to być inny niż meme-jwt)
+SECRET=$(kubectl get ksvc meme-gen -n $NS -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="JWT_SECRET")].valueFrom.secretKeyRef.name}')
+export JWT_SECRET=$(kubectl -n $NS get secret "${SECRET:-meme-jwt}" -o jsonpath='{.data.JWT_SECRET}' | base64 -d)
 TOKEN=$(tools/token.py sprawdzacz 5 2>/dev/null)
 URL=$(kubectl get ksvc meme-gen -n $NS -o jsonpath='{.status.url}')
 check "mem HD (scale 8) z tokenem → 201" "curl -sf -o /dev/null -XPOST $URL/api/memes -H 'Authorization: Bearer $TOKEN' -d '{\"top\":\"hd\",\"scale\":8}'"

@@ -75,12 +75,14 @@ Skrypt czeka, aż usługa zejdzie do zera podów (ok. 1–2 min), i mierzy pierw
 |---|---|---|
 | meme-api v1 (lab02) | | |
 
-Teraz ustaw minimum jednego poda i zmierz jeszcze raz:
+Teraz ustaw minimum jednego poda i zmierz jeszcze raz. `min-scale` to zmiana szablonu, więc powstaje nowa rewizja i potrzebuje nowej nazwy (w szablonie wciąż jest `meme-api-v2` z kroku 3). Ruch jest przypięty do `meme-api-v1`, dlatego przenosimy go na nową rewizję:
 
 ```bash
-kn service update meme-api -n memeops --scale-min 1
+kn service update meme-api -n memeops \
+  --image localhost:5001/meme-api:v1 --revision-name meme-api-v1-min1 --scale-min 1 \
+  --traffic meme-api-v1-min1=100
 timeout 90 tools/coldstart.sh meme-api   # nie doczeka się zera podów. Dlaczego? (bez timeout czekałby 5 min)
-kn service update meme-api -n memeops --scale-min 0
+kn service update meme-api -n memeops --traffic meme-api-v1=100   # powrót; rewizja bez ruchu ignoruje min-scale i schodzi do zera
 ```
 
 ## SUKCES
@@ -91,7 +93,7 @@ kn service update meme-api -n memeops --scale-min 0
 
 ## Dla chętnych
 
-- Zmień tylko zmienną środowiskową: `kn service update meme-api -n memeops --env GREETING="Witaj na konferencji"`. Ile rewizji przybyło i komu poszedł ruch? (Podpowiedź: ruch jest przypięty do nazw rewizji.)
+- Zmień tylko zmienną środowiskową: `kn service update meme-api -n memeops --env GREETING="Witaj na konferencji" --revision-name meme-api-v3`. Ile rewizji przybyło i komu poszedł ruch? (Podpowiedź: ruch jest przypięty do nazw rewizji.)
 - `kubectl get cm config-autoscaler -n knative-serving -o yaml | grep -A2 scale-to-zero` — które ustawienie skróci czekanie na zero?
 - Kroki 3–4 jeszcze raz, ale w YAML-u zamiast `kn` (tak, jak trzymasz to w repo przy GitOps): [`demo/01-serverless-60s/krok-po-kroku/`](../../demo/01-serverless-60s/krok-po-kroku/). Jest tam też ściąga ze wszystkimi ważniejszymi opcjami Knative Service.
 
@@ -107,4 +109,5 @@ Stan startowy labu = gotowa platforma z LAB 1 (`setup/check.sh`).
 | usługa `READY Unknown` dłużej niż minutę | `kubectl describe revision -n memeops` i `kubectl get pods -n memeops` |
 | `ErrImagePull` | czy `setup/platform.sh` zbudował obrazy: `curl localhost:5001/v2/meme-api/tags/list` |
 | drugi `kubectl apply -f …/meme-api.yaml` kończy się `denied the request: Saw the following changes without a name change` | usługa już jest, idź dalej. Knative dopisał do szablonu wartości domyślne (`name: user-container`, probe), a plik ich nie ma, więc dla webhooka to zmiana rewizji `meme-api-v1` bez zmiany nazwy. Od nowa: `kubectl delete ksvc meme-api -n memeops` i `apply` |
+| `kn service update` kończy się `Saw the following changes without a name change (-old +new): spec.template.metadata.name` | zmieniasz szablon (obraz, env, `--scale-min`…), a w szablonie została stara nazwa rewizji z `--revision-name`. Dodaj nową: `--revision-name meme-api-<coś-nowego>` |
 | `kn service …` bez `-n memeops` | `kn` bierze namespace z bieżącego kontekstu `kubectl`, nie z pliku: zawsze podawaj `-n` |

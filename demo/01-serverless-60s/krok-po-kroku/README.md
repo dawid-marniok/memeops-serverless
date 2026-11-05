@@ -10,6 +10,7 @@ Wymaga platformy z `setup/platform.sh` (`setup/check.sh` → 13/13) i obrazów `
 | `01-hello-v1.yaml` | usługa `hello`, 100% ruchu do `hello-v1`. **Zarazem ściąga:** zakomentowane są w nim wszystkie ważniejsze opcje Knative Service | tak: `hello-v1` |
 | `02-hello-v2-canary.yaml` | obraz `v2`, ruch 80% v1 / 20% v2, tag `kandydat` | tak: `hello-v2` |
 | `03-hello-v2-pelny.yaml` | 100% do najnowszej rewizji, v1 zostaje pod tagiem `poprzednia` | **nie**, zmienia się tylko ruch |
+| `04-konfiguracja.yaml` | osobna usługa `konfig`: ConfigMap z wartościami domyślnymi, Secret, `envFrom`, `secretKeyRef`, wolumeny. Pułapka ze zmianą ConfigMap | tak: `konfig-00001` |
 
 ```bash
 K=demo/01-serverless-60s/krok-po-kroku
@@ -138,11 +139,75 @@ Rollback to zmiana ruchu, a nie nowe wdrożenie. Rewizja `hello-v1` cały czas i
 
 Uwaga: `kn` zmienia obiekt w klastrze, a nie Twoje pliki. Kolejny `kubectl apply -f $K/03-…` przywróci ruch zapisany w pliku. To samo dzieje się w GitOps: źródłem prawdy jest repo.
 
-## 6. Sprzątanie
+## 6. Konfiguracja: ConfigMap i Secret
+
+Osobna usługa `konfig`, niezależna od `hello`. Jeden plik zawiera ConfigMap z wartościami domyślnymi, Secret i Knative Service, który korzysta z nich na cztery sposoby:
+
+| Sposób | W pliku | Co dostaje kontener |
+|---|---|---|
+| wszystkie klucze ConfigMap | `envFrom.configMapRef` | zmienne `GREETING`, `LOG_LEVEL`, `JEZYK`, `app.properties` |
+| nadpisanie wartości domyślnej | `env` z `value` | `LOG_LEVEL=debug` zamiast `info` z ConfigMap |
+| jeden klucz z Secretu | `env.valueFrom.secretKeyRef` | `DB_PASSWORD` |
+| pliki | `volumes` + `volumeMounts` | `/etc/app/app.properties` z ConfigMap, `/etc/sekrety/DB_USER` i `DB_PASSWORD` z Secretu |
+
+```bash
+kubectl apply -f $K/04-konfiguracja.yaml          # kubectl, nie kn: w pliku są trzy dokumenty
+kubectl wait ksvc/konfig -n demo --for=condition=Ready
+UK=http://konfig.demo.127.0.0.1.sslip.io
+curl -s $UK | tail -3                             # "Pozdrowienia z ConfigMap" to GREETING z ConfigMap
+P=$(kubectl get pod -n demo -l serving.knative.dev/service=konfig -o name | head -1)
+kubectl exec -n demo $P -c user-container -- sh -c \
+  'env | grep -E "GREETING|LOG_LEVEL|JEZYK|DB_" | sort; cat /etc/app/app.properties; ls /etc/sekrety'
+```
+
+Z próby: `LOG_LEVEL=debug` (wartość z `env` wygrywa z `envFrom`), `DB_PASSWORD=tylko-na-szkolenie`, w `/etc/app/app.properties` są linie `timeout=30` i `retry=3`.
+
+Secret to nie szyfrowanie, tylko base64:
+
+```bash
+kubectl get secret konfig-sekret -n demo -o jsonpath='{.data.DB_PASSWORD}' | base64 -d; echo
+```
+
+**Pułapka: zmiana ConfigMap.** Zmień powitanie i plik, a potem przez półtorej minuty odpytuj usługę co 5 s (ruch nie pozwala podowi zejść do zera):
+
+```bash
+kubectl patch cm konfig-domyslne -n demo --type merge \
+  -p '{"data":{"GREETING":"NOWE powitanie","app.properties":"timeout=60\nretry=5\n"}}'
+for i in $(seq 18); do
+  curl -s -o /dev/null $UK
+  kubectl exec -n demo $P -c user-container -- sh -c 'echo "$(date +%T) $GREETING | $(head -1 /etc/app/app.properties)"'
+  sleep 5
+done
+kubectl get rev -n demo -l serving.knative.dev/service=konfig     # nadal ta sama rewizja
+```
+
+Z próby: plik zmienił się na `timeout=60` po **57 s**, a `GREETING` w działającym podzie nie zmienił się wcale. Zmienne środowiskowe są czytane tylko przy starcie kontenera, a wolumen kubelet odświeża co jakiś czas (w praktyce do około minuty). Nowa rewizja nie powstała, bo treść ConfigMap nie jest częścią szablonu.
+
+**Druga strona scale-to-zero.** W pierwszej próbie pod zszedł do zera, zanim plik się odświeżył. Pierwszy `curl` po wybudzeniu zwrócił już `NOWE powitanie`, i to w **tej samej rewizji** `konfig-00002`. Nowy pod czyta ConfigMap od nowa. Ta sama rewizja może więc działać z różną konfiguracją, zależnie od tego, kiedy wstał pod. Dlatego nie zmieniamy ConfigMap w miejscu (LAB 6, krok 5).
+
+Jak przenieść zmianę w kontrolowany sposób: dowolna zmiana szablonu tworzy nową rewizję, która przeczyta aktualną ConfigMap.
+
+```bash
+kubectl patch ksvc konfig -n demo --type merge \
+  -p '{"spec":{"template":{"metadata":{"annotations":{"konfig/wersja":"2"}}}}}'
+kubectl wait ksvc/konfig -n demo --for=condition=Ready
+curl -s $UK | tail -3        # nowe powitanie, nowa rewizja (np. konfig-00003)
+```
+
+W praktyce lepiej dawać ConfigMapie nową nazwę przy każdej zmianie (`konfig-v2`) i wskazywać ją w szablonie. Wtedy stara rewizja zostaje ze starą konfiguracją i rollback z kroku 5 działa razem z konfiguracją.
+
+**Brakujący klucz.** Odkomentuj w pliku `FUNKCJA_BETA` bez linii `optional: true`. Z próby: pod nowej rewizji wisi w `CreateContainerConfigError`, usługa ma `Ready=Unknown`, a ruch dalej idzie do poprzedniej, działającej rewizji. Z `optional: true` rewizja wstaje, a zmiennej `FUNKCJA_BETA` po prostu nie ma.
+
+**`defaultMode: 0400` na Secrecie.** W pierwszej wersji pliku wolumen sekretu miał `defaultMode: 0400`. Wynik: `cat: /etc/sekrety/DB_USER: Permission denied`. Pliki należą do roota, a `meme-api` działa jako UID 10001 (`USER 10001` w Dockerfile). Dlatego w pliku zostało ustawienie domyślne (0644).
+
+Przywrócenie stanu z pliku: `kubectl apply -f $K/04-konfiguracja.yaml` (ConfigMap wraca do wartości z pliku, usługa dostaje nową rewizję).
+
+## 7. Sprzątanie
 
 ```bash
 kubectl delete ksvc hello -n demo
 kubectl delete -f $K/00-przygotowanie.yaml
+kubectl delete -f $K/04-konfiguracja.yaml
 ```
 
 Namespace `demo` zostaje, bo korzystają z niego pozostałe dema. Pełne sprzątanie dem: [`demo/README.md`](../../README.md), sekcja „Sprzątanie”.

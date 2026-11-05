@@ -30,9 +30,9 @@ Szczegóły i problemy: [`setup/README.md`](setup/README.md).
 |---|---|
 | Kopiowanie komend z labów | Otwórz to repo w Firefoksie **na VM-ce** (ikona Firefoksa na górnym pasku): https://github.com/dawid-marniok/memeops-serverless. Zaznacz komendę (albo kliknij ikonę kopiowania przy bloku kodu), w terminalu: prawy przycisk → *Paste* |
 | Tekst z własnego komputera | DaDesktop sam przenosi schowek Twojego komputera do VM-ki: skopiuj u siebie, w terminalu VM prawy przycisk → *Paste*. Sprawdź przed Enterem, co się wkleiło: w schowku może być coś innego, niż myślisz |
-| **Ctrl+C nie przerywa komendy** | W terminalu DaDesktop skróty z Ctrl nie docierają do VM-ki. Komendy, które same się nie kończą, mają w labach `timeout`. Gdy coś utknie: zamknij kartę terminala (×) i otwórz nową (*File → Open Tab*). Nowa karta startuje w tym samym katalogu |
+| **Ctrl+C nie przerywa komendy** | Skróty z Ctrl wpisane z klawiatury nie zawsze docierają do VM-ki. Komendy, które same się nie kończą, mają w labach `timeout`. Gdy coś utknie: zamknij kartę terminala (×) i otwórz nową (*File → Open Tab*). Nowa karta startuje w tym samym katalogu |
 | Drugi terminal | *File → Open Tab* w oknie terminala |
-| Edycja plików | Najprościej edytor graficzny: `pluma <plik> &` (zapis: przycisk *Save*). W terminalu: `nano <plik>`, zapis **F3** + Enter, wyjście **F2** (Ctrl+O / Ctrl+X mogą nie działać) |
+| Edycja plików | Najwygodniej VS Code: `code <plik>` albo `code .` w katalogu repo. Zapis działa zwykłym skrótem (**Cmd+S** na Macu, **Ctrl+S** na Windows/Linux). Prostszy edytor graficzny: `pluma <plik> &` (zapis: przycisk *Save*). W terminalu: `nano <plik>`, zapis **F3** + Enter, wyjście **F2** (Ctrl+O / Ctrl+X mogą nie działać) |
 | `kubectl edit` | Domyślnie otwiera vim. Ustaw nano: `export KUBE_EDITOR=nano` |
 | Plik z własnego komputera na VM | Przeciągnij go na pole *Drop file here* na dolnym pasku DaDesktop. Plik pojawi się w `~/uploads-to-dadesktop/` |
 | Adres w przeglądarce | Strony usług (np. http://meme-gen.memeops.127.0.0.1.sslip.io) otwierasz w Firefoksie **na VM-ce**, nie na swoim komputerze |
@@ -67,6 +67,7 @@ Szczegóły i problemy: [`setup/README.md`](setup/README.md).
 | [lab06 — Sekrety i logowanie](labs/lab06-sekrety/) | „Tylko zalogowani mogą tworzyć memy” |
 | [lab07 — CI/CD i canary](labs/lab07-cicd/) | „Nowy szablon dark mode — bezpiecznie” |
 | [lab08 — Awaria w piątek 16:55](labs/lab08-awaria/) | „Memy przestały działać!” |
+| [lab09 — Obserwowalność](labs/lab09-obserwowalnosc/) | „Ile memów, czemu tak wolno i kto nas obudzi przy awarii?” |
 
 ## Co jest w repo
 
@@ -86,5 +87,5 @@ Szczegóły i problemy: [`setup/README.md`](setup/README.md).
 
 - Kod Pythona jest gotowy. Zmieniasz konfigurację, manifesty i pipeline — w kodzie najwyżej parametry.
 - Każdy lab kończy się sekcją **SUKCES**: sprawdzasz ją sam, zanim zgłosisz „gotowe”.
-- Utknąłeś? Laby od 3 do 7 mają sekcję „Dogoń grupę”, a LAB 8 sekcję „Przed startem”: jedna komenda `tools/start-lab.sh` doprowadza stan klastra do startu labu. Uruchamiaj ją tylko wtedy, gdy nie skończyłeś poprzedniego labu, bo usuwa i tworzy od nowa usługi (tracisz własne rewizje).
+- Utknąłeś? Laby od 3 do 9 mają komendę `tools/start-lab.sh labNN` (sekcja „Dogoń grupę”, w LAB 8 krok 0 „Przygotowanie”): doprowadza stan klastra do startu labu. Uruchamiaj ją tylko wtedy, gdy nie skończyłeś poprzedniego labu, bo usuwa i tworzy od nowa usługi (tracisz własne rewizje).
 - Adresy usług: `http://<usługa>.memeops.127.0.0.1.sslip.io` (sslip.io zamienia nazwę na 127.0.0.1, a port 80 VM-ki prowadzi do Kouriera).

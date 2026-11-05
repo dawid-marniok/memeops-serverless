@@ -1,0 +1,87 @@
+# Krok 4: konfiguracja z ConfigMap i Secret w Knative Service (osobna usługa `konfig`, niezależna od `hello`).
+# kubectl apply -f demo/01-serverless-60s/krok-po-kroku/04-konfiguracja.yaml
+# (tu kubectl, nie kn: plik ma trzy dokumenty YAML, a `kn service apply -f` czyta tylko pierwszy)
+#
+# Cztery sposoby podania konfiguracji naraz:
+#   envFrom (wszystkie klucze ConfigMap) · env z value (nadpisanie) · valueFrom (jeden klucz z Secret) · wolumeny (pliki)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: konfig-domyslne
+  namespace: demo
+data:
+  GREETING: "Pozdrowienia z ConfigMap"   # meme-api dopisuje GREETING do odpowiedzi, więc widać ją w curl
+  LOG_LEVEL: info
+  JEZYK: pl
+  app.properties: |                      # klucz z wieloma liniami = plik po zamontowaniu jako wolumen
+    timeout=30
+    retry=3
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: konfig-sekret
+  namespace: demo
+type: Opaque
+stringData:                              # stringData: piszesz jawnym tekstem, Kubernetes zapisze base64 w .data
+  DB_USER: aplikacja
+  DB_PASSWORD: tylko-na-szkolenie        # przykład; prawdziwych sekretów nie trzymamy w repo (LAB 6)
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: konfig
+  namespace: demo
+spec:
+  template:
+    # Bez metadata.name: rewizje dostają nazwy konfig-00001, konfig-00002...
+    # (wygodne w kroku z wymuszeniem nowej rewizji)
+    # metadata:
+    #   annotations:
+    #     konfig/wersja: "2"             # dowolna zmiana szablonu = nowa rewizja, która przeczyta ConfigMap od nowa
+    spec:
+      timeoutSeconds: 15
+      containers:
+        - name: user-container
+          image: localhost:5001/meme-api:v1
+          envFrom:
+            - configMapRef:
+                name: konfig-domyslne    # wszystkie klucze jako zmienne: GREETING, LOG_LEVEL, JEZYK, a od K8s 1.32
+                                         # także app.properties (kropka w nazwie zmiennej jest już dozwolona)
+          env:
+            - name: LOG_LEVEL            # env wygrywa z envFrom: nadpisuje wartość domyślną z ConfigMap
+              value: debug
+            - name: DB_PASSWORD          # jeden klucz z Secretu
+              valueFrom:
+                secretKeyRef:
+                  name: konfig-sekret
+                  key: DB_PASSWORD
+            # - name: FUNKCJA_BETA       # klucz, którego nie ma: bez optional rewizja nie wstanie
+            #   valueFrom:               # (CreateContainerConfigError), z optional: true zmiennej po prostu nie ma
+            #     configMapKeyRef: {name: konfig-domyslne, key: FUNKCJA_BETA, optional: true}
+          volumeMounts:
+            - name: konfig
+              mountPath: /etc/app
+              readOnly: true
+            - name: tajne
+              mountPath: /etc/sekrety
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+            successThreshold: 1
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+      volumes:
+        - name: konfig
+          configMap:
+            name: konfig-domyslne
+            items:                       # tylko wybrany klucz jako plik /etc/app/app.properties
+              - key: app.properties
+                path: app.properties
+        - name: tajne
+          secret:
+            secretName: konfig-sekret    # każdy klucz = osobny plik: /etc/sekrety/DB_USER, /etc/sekrety/DB_PASSWORD
+            # defaultMode: 0400          # pułapka: pliki należą do roota, a meme-api działa jako UID 10001,
+            #                            # więc z 0400 dostaje "Permission denied". Domyślnie jest 0644.

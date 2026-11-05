@@ -14,3 +14,5 @@ Otwórz w przeglądarce, np. `xdg-open docs/01-knative-vs-k8s/index.html` (na Ma
 | 07 | [Skalowanie near-RT](07-near-rt-skalowanie/index.html) | dzień 1 · podsumowanie, dzień 2 · 2.6 |
 | 08 | [Autoskalowanie w Knative](08-autoskalowanie/index.html) | dzień 2 · 2.1, przed LAB 5 |
 | 09 | [Wasm a kontener](09-wasm-vs-kontener/index.html) | dzień 2 · 2.5, demo 12 |
+| 10 | [cert-manager w Knative](10-cert-manager/index.html) | dzień 2 · 2.2, LAB 6 (HTTPS dla chętnych) |
+| 11 | [KEDA od środka](11-keda/index.html) | dzień 2 · 2.5, demo 11 |

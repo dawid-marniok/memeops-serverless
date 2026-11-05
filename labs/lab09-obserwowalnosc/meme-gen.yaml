@@ -1,0 +1,44 @@
+# LAB 9: meme-gen 2.4.0 z tracingiem OpenTelemetry. Różnica względem LAB 6: obraz, wersja i trzy zmienne OTEL_*.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: meme-gen
+  namespace: memeops
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/target: "5"
+        autoscaling.knative.dev/max-scale: "8"
+    spec:
+      containers:
+        - image: localhost:5001/meme-gen:2.4.0
+          env:
+            - {name: APP_VERSION, value: "2.4.0"}
+            - {name: MEME_FORMAT, value: png}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: {name: meme-jwt, key: JWT_SECRET}
+            # Ten sam Collector, do którego wysyłają spany activator i queue-proxy. Port 4318 = OTLP przez HTTP.
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.observability:4318"}
+            - {name: OTEL_SERVICE_NAME, value: meme-gen}
+            # Paczka spanów co 1 s zamiast 5 s: pod po scale-to-zero znika i niewysłane spany giną razem z nim.
+            - {name: OTEL_BSP_SCHEDULE_DELAY, value: "1000"}
+          envFrom:
+            - configMapRef: {name: meme-config}
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+  traffic:
+    - latestRevision: true
+      percent: 100

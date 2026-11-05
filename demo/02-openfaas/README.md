@@ -10,9 +10,16 @@ Dwa terminale: **T1** komendy, **T2** port-forward (zostaje włączony).
 
 ```bash
 mkdir -p ~/.local/bin
-curl -fsSL https://github.com/openfaas/faas-cli/releases/download/0.18.16/faas-cli \
-  -o ~/.local/bin/faas-cli          # Linux x86_64; arm64: faas-cli-arm64, Mac M: faas-cli-darwin-arm64
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64)               SUFFIX="" ;;
+  Linux-aarch64|Linux-arm64)  SUFFIX="-arm64" ;;
+  Darwin-arm64)               SUFFIX="-darwin-arm64" ;;
+  Darwin-x86_64)              SUFFIX="-darwin" ;;
+esac
+curl -fsSL "https://github.com/openfaas/faas-cli/releases/download/0.18.16/faas-cli${SUFFIX}" \
+  -o ~/.local/bin/faas-cli
 chmod +x ~/.local/bin/faas-cli
+faas-cli version --short-version     # ma wypisać 0.18.16
 helm repo add openfaas https://openfaas.github.io/faas-netes/
 ```
 
@@ -140,4 +147,5 @@ kubectl delete namespace openfaas openfaas-fn
 |---|---|
 | `connection refused` na 8080 | port-forward w T2 padł: uruchom go jeszcze raz |
 | `faas-cli: command not found` | `export PATH="$HOME/.local/bin:$PATH"` |
+| `exec format error` przy `faas-cli` | binarka jest na inny system albo architekturę (np. linuksowa na Macu): pobierz ją jeszcze raz komendą z „Przygotowania” |
 | `invalid credentials` w UI | każda instalacja generuje nowe hasło, a przeglądarka pamięta stare: okno incognito, user `admin`, hasło `echo $PASSWORD` |

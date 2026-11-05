@@ -100,7 +100,8 @@ curl -s localhost:5001/v2/meme-gen/tags/list
 Wpisz SHA w adnotacji `memeops/git-sha` w `labs/lab03-funkcja-python/meme-gen.yaml` (w miejsce `UZUPELNIJ`) i wdróż. Możesz to zrobić w edytorze albo jedną komendą:
 
 ```bash
-sed -i "s/UZUPELNIJ/$SHA/" labs/lab03-funkcja-python/meme-gen.yaml
+# -i.bak działa i na macOS (BSD sed), i na Linuksie (GNU sed)
+sed -i.bak "s/UZUPELNIJ/$SHA/" labs/lab03-funkcja-python/meme-gen.yaml && rm labs/lab03-funkcja-python/meme-gen.yaml.bak
 grep git-sha labs/lab03-funkcja-python/meme-gen.yaml      # memeops/git-sha: "<Twój SHA>"
 ```
 

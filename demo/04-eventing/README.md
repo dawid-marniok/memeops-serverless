@@ -77,6 +77,8 @@ PingSource co minutę (`* * * * *`, jak w cronie) wysyła zdarzenie do brokera.
 kubectl logs -n demo -l serving.knative.dev/service=mem-dnia -c user-container --tail=20
 ```
 
+Logi są tylko póki pod żyje (kilkanaście sekund po zdarzeniu). `No resources found` znaczy, że pod już zniknął: uruchom komendę zaraz po tym, jak w T1 pojawi się nowy pod (o następnej pełnej minucie).
+
 👀 Blok `☁️ cloudevents.Event`: `type: dev.knative.sources.ping`, `source: …/pingsources/mem-co-minute` i dane `{"top": "mem dnia", …}`. Ostrzeżenia o OpenTelemetry na początku logów pomiń.
 
 ### 6. Własne zdarzenie

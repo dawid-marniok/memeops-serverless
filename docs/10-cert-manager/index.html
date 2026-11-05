@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cert-manager w Knative</title>
+<style>
+/* Ten sam system co pozostałe notatki: kolor = rola (obiekty Knative / cert-manager / brama), jedna kolumna tekstu, tabele przewijane na telefonie. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --kn: #b4561a;
+  --kn-bg: #fbe9da;
+  --kni-bg: #fdf6ef;
+  --traffic: #0f6d6a;
+  --traffic-bg: #e3f2f0;
+  --cold: #b0306a;
+  --cold-bg: #f9e6ef;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+    --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --kn: #f0955a; --kn-bg: #33241a; --kni-bg: #261e18;
+  --traffic: #5cc4bd; --traffic-bg: #17302e; --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 96px; }
+.prose { max-width: 760px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+.answer .v { font-weight: 700; }
+.answer .v.no { color: var(--cold); }
+.answer .v.yes { color: var(--traffic); }
+
+/* Diagram przepływu */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-top: 16px; }
+.scroll svg { display: block; width: 100%; min-width: 760px; height: auto; }
+svg text { font-family: var(--sans); }
+.box rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.3; }
+.box.kn rect { fill: var(--kn-bg); stroke: var(--kn); }
+.box.cm rect { fill: var(--traffic-bg); stroke: var(--traffic); }
+.box.gw rect { fill: var(--cold-bg); stroke: var(--cold); }
+.box .t { font-size: 14px; font-weight: 650; fill: var(--text); }
+.box .s { font-size: 11.5px; fill: var(--muted); font-family: var(--mono); }
+.a { fill: none; stroke-width: 2.4; }
+.a.kn { stroke: var(--kn); }
+.a.cm { stroke: var(--traffic); }
+.a.dash { stroke-dasharray: 6 5; }
+.mk-kn { fill: var(--kn); }
+.mk-cm { fill: var(--traffic); }
+.lbl { font-size: 12px; font-weight: 700; }
+.lbl.kn { fill: var(--kn); }
+.lbl.cm { fill: var(--traffic); }
+.note { font-size: 12px; fill: var(--muted); }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid; }
+.legend .l-kn::before { background: var(--kn-bg); border-color: var(--kn); }
+.legend .l-cm::before { background: var(--traffic-bg); border-color: var(--traffic); }
+.legend .l-gw::before { background: var(--cold-bg); border-color: var(--cold); }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 680px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 26%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; }
+.tag.no { background: var(--cold-bg); color: var(--cold); }
+.tag.yes { background: var(--traffic-bg); color: var(--traffic); }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre .c { color: var(--code-comment); }
+.callout { border-left: 3px solid var(--kn); background: var(--kni-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.src { font-size: 13.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="prose">
+  <div class="eyebrow">Serverless na Kubernetes · notatka do nauki</div>
+  <h1>cert-manager w Knative</h1>
+  <p class="lede">Skąd usługa Knative bierze certyfikat HTTPS, kto go zamawia i gdzie to się włącza. W skrócie: cert-manager robi to co zawsze, tylko certyfikat zamawia kontroler Knative, a nie adnotacja na Ingressie.</p>
+  <div class="meta">
+    <span class="pill">Knative Serving 1.23.0</span>
+    <span class="pill">cert-manager v1.20.4</span>
+    <span class="pill">Kourier (Envoy)</span>
+    <span class="pill">klaster kind <code>memeops</code></span>
+    <span class="pill">stan na 05.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#ingress">Dlaczego nie adnotacja</a>
+    <a href="#przeplyw">Przepływ</a>
+    <a href="#wlacz">Gdzie się włącza</a>
+    <a href="#issuer">Jaki issuer</a>
+    <a href="#wskaz">Jak wskazać issuera</a>
+    <a href="#wyjatki">Wyjątki i warianty</a>
+    <a href="#bez-cm">Bez cert-managera</a>
+    <a href="#klaster">Na klastrze</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Wystarczy adnotacja <code>cert-manager.io/cluster-issuer</code>?</div><p><span class="v no">Nie.</span> W Knative nie piszesz Ingressów, więc nie ma na czym jej postawić. Adnotacja na ksvc niczego nie uruchomi.</p></div>
+    <div class="answer"><div class="q">Kto zamawia certyfikat?</div><p><span class="v yes">Kontroler Knative Serving.</span> Tworzy obiekt <code>Certificate</code> cert-managera za ciebie, dla każdej domeny usługi.</p></div>
+    <div class="answer"><div class="q">Gdzie się to włącza?</div><p><span class="v yes">Dwie ConfigMapy</span> w <code>knative-serving</code>: <code>config-certmanager</code> (który issuer) i <code>config-network</code> (<code>external-domain-tls: Enabled</code>).</p></div>
+    <div class="answer"><div class="q">Trzeba instalować net-certmanager?</div><p><span class="v no">Nie.</span> Od Knative 1.15 integracja jest w serving-core. Ostatni osobny net-certmanager to 1.14.</p></div>
+    <div class="answer"><div class="q">Kto serwuje HTTPS?</div><p><span class="v yes">Kourier.</span> Dostaje Secret z certyfikatem przez wewnętrzny KIngress i terminuje TLS na porcie 443.</p></div>
+  </div>
+</section>
+
+<section id="ingress">
+  <h2 class="prose"><span class="num">1</span>Dlaczego nie działa to, co znasz z Ingressa</h2>
+  <p class="prose">W zwykłym Kubernetesie cert-manager ma komponent <b>ingress-shim</b>. Obserwuje obiekty <code>networking.k8s.io/Ingress</code> (i Gateway API), widzi adnotację <code>cert-manager.io/cluster-issuer</code> i sekcję <code>tls:</code>, po czym sam tworzy <code>Certificate</code>. W Knative tej drogi nie ma, bo Ingress tworzy Knative i to <b>inny typ obiektu</b>.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Zwykły K8s + ingress-nginx</th><th>Knative + Kourier</th></tr></thead>
+    <tbody>
+      <tr><th>Kto pisze Ingress</th><td>Ty, ręcznie</td><td>Knative, z Route usługi</td></tr>
+      <tr><th>Typ obiektu</th><td><code>ingresses.networking.k8s.io</code></td><td><code>ingresses.networking.internal.knative.dev</code> (KIngress)</td></tr>
+      <tr><th>Kto zamawia <code>Certificate</code></th><td>ingress-shim cert-managera, z adnotacji</td><td>kontroler Knative Serving, z KCertificate</td></tr>
+      <tr><th>Gdzie wybierasz issuer</th><td>adnotacja na Ingressie</td><td>ConfigMap <code>config-certmanager</code>, raz dla klastra</td></tr>
+      <tr><th>Gdzie włączasz TLS</th><td>sekcja <code>tls:</code> w każdym Ingressie</td><td><code>external-domain-tls</code> w <code>config-network</code>, dla wszystkich usług naraz</td></tr>
+      <tr><th>Kto czyta Secret z certyfikatem</th><td>ingress-controller</td><td>net-kourier-controller → Envoy w <code>3scale-kourier-gateway</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="prose">ingress-shim nie zna KIngressa, a Kourier nie czyta adnotacji cert-managera. Dlatego Knative ma własny odpowiednik ingress-shima, wbudowany w swój kontroler.</p>
+</section>
+
+<section id="przeplyw">
+  <h2 class="prose"><span class="num">2</span>Przepływ: od ksvc do HTTPS</h2>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 900 310" role="img" aria-label="Górny rząd: Knative Service, Route, KCertificate Knative, Certificate cert-managera. Dolny rząd od prawej: cert-manager z ClusterIssuerem wystawia Secret, Secret trafia do KIngress, KIngress czyta Kourier, który serwuje HTTPS.">
+        <defs>
+          <marker id="mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-kn" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="mc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-cm" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        <!-- górny rząd -->
+        <g class="box kn"><rect x="20" y="40" width="140" height="64" rx="10"/><text class="t" x="90" y="67" text-anchor="middle">Knative Service</text><text class="s" x="90" y="86" text-anchor="middle">ksvc</text></g>
+        <g class="box kn"><rect x="210" y="40" width="150" height="64" rx="10"/><text class="t" x="285" y="67" text-anchor="middle">Route</text><text class="s" x="285" y="86" text-anchor="middle">domeny usługi</text></g>
+        <g class="box kn"><rect x="410" y="40" width="190" height="64" rx="10"/><text class="t" x="505" y="67" text-anchor="middle">KCertificate</text><text class="s" x="505" y="86" text-anchor="middle">networking.internal…</text></g>
+        <g class="box cm"><rect x="650" y="40" width="230" height="64" rx="10"/><text class="t" x="765" y="67" text-anchor="middle">Certificate</text><text class="s" x="765" y="86" text-anchor="middle">cert-manager.io/v1</text></g>
+        <!-- dolny rząd -->
+        <g class="box gw"><rect x="20" y="200" width="140" height="64" rx="10"/><text class="t" x="90" y="227" text-anchor="middle">Kourier</text><text class="s" x="90" y="246" text-anchor="middle">HTTPS :443</text></g>
+        <g class="box kn"><rect x="210" y="200" width="150" height="64" rx="10"/><text class="t" x="285" y="227" text-anchor="middle">KIngress</text><text class="s" x="285" y="246" text-anchor="middle">tls: secretName</text></g>
+        <g class="box cm"><rect x="410" y="200" width="190" height="64" rx="10"/><text class="t" x="505" y="227" text-anchor="middle">Secret</text><text class="s" x="505" y="246" text-anchor="middle">tls.crt / tls.key</text></g>
+        <g class="box cm"><rect x="650" y="200" width="230" height="64" rx="10"/><text class="t" x="765" y="227" text-anchor="middle">cert-manager</text><text class="s" x="765" y="246" text-anchor="middle">ClusterIssuer (ACME / CA)</text></g>
+        <!-- strzałki -->
+        <path class="a kn" d="M160 72 H204" marker-end="url(#mk)"/>
+        <path class="a kn" d="M360 72 H404" marker-end="url(#mk)"/>
+        <path class="a kn" d="M600 72 H644" marker-end="url(#mk)"/>
+        <path class="a cm" d="M765 104 V194" marker-end="url(#mc)"/>
+        <path class="a cm" d="M650 232 H606" marker-end="url(#mc)"/>
+        <path class="a kn" d="M410 232 H366" marker-end="url(#mk)"/>
+        <path class="a kn" d="M210 232 H166" marker-end="url(#mk)"/>
+        <path class="a kn dash" d="M285 104 V194" marker-end="url(#mk)"/>
+        <text class="lbl kn" x="382" y="30" text-anchor="middle">gdy external-domain-tls: Enabled</text>
+        <text class="lbl kn" x="622" y="128" text-anchor="middle">kontroler Serving</text>
+        <text class="lbl kn" x="622" y="144" text-anchor="middle">tłumaczy</text>
+        <text class="lbl cm" x="775" y="150">issuerRef z</text>
+        <text class="lbl cm" x="775" y="166">config-certmanager</text>
+        <text class="lbl cm" x="628" y="222" text-anchor="middle">wystawia</text>
+        <text class="lbl kn" x="295" y="150">Route tworzy</text>
+        <text class="lbl kn" x="295" y="166">KIngress</text>
+        <text class="note" x="20" y="295">Pomarańczowe obiekty tworzy i aktualizuje Knative, turkusowe to cert-manager. Ty ustawiasz tylko dwie ConfigMapy i ClusterIssuer.</text>
+      </svg>
+    </div>
+    <div class="legend"><span class="l-kn">Knative</span><span class="l-cm">cert-manager</span><span class="l-gw">brama (Envoy)</span></div>
+    <figcaption>Gdy Secret jest gotowy, KCertificate przechodzi w <code>Ready</code>, Knative dopisuje TLS do KIngressa, a adres usługi zmienia się z <code>http://</code> na <code>https://</code>. Przy HTTP-01 Knative dodatkowo sam dopisuje do KIngressa ścieżkę <code>/.well-known/acme-challenge/…</code> do solvera cert-managera.</figcaption>
+  </figure>
+</section>
+
+<section id="wlacz" class="prose">
+  <h2><span class="num">3</span>Gdzie to się włącza</h2>
+  <p>Wszystko w namespace <code>knative-serving</code>. Na ksvc nie dopisujesz nic.</p>
+  <h3>1. <code>config-certmanager</code>: który issuer</h3>
+<pre>data:
+  issuerRef: |
+    kind: ClusterIssuer        <span class="c"># albo Issuer</span>
+    name: memeops-ca           <span class="c"># na produkcji np. letsencrypt-dns01</span></pre>
+  <p>Bez <code>issuerRef</code> Knative użyje ClusterIssuera <code>knative-selfsigned-issuer</code> (tak mówi komentarz w <code>_example</code>). Na <code>memeops</code> takiego ClusterIssuera nie ma, więc <code>issuerRef</code> trzeba ustawić.</p>
+  <h3>2. <code>config-network</code>: włącznik</h3>
+<pre>data:
+  external-domain-tls: "Enabled"   <span class="c"># dawniej auto-tls, ten klucz jest już deprecated</span>
+  http-protocol: "Redirected"      <span class="c"># opcjonalnie: http → 301 na https; domyślnie "Enabled"</span></pre>
+  <h3>3. Restart kontrolera</h3>
+<pre>kubectl -n knative-serving rollout restart deploy/controller</pre>
+  <div class="callout">Kontroler Serving włącza obsługę cert-managera tylko wtedy, gdy przy starcie widzi jego CRD. Jeśli cert-manager doszedł po Knative, certyfikaty wiszą w <code>CertificateNotReady</code> bez żadnego komunikatu. W próbie LAB 6 pomógł dopiero restart <b>po</b> zmianie ConfigMap: po ok. 40 s adresy były <code>https://</code>.</div>
+  <h3>Wszystkie klucze w jednym miejscu</h3>
+</section>
+<div class="table-wrap"><table>
+  <thead><tr><th>Klucz</th><th>ConfigMap</th><th>Co robi</th></tr></thead>
+  <tbody>
+    <tr><th><code>issuerRef</code></th><td><code>config-certmanager</code></td><td>Issuer dla domen zewnętrznych (<code>*.127.0.0.1.sslip.io</code>, <code>app.firma.pl</code>).</td></tr>
+    <tr><th><code>clusterLocalIssuerRef</code></th><td><code>config-certmanager</code></td><td>Issuer dla domen wewnętrznych <code>*.svc.cluster.local</code>. Działa tylko z <code>cluster-local-domain-tls</code>.</td></tr>
+    <tr><th><code>systemInternalIssuerRef</code></th><td><code>config-certmanager</code></td><td>Issuer dla ruchu między komponentami Knative. Działa tylko z <code>system-internal-tls</code>.</td></tr>
+    <tr><th><code>external-domain-tls</code></th><td><code>config-network</code></td><td>Główny włącznik: certyfikaty dla domen zewnętrznych. Dawniej <code>auto-tls</code>.</td></tr>
+    <tr><th><code>http-protocol</code></th><td><code>config-network</code></td><td><code>Enabled</code>: HTTP i HTTPS równolegle. <code>Redirected</code>: HTTP odpowiada 301 na HTTPS.</td></tr>
+    <tr><th><code>namespace-wildcard-cert-selector</code></th><td><code>config-network</code></td><td>Jeden certyfikat wildcard na namespace zamiast osobnego na każdą usługę. Puste = wyłączone.</td></tr>
+    <tr><th><code>certificate-class</code></th><td><code>config-network</code></td><td>Kto obsługuje KCertificate. Domyślnie <code>cert-manager.certificate.networking.knative.dev</code>, nie trzeba zmieniać.</td></tr>
+    <tr><th><code>cluster-local-domain-tls</code>, <code>system-internal-tls</code></th><td><code>config-network</code></td><td>TLS wewnątrz klastra. Na 1.23 w stanie alpha, poza zakresem szkolenia.</td></tr>
+  </tbody>
+</table></div>
+
+<section id="issuer">
+  <h2 class="prose"><span class="num">4</span>Jaki issuer wybrać i gdzie go wskazać</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Issuer</th><th>Certyfikat</th><th>Co jest potrzebne</th><th>Kiedy</th></tr></thead>
+    <tbody>
+      <tr><th>ACME (Let's Encrypt), HTTP-01</th><td>osobny dla każdej usługi i domeny</td><td>Prawdziwa domena i brama osiągalna z internetu na porcie 80</td><td>Produkcja z niewielką liczbą usług</td></tr>
+      <tr><th>ACME (Let's Encrypt), DNS-01</th><td>wildcard <code>*.namespace.domena</code> albo osobne</td><td>Dostęp do API DNS (Route 53, Cloudflare, Azure DNS…)</td><td>Produkcja, dużo usług, brama za firewallem</td></tr>
+      <tr><th>CA (własne)</th><td>dowolny, podpisany twoim CA</td><td>Secret z kluczem CA; klienci muszą temu CA ufać</td><td>Laboratorium, sieć firmowa z własnym PKI</td></tr>
+      <tr><th>selfSigned</th><td>każdy podpisany sam sobą</td><td>nic</td><td>Tylko do zbudowania CA (tak jak w LAB 6)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="prose">
+    <p><b>Dlaczego na kindzie nie Let's Encrypt:</b> <code>*.127.0.0.1.sslip.io</code> wskazuje na twój laptop. Serwer Let's Encrypt nie dotrze do <code>127.0.0.1</code>, więc wyzwanie HTTP-01 nie przejdzie, a DNS-01 wymaga własnej strefy DNS. Dlatego LAB 6 buduje własne CA: <code>selfSigned</code> podpisuje certyfikat CA, a ClusterIssuer <code>memeops-ca</code> wystawia nim certyfikaty usług.</p>
+    <p><b>Wildcard per namespace:</b> ustaw <code>namespace-wildcard-cert-selector</code> (np. <code>{}</code> dla wszystkich namespace'ów albo <code>matchExpressions</code> na etykiecie namespace'u). Dokumentacja Knative mówi wprost: przy ACME działa to tylko z DNS-01, nie z HTTP-01. W danym momencie działa tylko jeden tryb: albo certyfikat na każdą usługę, albo wildcard na namespace. Z własnym CA nie ma wyzwań ACME, więc ograniczenie DNS-01 nie powinno go dotyczyć [nie testowane].</p>
+
+    <h3 id="wskaz">Jak wskazać issuera</h3>
+    <p>Issuer to zwykły obiekt cert-managera, taki sam jak przy Ingressie. Knative nic w nim nie zmienia. Inne jest tylko miejsce, w którym go wskazujesz: zamiast adnotacji na Ingressie jest jeden klucz <code>issuerRef</code> w <code>config-certmanager</code>. Kontroler Serving wpisuje go do <code>spec.issuerRef</code> każdego Certificate, który tworzy.</p>
+<pre><span class="c"># 1. ClusterIssuer Let's Encrypt z DNS-01 (tu Cloudflare): zwykły YAML cert-managera</span>
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory   <span class="c"># na próbę: acme-staging-v02</span>
+    email: admin@firma.pl
+    privateKeySecretRef:
+      name: letsencrypt-prod-konto      <span class="c"># klucz konta ACME, cert-manager tworzy go sam</span>
+    solvers:
+    - dns01:
+        cloudflare:
+          apiTokenSecretRef:            <span class="c"># Secret w namespace cert-manager</span>
+            name: cloudflare-api-token
+            key: api-token
+---
+<span class="c"># 2. Wskazanie go w Knative: to jest odpowiednik adnotacji cert-manager.io/cluster-issuer</span>
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-certmanager
+  namespace: knative-serving
+data:
+  issuerRef: |
+    kind: ClusterIssuer
+    name: letsencrypt-prod</pre>
+    <p>Potem <code>external-domain-tls: Enabled</code> w <code>config-network</code> i restart <code>deploy/controller</code>, jak w <a href="#wlacz">sekcji 3</a>.</p>
+    <div class="callout"><b>HTTP-01:</b> ścieżkę <code>/.well-known/acme-challenge/…</code> wystawia Knative przez KIngress, a nie ingress-shim. Dokumentacja Knative (1.24) nie podaje, jak ma wyglądać sekcja <code>solvers.http01</code> dla Kouriera, a nie testowaliśmy tego na szkoleniu. Przed produkcją sprawdź ten wariant na <code>acme-staging-v02</code>, żeby nie wpaść w limity Let's Encrypt. DNS-01 działa tak samo jak poza Knative.</div>
+
+    <h3>Jeden issuer na klaster, i co z tym zrobić</h3>
+    <p>Ksvc nie ma pola ani adnotacji „użyj issuera X”. Jedyne, co ustawisz na usłudze, to wyłączenie TLS (<a href="#wyjatki">sekcja 5</a>). Jeśli różne usługi potrzebują różnych issuerów:</p>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Potrzeba</th><th>Jak</th><th>Uwagi</th></tr></thead>
+    <tbody>
+      <tr><th>Jeden issuer dla wszystkich</th><td><code>issuerRef: {kind: ClusterIssuer, name: …}</code></td><td>Standard, tak jest w LAB 6.</td></tr>
+      <tr><th>Inny issuer w każdym namespace (np. <code>prod</code>: Let's Encrypt, <code>dev</code>: własne CA)</th><td><code>issuerRef: {kind: Issuer, name: tls}</code> i w każdym namespace z usługami osobny <code>Issuer</code> o nazwie <code>tls</code></td><td>cert-manager szuka Issuera w namespace obiektu Certificate. Dokumentacja Knative nie mówi, w którym namespace powstaje Certificate; zakładamy, że w namespace usługi [nie testowane]. Brak Issuera = certyfikat nigdy nie będzie gotowy.</td></tr>
+      <tr><th>Inny certyfikat dla jednej domeny</th><td>Sam tworzysz <code>Certificate</code> z dowolnym issuerem i podajesz jego Secret w <code>DomainMapping</code> → <code>spec.tls.secretName</code></td><td>Knative nie zamawia wtedy certyfikatu dla tej domeny, tylko używa twojego Secretu.</td></tr>
+    </tbody>
+  </table></div>
+<pre class="prose"><span class="c"># własna domena z własnym certyfikatem (Secret z Certificate cert-managera albo kupiony)</span>
+apiVersion: serving.knative.dev/v1beta1
+kind: DomainMapping
+metadata:
+  name: memy.firma.pl
+  namespace: memeops
+spec:
+  ref:
+    name: meme-gen
+    kind: Service
+    apiVersion: serving.knative.dev/v1
+  tls:
+    secretName: memy-firma-pl-tls</pre>
+</section>
+
+<section id="wyjatki">
+  <h2 class="prose"><span class="num">5</span>Wyjątki i warianty</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Chcesz</th><th>Jak</th></tr></thead>
+    <tbody>
+      <tr><th>Jedna usługa bez HTTPS (np. odbiera webhooki po HTTP)</th><td>Adnotacja na ksvc: <code>networking.knative.dev/disable-external-domain-tls: "true"</code> w <code>metadata.annotations</code> ksvc (albo Route). Według dokumentacji Knative, na klastrze nie testowane.</td></tr>
+      <tr><th>Własna domena (<code>memy.firma.pl</code>)</th><td><code>DomainMapping</code>. Przy włączonym <code>external-domain-tls</code> dostaje certyfikat tak samo jak ksvc. Możesz też podać gotowy Secret w <code>spec.tls.secretName</code> (<a href="#wskaz">sekcja 4</a>). Domena wymaga <code>ClusterDomainClaim</code>, bo <code>autocreate-cluster-domain-claims</code> jest domyślnie wyłączone.</td></tr>
+      <tr><th>HTTPS tylko na zewnątrz, w środku zwykły HTTP</th><td>To jest domyślne zachowanie. <code>external-domain-tls</code> nie dotyka ruchu <code>*.svc.cluster.local</code>.</td></tr>
+      <tr><th>Adresy <code>https://</code>, ale TLS kończy się na load balancerze przed klastrem</th><td>Bez cert-managera: <code>default-external-scheme: "https"</code> w <code>config-network</code>. Knative tylko raportuje adresy jako HTTPS.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="bez-cm" class="prose">
+  <h2><span class="num">6</span>Bez cert-managera: jeden certyfikat na bramie</h2>
+  <p>Jeśli masz gotowy certyfikat wildcard (np. <code>*.apps.firma.pl</code>), możesz go podać prosto Kourierowi i pominąć cert-managera. To najbliższe temu, co znasz jako „TLS na ingressie”: konfigurujesz bramę, nie usługi.</p>
+<pre><span class="c"># Secret z wildcardem w namespace kontrolera Kouriera</span>
+kubectl -n knative-serving create secret tls wildcard-cert --cert=tls.crt --key=tls.key
+
+<span class="c"># net-kourier-controller ma na to zmienne środowiskowe (na memeops są puste)</span>
+kubectl -n knative-serving set env deploy/net-kourier-controller \
+  CERTS_SECRET_NAMESPACE=knative-serving CERTS_SECRET_NAME=wildcard-cert</pre>
+  <p>Envoy serwuje wtedy ten jeden certyfikat dla wszystkich hostów na porcie 443 [nie testowane na <code>memeops</code>]. Minusy: certyfikat odnawiasz sam, a nowa domena spoza wildcarda oznacza nowy certyfikat. Przy Istio odpowiednikiem jest TLS skonfigurowany na obiekcie <code>Gateway</code>.</p>
+</section>
+
+<section id="klaster" class="prose">
+  <h2><span class="num">7</span>Zobacz na klastrze</h2>
+  <p>Pełna ścieżka jest w LAB 6, punkt „Dla chętnych: HTTPS” (<code>labs/lab06-sekrety/</code>). W skrócie:</p>
+<pre><span class="c"># cert-manager + restart kontrolera (skrypt robi to sam)</span>
+setup/platform.sh --cert-manager --bez-obrazow
+
+<span class="c"># własne CA: selfSigned → certyfikat CA → ClusterIssuer memeops-ca</span>
+kubectl apply -f labs/lab06-sekrety/tls.yaml
+
+kubectl patch cm config-certmanager -n knative-serving --type merge \
+  -p '{"data":{"issuerRef":"kind: ClusterIssuer\nname: memeops-ca\n"}}'
+kubectl patch cm config-network -n knative-serving --type merge \
+  -p '{"data":{"external-domain-tls":"Enabled","http-protocol":"Redirected"}}'
+kubectl -n knative-serving rollout restart deploy/controller
+
+<span class="c"># łańcuch obiektów z diagramu</span>
+kubectl get kcert -A                 <span class="c"># KCertificate Knative, READY True</span>
+kubectl get certificate -A           <span class="c"># Certificate cert-managera</span>
+kubectl get kingress -A -o yaml | grep -A3 'tls:'
+kn service list -n memeops           <span class="c"># adresy https://</span>
+
+<span class="c"># test: ufamy naszemu CA</span>
+kubectl -n cert-manager get secret memeops-ca -o jsonpath='{.data.ca\.crt}' | base64 -d &gt; /tmp/memeops-ca.crt
+curl --cacert /tmp/memeops-ca.crt https://meme-gen.memeops.127.0.0.1.sslip.io/api/info
+curl -sI http://meme-gen.memeops.127.0.0.1.sslip.io/ | head -2     <span class="c"># 301 → https</span>
+
+<span class="c"># sprzątanie</span>
+kubectl patch cm config-network -n knative-serving --type merge \
+  -p '{"data":{"external-domain-tls":"Disabled","http-protocol":"Enabled"}}'</pre>
+  <p>Gdy coś nie działa, idź po łańcuchu od lewej: <code>kubectl describe kcert</code>, potem <code>kubectl describe certificate</code> i <code>certificaterequest</code>, na końcu logi <code>deploy/cert-manager -n cert-manager</code>. Pusty status KCertificate najczęściej oznacza brak restartu kontrolera.</p>
+  
+</section>
+
+<section id="sprawdz" class="prose">
+  <h2><span class="num">8</span>Sprawdź się</h2>
+  <details><summary>Dopisujesz <code>cert-manager.io/cluster-issuer: letsencrypt</code> do <code>metadata.annotations</code> ksvc. Co się stanie?</summary><p>Nic. ingress-shim cert-managera obserwuje tylko <code>networking.k8s.io/Ingress</code> (i Gateway API), a Knative tworzy KIngress. Certyfikaty włączasz przez <code>external-domain-tls</code> w <code>config-network</code>, a issuer wybierasz w <code>config-certmanager</code>.</p></details>
+  <details><summary>Włączyłeś <code>external-domain-tls</code>, ksvc ma <code>CertificateNotReady</code>, a w <code>kubectl get certificate</code> nic nie ma. Co sprawdzić?</summary><p>Kontroler Serving nie stworzył Certificate cert-managera, czyli nie widzi integracji. Najczęstsza przyczyna: cert-manager zainstalowany po Knative bez restartu <code>deploy/controller</code>. Zrestartuj go po ustawieniu ConfigMap. Potem sprawdź, czy issuer z <code>issuerRef</code> istnieje (<code>kubectl get clusterissuer</code>).</p></details>
+  <details><summary>Klaster kind, adresy <code>*.127.0.0.1.sslip.io</code>. Czy zadziała Let's Encrypt z HTTP-01?</summary><p>Nie. Serwer Let's Encrypt musi połączyć się z twoją bramą pod tą domeną, a <code>127.0.0.1</code> to dla niego jego własny host. Lokalnie używasz własnego CA (ClusterIssuer typu <code>ca</code>).</p></details>
+  <details><summary>Masz 200 usług w jednym namespace i limit Let's Encrypt na liczbę certyfikatów. Co zrobić?</summary><p>Wildcard per namespace: <code>namespace-wildcard-cert-selector</code> w <code>config-network</code> plus ClusterIssuer ACME z DNS-01. Jeden certyfikat <code>*.namespace.domena</code> zamiast 200.</p></details>
+  <details><summary>Usługi w <code>prod</code> mają mieć certyfikaty z Let's Encrypt, a w <code>dev</code> z firmowego CA. Gdzie to ustawić?</summary><p>Nie na ksvc, bo tam nie ma wyboru issuera. W <code>config-certmanager</code> ustaw <code>issuerRef</code> z <code>kind: Issuer</code> i stałą nazwą (np. <code>tls</code>), a w <code>prod</code> i <code>dev</code> utwórz Issuery o tej nazwie: jeden ACME, drugi CA. Albo zostaw jeden ClusterIssuer, a wyjątki obsłuż przez DomainMapping z własnym Secretem.</p></details>
+  <details><summary>Czy po włączeniu <code>external-domain-tls</code> ruch <code>hello.demo.svc.cluster.local</code> też idzie po HTTPS?</summary><p>Nie. Ten klucz dotyczy tylko domen zewnętrznych. Domeny wewnętrzne obsługuje osobny <code>cluster-local-domain-tls</code> (alpha).</p></details>
+  <details><summary>Gdzie Knative trzyma informację, że certyfikat jest gotowy, zanim dopisze go do KIngressa?</summary><p>W statusie KCertificate (<code>kubectl get kcert</code>). Kontroler Serving przepisuje tam status z Certificate cert-managera. Gdy jest <code>Ready</code>, Route dopisuje Secret do KIngressa, a adres usługi zmienia się na <code>https://</code>.</p></details>
+</section>
+
+<p class="src prose">Źródła: bloki <code>_example</code> w <code>config-network</code>, <code>config-certmanager</code> i <code>config-kourier</code> oraz zmienne <code>deploy/net-kourier-controller</code> na klastrze <code>memeops</code> (Knative 1.23.0, cert-manager v1.20.4), <code>kubectl api-resources</code>; LAB 6 (<code>labs/lab06-sekrety/</code>). Dokumentacja: knative.dev → Serving → Using a custom domain → Configuring HTTPS / Using certificates, cert-manager.io → Concepts → Issuer. Zobacz też: <a href="../04-kourier/index.html">Kourier dla Knative</a> (brama i porty), <a href="../01-knative-vs-k8s/index.html">Knative a zwykły Kubernetes</a> (Route, KIngress).</p>
+
+</div>
+</body>
+</html>

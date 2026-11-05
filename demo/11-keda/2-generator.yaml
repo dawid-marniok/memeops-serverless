@@ -1,4 +1,4 @@
-# Demo 11, krok 2: worker. Zdejmuje jedno zadanie z listy i „generuje mema” przez 1 s. Startuje z zerem replik.
+# Demo 11, krok 2: worker. Zdejmuje jedno zadanie z listy i „generuje mema” przez CZAS sekund (domyślnie 1). Startuje z zerem replik.
 # Pętla w args to sam program workera (prawdziwy worker byłby Twoją aplikacją).
 apiVersion: apps/v1
 kind: Deployment
@@ -18,6 +18,6 @@ spec:
             - |
               while true; do
                 zadanie=$(redis-cli -h redis --raw BLPOP memy 5 | tail -1)
-                [ -n "$zadanie" ] && { echo "$(hostname): generuję mem nr $zadanie"; sleep 1; }
+                [ -n "$zadanie" ] && { echo "$(hostname): generuję mem nr $zadanie"; sleep "${CZAS:-1}"; }
               done
           resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}

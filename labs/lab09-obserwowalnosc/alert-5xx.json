@@ -1,0 +1,57 @@
+{
+  "title": "meme-gen",
+  "folderUid": "memeops",
+  "interval": 10,
+  "rules": [
+    {
+      "uid": "meme-gen-5xx",
+      "title": "meme-gen: ponad 5% odpowiedzi 5xx",
+      "condition": "C",
+      "for": "1m",
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "labels": {
+        "zespol": "memeops",
+        "waga": "krytyczny"
+      },
+      "annotations": {
+        "summary": "Ponad 5% żądań do meme-gen kończy się błędem 5xx (ostatnia minuta).",
+        "runbook": "kubectl describe pod -n memeops -l serving.knative.dev/service=meme-gen | grep -A3 'Last State'; w Tempo: { span.http.response.status_code >= 500 }"
+      },
+      "data": [
+        {
+          "refId": "A",
+          "datasourceUid": "prometheus",
+          "relativeTimeRange": {
+            "from": 300,
+            "to": 0
+          },
+          "model": {
+            "refId": "A",
+            "instant": true,
+            "expr": "sum(rate(http_server_request_duration_seconds_count{namespace=\"memeops\", service=\"meme-gen\", http_response_status_code=~\"5..\"}[1m])) / sum(rate(http_server_request_duration_seconds_count{namespace=\"memeops\", service=\"meme-gen\"}[1m]))"
+          }
+        },
+        {
+          "refId": "C",
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "gt",
+                  "params": [
+                    0.05
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
