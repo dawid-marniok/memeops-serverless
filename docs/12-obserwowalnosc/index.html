@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obserwowalność w Kubernetesie</title>
+<style>
+/* Ten sam system co pozostałe notatki. Kolor = sygnał: pomarańcz = metryki, niebieski = logi, fiolet = trace'y, turkus = Alloy i Grafana, róż = pułapka. */
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #efede6;
+  --text: #1d1c1a;
+  --muted: #5f5c55;
+  --line: #dcd8cc;
+  --accent: #0f6d6a;
+  --acc-bg: #e3f2f0;
+  --m: #b4561a;
+  --m-bg: #fbe9da;
+  --l: #2a5db0;
+  --l-bg: #e2ebf9;
+  --t: #7a3fb0;
+  --t-bg: #efe4f8;
+  --cold: #b0306a;
+  --cold-bg: #f9e6ef;
+  --code-bg: #1e2124;
+  --code-text: #e6e3da;
+  --code-comment: #8f9a92;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+    --accent: #5cc4bd; --acc-bg: #17302e;
+    --m: #f0955a; --m-bg: #33241a; --l: #7fa8f0; --l-bg: #1a2638; --t: #c39af0; --t-bg: #2a1f36;
+    --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141615; --surface: #1c1f1e; --surface-2: #232726; --text: #e8e6df; --muted: #a3a097; --line: #34393a;
+  --accent: #5cc4bd; --acc-bg: #17302e;
+  --m: #f0955a; --m-bg: #33241a; --l: #7fa8f0; --l-bg: #1a2638; --t: #c39af0; --t-bg: #2a1f36;
+  --cold: #ee7fae; --cold-bg: #3a1a28; --code-bg: #0f1110;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono); }
+a { color: var(--accent); }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 96px; }
+.prose { max-width: 760px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 8px 0 14px; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 26px; line-height: 1.25; margin: 64px 0 12px; letter-spacing: -.01em; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-size: 14px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 18px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.answer .q { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.answer p { margin: 0; font-size: 15px; line-height: 1.55; }
+.answer .v { font-weight: 700; color: var(--accent); }
+.answer .v.m { color: var(--m); }
+.answer .v.l { color: var(--l); }
+.answer .v.t { color: var(--t); }
+.answer .v.no { color: var(--cold); }
+
+/* Diagram */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-top: 16px; }
+.scroll svg { display: block; width: 100%; min-width: 820px; height: auto; }
+svg text { font-family: var(--sans); }
+.col-h { font-size: 11px; font-weight: 700; letter-spacing: .08em; fill: var(--muted); }
+.node { cursor: pointer; transition: opacity .2s; }
+.node rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.3; transition: stroke-width .15s; }
+.node.alloy rect, .node.graf rect { fill: var(--acc-bg); stroke: var(--accent); }
+.node.st-m rect { fill: var(--m-bg); stroke: var(--m); }
+.node.st-l rect { fill: var(--l-bg); stroke: var(--l); }
+.node.st-t rect { fill: var(--t-bg); stroke: var(--t); }
+.node:hover rect, .node:focus-visible rect { stroke-width: 2.6; }
+.node:focus { outline: none; }
+.node.sel rect { stroke-width: 3; }
+.node .t { font-size: 14px; font-weight: 650; fill: var(--text); }
+.node .s { font-size: 11px; fill: var(--muted); font-family: var(--mono); }
+.e { fill: none; stroke-width: 2.4; transition: opacity .2s, stroke-width .2s; }
+.e.m { stroke: var(--m); }
+.e.l { stroke: var(--l); }
+.e.t { stroke: var(--t); }
+.e.on { stroke-width: 4; }
+.mk-m { fill: var(--m); } .mk-l { fill: var(--l); } .mk-t { fill: var(--t); }
+.lbl { font-size: 11.5px; font-weight: 700; transition: opacity .2s; }
+.lbl.m { fill: var(--m); } .lbl.l { fill: var(--l); } .lbl.t { fill: var(--t); }
+.dim { opacity: .13; }
+figure { margin: 0; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid; }
+.legend .l-m::before { background: var(--m-bg); border-color: var(--m); }
+.legend .l-l::before { background: var(--l-bg); border-color: var(--l); }
+.legend .l-t::before { background: var(--t-bg); border-color: var(--t); }
+.legend .l-a::before { background: var(--acc-bg); border-color: var(--accent); }
+.legend .l-src::before { background: var(--surface-2); border-color: var(--line); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; align-items: center; }
+.chip { font: 600 13px var(--sans); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+.chip:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip[aria-pressed="true"] { background: var(--acc-bg); border-color: var(--accent); color: var(--accent); }
+.chip.m[aria-pressed="true"] { background: var(--m-bg); border-color: var(--m); color: var(--m); }
+.chip.l[aria-pressed="true"] { background: var(--l-bg); border-color: var(--l); color: var(--l); }
+.chip.t[aria-pressed="true"] { background: var(--t-bg); border-color: var(--t); color: var(--t); }
+.sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 12px; min-height: 120px; }
+.panel h4 { margin: 0 0 4px; font-size: 17px; }
+.panel .role { color: var(--muted); font-size: 14.5px; margin: 0 0 10px; }
+.panel dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; margin: 0; font-size: 14.5px; }
+.panel dt { color: var(--muted); font-weight: 600; }
+.panel dd { margin: 0; }
+.panel .stepnav { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.panel .stepnum { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.btn { font: 600 13.5px var(--sans); padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); cursor: pointer; }
+.btn:disabled { opacity: .4; cursor: default; }
+.panel pre { margin: 10px 0 0; }
+@media (max-width: 560px) { .panel dl { grid-template-columns: 1fr; } .panel dt { margin-top: 6px; } }
+
+/* Kroki */
+ol.steps { padding-left: 0; list-style: none; counter-reset: s; margin: 16px 0 0; }
+ol.steps li { counter-increment: s; position: relative; padding: 0 0 14px 44px; }
+ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 28px; height: 28px; border-radius: 50%; background: var(--acc-bg); color: var(--accent); font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+
+/* Tabele */
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 680px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+tbody th { font-weight: 650; width: 20%; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+td code, li code, p code, th code, summary code, dd code { font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.tag.m { background: var(--m-bg); color: var(--m); }
+.tag.l { background: var(--l-bg); color: var(--l); }
+.tag.t { background: var(--t-bg); color: var(--t); }
+.tag.a { background: var(--acc-bg); color: var(--accent); }
+.tag.no { background: var(--cold-bg); color: var(--cold); }
+
+/* Karty komponentów */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card.m { border-top-color: var(--m); } .card.l { border-top-color: var(--l); } .card.t { border-top-color: var(--t); } .card.a { border-top-color: var(--accent); }
+.card h3 { margin: 0 0 2px; }
+.card .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 8px; }
+.card ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
+.card li { margin-bottom: 4px; }
+
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; position: relative; }
+pre .c { color: var(--code-comment); }
+.copy { position: absolute; top: 8px; right: 8px; font: 600 11.5px var(--sans); padding: 3px 9px; border-radius: 6px; border: 1px solid #444a4d; background: #2a2f31; color: #cfd2c9; cursor: pointer; }
+.callout { border-left: 3px solid var(--accent); background: var(--acc-bg); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 15px; }
+.callout.cold { border-left-color: var(--cold); background: var(--cold-bg); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details p { margin: 10px 0 4px; }
+.src { font-size: 13.5px; color: var(--muted); }
+
+/* Zakładki z kodem */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.tabpanel[hidden] { display: none; }
+
+/* Zapytania */
+.qform { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.qform label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); flex: 1 1 200px; }
+.qform input, .calc input { font: 15px var(--mono); padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); width: 100%; }
+.qform input:focus-visible, .calc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.qform small { font-weight: 400; }
+.qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 14px; }
+.qcol h3 { margin: 0 0 8px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.q { margin-bottom: 10px; }
+.q .d { font-size: 13.5px; color: var(--muted); margin-bottom: 4px; }
+.q pre { margin: 0; white-space: pre-wrap; word-break: break-word; padding-right: 64px; }
+
+/* Kalkulator kardynalności */
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 16px; }
+.calc .rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 16px; }
+.calc label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.calc .chk { flex-direction: row; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; color: var(--text); }
+.calc .chk input { width: auto; }
+.result { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
+.result div { background: var(--surface-2); border-radius: 9px; padding: 10px 14px; }
+.result .k { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.result .val { font-size: 26px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.result .val.m { color: var(--m); }
+.result .val.no { color: var(--cold); }
+.result .x { font-size: 13px; color: var(--muted); }
+
+dl.gloss { display: grid; grid-template-columns: 170px 1fr; gap: 8px 16px; font-size: 15px; }
+dl.gloss dt { font-weight: 700; font-family: var(--mono); font-size: 14px; }
+dl.gloss dd { margin: 0; }
+@media (max-width: 560px) { dl.gloss { grid-template-columns: 1fr; } dl.gloss dd { margin-bottom: 8px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="prose">
+  <div class="eyebrow">Notatka do nauki · temat ogólny, bez Knative</div>
+  <h1>Obserwowalność w Kubernetesie: Prometheus, Loki, Tempo, Alloy i Grafana</h1>
+  <p class="lede">Co każdy z pięciu klocków robi, którędy płyną metryki, logi i trace'y, jak wygląda konfiguracja zbieracza i jak w Grafanie przejść od wykresu do konkretnej linii logu. W skrócie: metryki mówią, <em>że</em> coś jest nie tak, trace'y mówią <em>gdzie</em>, logi mówią <em>dlaczego</em>.</p>
+  <div class="meta">
+    <span class="pill">Prometheus 3.16</span>
+    <span class="pill">Loki 3.7</span>
+    <span class="pill">Tempo 3.1</span>
+    <span class="pill">Alloy 1.21</span>
+    <span class="pill">Grafana 13.3</span>
+    <span class="pill">stan na 06.11.2026</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#skrot">W skrócie</a>
+    <a href="#mapa">Mapa stosu</a>
+    <a href="#sygnaly">Trzy sygnały</a>
+    <a href="#klocki">Pięć klocków</a>
+    <a href="#alloy">Alloy w praktyce</a>
+    <a href="#instrumentacja">Skąd spany</a>
+    <a href="#polaczenia">Połączenia w Grafanie</a>
+    <a href="#zapytania">Zapytania</a>
+    <a href="#kardynalnosc">Kardynalność</a>
+    <a href="#instalacja">Instalacja</a>
+    <a href="#pulapki">Pułapki</a>
+    <a href="#slowniczek">Słowniczek</a>
+    <a href="#sprawdz">Sprawdź się</a>
+  </nav>
+</header>
+
+<section id="skrot">
+  <h2 class="prose">W skrócie</h2>
+  <div class="answers">
+    <div class="answer"><div class="q">Co to jest obserwowalność?</div><p><span class="v">Zdolność odpowiedzenia na nowe pytanie</span> o działający system bez wdrażania nowego kodu. Monitoring sprawdza znane awarie. Obserwowalność pozwala zbadać te, których nikt nie przewidział.</p></div>
+    <div class="answer"><div class="q">Jakie sygnały?</div><p><span class="v m">Metryki</span>, <span class="v l">logi</span> i <span class="v t">trace'y</span>. Każdy ma osobny magazyn i osobny język zapytań. Czwarty sygnał, profile (Pyroscope), tu pomijamy.</p></div>
+    <div class="answer"><div class="q">Kto zbiera?</div><p><span class="v">Grafana Alloy</span>, czyli dystrybucja OpenTelemetry Collectora z natywnymi potokami Prometheusa i Loki. Zastąpił Grafana Agenta (koniec wsparcia 1.11.2025) i Promtaila (2.03.2026).</p></div>
+    <div class="answer"><div class="q">Kto przechowuje?</div><p><span class="v m">Prometheus</span> szeregi czasowe, <span class="v l">Loki</span> linie logów, <span class="v t">Tempo</span> spany. Loki i Tempo trzymają dane w object storage (S3, GCS, Azure Blob) albo na dysku.</p></div>
+    <div class="answer"><div class="q">Kto pokazuje?</div><p><span class="v">Grafana.</span> Nie przechowuje danych, tylko odpytuje trzy magazyny: PromQL, LogQL i TraceQL. Ma Explore, dashboardy, Drilldown bez pisania zapytań i alerty.</p></div>
+    <div class="answer"><div class="q">Co je łączy?</div><p><span class="v">Wspólne etykiety i <code>trace_id</code>.</span> Te same <code>namespace</code>, <code>pod</code>, <code>service.name</code> we wszystkich sygnałach, a w logu i w exemplarze metryki identyfikator trace'a.</p></div>
+  </div>
+  <p class="prose src" style="margin-top:14px">Skrót <strong>LGTM</strong> to Loki, Grafana, Tempo i Mimir. Mimir to skalowalny, wielodzierżawczy magazyn zgodny z Prometheusem. Na jednym klastrze w zupełności wystarcza zwykły Prometheus, dlatego tu jest on, a nie Mimir.</p>
+</section>
+
+<section id="mapa">
+  <h2><span class="num">01</span>Mapa stosu: co gdzie stoi i kto komu wysyła dane</h2>
+  <p class="prose">Strzałka pokazuje kierunek, w którym płyną dane. Wybierz sygnał, żeby zobaczyć tylko jego drogę, albo kliknij klocek, żeby przeczytać, co robi, na jakim porcie słucha i co się dzieje, gdy padnie. „Jedno żądanie” prowadzi krok po kroku przez nieudaną płatność w przykładowym sklepie.</p>
+
+  <div class="toolbar" role="group" aria-label="Widok diagramu">
+    <button type="button" class="chip" data-flow="all" aria-pressed="true">Wszystko</button>
+    <button type="button" class="chip m" data-flow="m" aria-pressed="false">Metryki</button>
+    <button type="button" class="chip l" data-flow="l" aria-pressed="false">Logi</button>
+    <button type="button" class="chip t" data-flow="t" aria-pressed="false">Trace'y</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button type="button" class="chip" id="tour-btn" aria-pressed="false">Jedno żądanie krok po kroku</button>
+  </div>
+
+  <figure>
+    <div class="scroll">
+      <svg id="map" viewBox="0 0 1000 500" role="img" aria-labelledby="map-title">
+        <title id="map-title">Architektura stosu: aplikacja i węzeł, Alloy, Prometheus, Loki, Tempo, Alertmanager i Grafana</title>
+        <defs>
+          <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-m"/></marker>
+          <marker id="al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-l"/></marker>
+          <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-t"/></marker>
+        </defs>
+
+        <text class="col-h" x="40" y="18">ŹRÓDŁA · POD I WĘZEŁ</text>
+        <text class="col-h" x="300" y="18">ZBIERANIE · ALLOY</text>
+        <text class="col-h" x="580" y="18">MAGAZYNY</text>
+        <text class="col-h" x="830" y="18">WIDOK</text>
+
+        <!-- krawędzie: trace'y -->
+        <path class="e t" data-id="e-app-gw" d="M230,62 H296" marker-end="url(#at)"/>
+        <text class="lbl t" data-for="e-app-gw" x="263" y="54" text-anchor="middle">OTLP</text>
+        <path class="e t" data-id="e-gw-tempo" d="M500,62 H576" marker-end="url(#at)"/>
+        <text class="lbl t" data-for="e-gw-tempo" x="538" y="54" text-anchor="middle">OTLP</text>
+        <path class="e m" data-id="e-tempo-prom" d="M665,110 V186" marker-end="url(#am)"/>
+        <text class="lbl m" data-for="e-tempo-prom" x="673" y="142">span-metrics</text>
+        <text class="lbl m" data-for="e-tempo-prom" x="673" y="157">remote write</text>
+        <path class="e t" data-id="e-tempo-graf" d="M750,62 C800,62 800,212 826,212" marker-end="url(#at)"/>
+        <text class="lbl t" data-for="e-tempo-graf" x="792" y="110">TraceQL</text>
+
+        <!-- krawędzie: metryki -->
+        <path class="e m" data-id="e-app-prom" d="M230,100 L576,205" marker-end="url(#am)"/>
+        <path class="e m" data-id="e-kub-prom" d="M230,175 L576,222" marker-end="url(#am)"/>
+        <path class="e m" data-id="e-ksm-prom" d="M230,240 L576,238" marker-end="url(#am)"/>
+        <path class="e m" data-id="e-ne-prom" d="M230,305 L576,254" marker-end="url(#am)"/>
+        <text class="lbl m" data-for="e-app-prom e-kub-prom e-ksm-prom e-ne-prom" x="402" y="318" text-anchor="middle">Prometheus sam pobiera /metrics (scrape, pull)</text>
+        <path class="e m" data-id="e-prom-am" d="M665,280 V296" marker-end="url(#am)"/>
+        <path class="e m" data-id="e-prom-graf" d="M750,235 H826" marker-end="url(#am)"/>
+        <text class="lbl m" data-for="e-prom-graf" x="788" y="228" text-anchor="middle">PromQL</text>
+
+        <!-- krawędzie: logi -->
+        <path class="e l" data-id="e-app-log" d="M40,96 H24 V432 H36" marker-end="url(#al)"/>
+        <text class="lbl l" data-for="e-app-log" x="17" y="300" transform="rotate(-90 17 300)" text-anchor="middle">stdout / stderr</text>
+        <path class="e l" data-id="e-log-ds" d="M230,432 H296" marker-end="url(#al)"/>
+        <text class="lbl l" data-for="e-log-ds" x="263" y="424" text-anchor="middle">czyta</text>
+        <path class="e l" data-id="e-ds-loki" d="M500,432 H576" marker-end="url(#al)"/>
+        <text class="lbl l" data-for="e-ds-loki" x="538" y="424" text-anchor="middle">push</text>
+        <path class="e l" data-id="e-loki-graf" d="M750,432 C800,432 800,258 826,258" marker-end="url(#al)"/>
+        <text class="lbl l" data-for="e-loki-graf" x="792" y="380">LogQL</text>
+
+        <!-- węzły -->
+        <g class="node" data-id="app" data-f="m l t" tabindex="0" role="button" aria-label="Aplikacja">
+          <rect x="40" y="30" width="190" height="80" rx="9"/>
+          <text class="t" x="54" y="54">Twoja aplikacja</text>
+          <text class="s" x="54" y="74">SDK OTel · /metrics</text>
+          <text class="s" x="54" y="92">logi JSON na stdout</text>
+        </g>
+        <g class="node" data-id="kubelet" data-f="m" tabindex="0" role="button" aria-label="kubelet i cAdvisor">
+          <rect x="40" y="150" width="190" height="50" rx="9"/>
+          <text class="t" x="54" y="172">kubelet / cAdvisor</text>
+          <text class="s" x="54" y="190">CPU, pamięć kontenera</text>
+        </g>
+        <g class="node" data-id="ksm" data-f="m" tabindex="0" role="button" aria-label="kube-state-metrics">
+          <rect x="40" y="215" width="190" height="50" rx="9"/>
+          <text class="t" x="54" y="237">kube-state-metrics</text>
+          <text class="s" x="54" y="255">stan obiektów API</text>
+        </g>
+        <g class="node" data-id="ne" data-f="m" tabindex="0" role="button" aria-label="node-exporter">
+          <rect x="40" y="280" width="190" height="50" rx="9"/>
+          <text class="t" x="54" y="302">node-exporter</text>
+          <text class="s" x="54" y="320">DaemonSet · węzeł</text>
+        </g>
+        <g class="node" data-id="varlog" data-f="l" tabindex="0" role="button" aria-label="Pliki logów na węźle">
+          <rect x="40" y="400" width="190" height="64" rx="9"/>
+          <text class="t" x="54" y="424">/var/log/pods</text>
+          <text class="s" x="54" y="444">pliki logów na węźle</text>
+        </g>
+        <g class="node alloy" data-id="gw" data-f="t" tabindex="0" role="button" aria-label="Alloy jako bramka OTLP">
+          <rect x="300" y="30" width="200" height="80" rx="9"/>
+          <text class="t" x="314" y="54">Alloy · bramka OTLP</text>
+          <text class="s" x="314" y="74">otelcol.receiver.otlp</text>
+          <text class="s" x="314" y="92">→ batch → exporter</text>
+        </g>
+        <g class="node alloy" data-id="ds" data-f="l" tabindex="0" role="button" aria-label="Alloy jako DaemonSet">
+          <rect x="300" y="400" width="200" height="64" rx="9"/>
+          <text class="t" x="314" y="424">Alloy · DaemonSet</text>
+          <text class="s" x="314" y="444">file → process → write</text>
+        </g>
+        <g class="node st-t" data-id="tempo" data-f="t m" tabindex="0" role="button" aria-label="Tempo">
+          <rect x="580" y="30" width="170" height="80" rx="9"/>
+          <text class="t" x="594" y="54">Tempo</text>
+          <text class="s" x="594" y="74">:4317 :4318 OTLP</text>
+          <text class="s" x="594" y="92">:3200 API · TraceQL</text>
+        </g>
+        <g class="node st-m" data-id="prom" data-f="m" tabindex="0" role="button" aria-label="Prometheus">
+          <rect x="580" y="190" width="170" height="90" rx="9"/>
+          <text class="t" x="594" y="214">Prometheus</text>
+          <text class="s" x="594" y="234">:9090 · TSDB</text>
+          <text class="s" x="594" y="252">reguły alertów</text>
+          <text class="s" x="594" y="270">PromQL</text>
+        </g>
+        <g class="node st-m" data-id="am" data-f="m" tabindex="0" role="button" aria-label="Alertmanager">
+          <rect x="580" y="300" width="170" height="56" rx="9"/>
+          <text class="t" x="594" y="323">Alertmanager</text>
+          <text class="s" x="594" y="342">:9093 → Slack, e-mail</text>
+        </g>
+        <g class="node st-l" data-id="loki" data-f="l" tabindex="0" role="button" aria-label="Loki">
+          <rect x="580" y="400" width="170" height="64" rx="9"/>
+          <text class="t" x="594" y="424">Loki</text>
+          <text class="s" x="594" y="444">:3100 · LogQL</text>
+        </g>
+        <g class="node graf" data-id="graf" data-f="m l t" tabindex="0" role="button" aria-label="Grafana">
+          <rect x="830" y="190" width="150" height="90" rx="9"/>
+          <text class="t" x="844" y="214">Grafana</text>
+          <text class="s" x="844" y="234">:3000</text>
+          <text class="s" x="844" y="252">Explore, Drilldown</text>
+          <text class="s" x="844" y="270">dashboardy, alerty</text>
+        </g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span class="l-src">źródło danych</span>
+      <span class="l-a">Alloy i Grafana</span>
+      <span class="l-m">metryki</span>
+      <span class="l-l">logi</span>
+      <span class="l-t">trace'y</span>
+    </div>
+    <figcaption>Jeden z typowych układów. Alloy może też scrapować metryki zamiast Prometheusa i wysyłać je przez remote write, a aplikacja może wysyłać spany prosto do Tempo, bez bramki. Grafana sama odpytuje magazyny, więc strzałka do niej to odpowiedź na zapytanie.</figcaption>
+  </figure>
+
+  <div class="panel" id="panel" aria-live="polite">
+    <h4>Kliknij klocek na diagramie</h4>
+    <p class="role">Albo włącz „Jedno żądanie krok po kroku”.</p>
+  </div>
+</section>
+
+<section id="sygnaly">
+  <h2><span class="num">02</span>Trzy sygnały, trzy różne drogi</h2>
+  <p class="prose">Każdy sygnał odpowiada na inne pytanie, ma innego zbieracza, inny magazyn i inny koszt. Najczęstszy błąd to trzymanie wszystkiego w logach („policzę błędy grepem”) albo wszystkiego w metrykach („dodam <code>user_id</code> jako etykietę”).</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th><span class="tag m">Metryki</span></th><th><span class="tag l">Logi</span></th><th><span class="tag t">Trace'y</span></th></tr></thead>
+      <tbody>
+        <tr><th>Pytanie</th><td>Czy jest problem? Jak duży? Od kiedy?</td><td>Co dokładnie się stało?</td><td>Gdzie w łańcuchu usług ginie czas albo pada żądanie?</td></tr>
+        <tr><th>Jednostka</th><td>próbka: liczba + znacznik czasu w serii (nazwa + etykiety)</td><td>linia tekstu w strumieniu (zestaw etykiet)</td><td>span: operacja z początkiem, czasem trwania, atrybutami i rodzicem</td></tr>
+        <tr><th>Jak trafia do magazynu</th><td><strong>pull</strong>: Prometheus co <code>scrape_interval</code> pobiera <code>/metrics</code>. Opcjonalnie push: remote write albo OTLP</td><td><strong>push</strong>: aplikacja pisze na stdout, Alloy na węźle czyta pliki i wysyła do Loki</td><td><strong>push</strong>: SDK w procesie wysyła spany przez OTLP (gRPC 4317, HTTP 4318)</td></tr>
+        <tr><th>Magazyn</th><td>Prometheus (TSDB na dysku)</td><td>Loki (indeks etykiet + skompresowane chunki)</td><td>Tempo (bloki Parquet w object storage)</td></tr>
+        <tr><th>Język</th><td>PromQL</td><td>LogQL</td><td>TraceQL</td></tr>
+        <tr><th>Koszt rośnie z</th><td>liczbą serii (kardynalnością etykiet)</td><td>wolumenem bajtów i liczbą strumieni</td><td>liczbą spanów: ruchem × głębokością wywołań</td></tr>
+        <tr><th>Typowa retencja</th><td>tygodnie (Prometheus domyślnie 15 dni)</td><td>dni do tygodni</td><td>dni; często z próbkowaniem</td></tr>
+        <tr><th>Mocna strona</th><td>tanie agregaty, alerty, trendy</td><td>szczegół, treść błędu, stack trace</td><td>przyczynowość między usługami, rozkład czasu</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">Kolejność diagnozy prawie zawsze ta sama: <strong>alert z metryki</strong> → wykres zawęża czas i usługę → <strong>trace</strong> pokazuje, który span jest wolny albo czerwony → <strong>log</strong> z tym samym <code>trace_id</code> mówi, dlaczego.</div>
+</section>
+
+<section id="klocki">
+  <h2><span class="num">03</span>Pięć klocków</h2>
+  <div class="cards">
+    <div class="card m">
+      <h3>Prometheus</h3>
+      <p class="sub">baza szeregów czasowych + silnik reguł · port 9090</p>
+      <ul>
+        <li>Seria = nazwa metryki + zestaw etykiet, np. <code>http_requests_total{method="POST", code="500"}</code>. Każda unikalna kombinacja etykiet to osobna seria w pamięci.</li>
+        <li>Typy: <strong>counter</strong> (tylko rośnie, czytasz przez <code>rate()</code>), <strong>gauge</strong> (dowolna wartość), <strong>histogram</strong> (kubełki czasów). Natywne histogramy są stabilne od 3.8, ale scrapowanie ich włączasz w konfiguracji: <code>scrape_native_histograms</code>.</li>
+        <li>Model pull: sam pobiera <code>/metrics</code>. Domyślny <code>scrape_interval</code> to 1 min, Prometheus Operator ustawia 30 s. Co scrape tworzy też serię <code>up</code>, więc wiesz, że cel nie odpowiada.</li>
+        <li>Na Kubernetesie cele opisujesz obiektami <code>ServiceMonitor</code> i <code>PodMonitor</code> (CRD Prometheus Operatora). Adnotacje <code>prometheus.io/scrape</code> z poradników Operator ignoruje.</li>
+        <li>Reguły: <em>recording</em> (prelicza drogie zapytanie) i <em>alerting</em> (warunek + <code>for:</code>). Alert idzie do Alertmanagera, który grupuje, wycisza i wysyła dalej.</li>
+        <li>Przyjmie też push: remote write (<code>--web.enable-remote-write-receiver</code>) i OTLP po HTTP (<code>--web.enable-otlp-receiver</code>, ścieżka <code>/api/v1/otlp/v1/metrics</code>). Oba domyślnie wyłączone.</li>
+        <li>Nie jest magazynem długoterminowym ani klastrem HA. Do tego Mimir albo Thanos.</li>
+      </ul>
+    </div>
+    <div class="card l">
+      <h3>Loki</h3>
+      <p class="sub">magazyn logów · port 3100</p>
+      <ul>
+        <li>Indeksuje <strong>tylko etykiety</strong>, nie treść. Treść leży skompresowana w chunkach w object storage. Dlatego jest tani, a wyszukiwanie w treści (<code>|= "error"</code>) to przeglądanie chunków wybranych strumieni.</li>
+        <li>Strumień = unikalny zestaw etykiet. Domyślnie najwyżej 15 etykiet na strumień. Etykiety mają mieć mało wartości: <code>namespace</code>, <code>app</code>, <code>container</code>, <code>level</code>.</li>
+        <li><strong>Structured metadata</strong> (domyślnie włączone od 3.0): pary klucz-wartość przy linii, poza indeksem. Tu trafia <code>trace_id</code>. Filtrujesz po nich jak po etykiecie: <code>| trace_id="…"</code>.</li>
+        <li>Przyjmuje push na <code>/loki/api/v1/push</code> i natywnie OTLP na <code>/otlp</code>. Z OTLP wybrane atrybuty zasobu (np. <code>service.name</code> → <code>service_name</code>) stają się etykietami, resztę zapisuje jako structured metadata.</li>
+        <li>Tryby: <em>monolithic</em> (jeden proces, do kilkudziesięciu GB dziennie, domyślny w chartcie), <em>simple scalable</em> (przestarzały, znika w Loki 4) i <em>distributed</em> (mikroserwisy: distributor, ingester, querier, query-frontend, compactor).</li>
+        <li>Retencję i kasowanie starych danych robi compactor. Bez niego dane w object storage rosną bez końca.</li>
+      </ul>
+    </div>
+    <div class="card t">
+      <h3>Tempo</h3>
+      <p class="sub">magazyn trace'ów · OTLP 4317/4318, API 3200</p>
+      <ul>
+        <li>Przyjmuje spany przez OTLP, a także Jaeger i Zipkin. Zapisuje je w blokach Parquet w object storage. Wyszukanie trace'a po ID jest tanie, przeszukiwanie po atrybutach robi TraceQL.</li>
+        <li>Tempo 3.0 zmieniło architekturę: zamiast ingesterów i compactora są block-buildery, live-store i backend scheduler. W trybie mikroserwisów dane przechodzą przez Kafkę, w trybie monolitycznym działa jeden proces bez Kafki.</li>
+        <li><strong>TraceQL metrics</strong> (GA od 3.0): metryki liczone w locie z zapisanych spanów, np. <code>{…} | rate()</code>. Nie wymagają metrics-generatora.</li>
+        <li><strong>metrics-generator</strong> (w chartcie domyślnie wyłączony) liczy z napływających spanów <code>traces_spanmetrics_*</code> (żądania, błędy, czasy) i <code>traces_service_graph_*</code> (mapa usług) i wysyła je do Prometheusa przez remote write. Metryki RED bez <code>/metrics</code> w aplikacji.</li>
+        <li>Nie próbkuje sam. O próbkowaniu decyduje SDK (head sampling) albo kolektor (tail sampling w Alloy).</li>
+      </ul>
+    </div>
+    <div class="card a">
+      <h3>Grafana Alloy</h3>
+      <p class="sub">zbieracz wszystkich sygnałów · UI na porcie 12345</p>
+      <ul>
+        <li>Dystrybucja OpenTelemetry Collectora od Grafana Labs, z natywnymi komponentami Prometheusa (<code>prometheus.*</code>) i Loki (<code>loki.*</code>). Jeden binarny plik zamiast Promtaila, Grafana Agenta i osobnego OTel Collectora.</li>
+        <li>Konfiguracja w plikach <code>.alloy</code> (dawniej język River): bloki-komponenty połączone referencjami, np. <code>forward_to = [loki.write.default.receiver]</code>. Powstaje graf, który widać w UI.</li>
+        <li>Typowo dwa wdrożenia: <strong>DaemonSet</strong> (logi z plików węzła, metryki lokalne) i <strong>Deployment</strong> jako bramka OTLP dla aplikacji (batch, wzbogacanie o metadane Kubernetesa, tail sampling).</li>
+        <li>Migracja: <code>alloy convert --source-format=promtail</code> (albo <code>otelcol</code>, <code>prometheus</code>) tłumaczy starą konfigurację.</li>
+        <li>Gotowy zestaw potoków dla klastra daje chart <code>grafana/k8s-monitoring</code>. Pod spodem to też Alloy.</li>
+      </ul>
+    </div>
+    <div class="card a">
+      <h3>Grafana</h3>
+      <p class="sub">UI, zapytania, alerty · port 3000</p>
+      <ul>
+        <li>Nie przechowuje danych telemetrycznych. Ma <em>źródła danych</em> (data sources): Prometheus, Loki, Tempo i dziesiątki innych.</li>
+        <li><strong>Explore</strong>: ręczne zapytania i podzielony widok, np. metryka obok logów. <strong>Drilldown</strong> (Metrics, Logs, Traces, Profiles; od Grafany 12): przeglądanie bez pisania zapytań.</li>
+        <li><strong>Dashboardy</strong> z panelami i zmiennymi. <strong>Alerting</strong>: reguły zarządzane przez Grafanę albo podgląd reguł z Prometheusa i Loki.</li>
+        <li>Wartość jest w <strong>połączeniach</strong> między źródłami: log → trace, trace → logi, metryka → trace. Każde to jedno ustawienie źródła danych (sekcja <a href="#polaczenia">Połączenia</a>).</li>
+        <li>Konfigurujesz ją kodem: źródła i dashboardy przez provisioning (pliki YAML/JSON albo sidecar czytający ConfigMapy w chartcie).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="alloy">
+  <h2><span class="num">04</span>Alloy w praktyce: trzy potoki</h2>
+  <p class="prose">Każdy komponent ma typ i nazwę (<code>loki.process "pods"</code>), argumenty i wyjście. Dane płyną tam, gdzie wskazuje <code>forward_to</code> albo blok <code>output</code>. Wszystkie trzy pliki przeszły <code>alloy fmt</code> i uruchomienie <code>alloy run</code> w wersji v1.21.3. Potok logów sprawdzony bez klastra: <code>discovery.kubernetes</code> podmieniony na stały cel.</p>
+
+  <div class="tabs" role="tablist" aria-label="Potoki Alloy">
+    <button type="button" class="chip l" role="tab" aria-selected="true" aria-pressed="true" data-tab="tp-logs">Logi z węzła → Loki</button>
+    <button type="button" class="chip t" role="tab" aria-selected="false" aria-pressed="false" data-tab="tp-traces">Trace'y OTLP → Tempo</button>
+    <button type="button" class="chip m" role="tab" aria-selected="false" aria-pressed="false" data-tab="tp-metrics">Metryki → Prometheus</button>
+  </div>
+
+  <div class="tabpanel" id="tp-logs" role="tabpanel">
+<pre><span class="c">// Alloy jako DaemonSet: tylko pody z tego węzła</span>
+discovery.kubernetes "pods" {
+  role = "pod"
+  selectors {
+    role  = "pod"
+    field = "spec.nodeName=" + coalesce(sys.env("HOSTNAME"), constants.hostname)
+  }
+}
+
+<span class="c">// Etykiety Loki + ścieżka do pliku logu kontenera</span>
+discovery.relabel "pods" {
+  targets = discovery.kubernetes.pods.targets
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    target_label  = "app"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+    separator     = "/"
+    target_label  = "__path__"
+    replacement   = "/var/log/pods/*$1/*.log"
+  }
+}
+
+local.file_match "pods" {
+  path_targets = discovery.relabel.pods.output
+}
+
+loki.source.file "pods" {
+  targets    = local.file_match.pods.targets
+  forward_to = [loki.process.pods.receiver]
+}
+
+loki.process "pods" {
+  stage.cri {}                              <span class="c">// zdejmuje prefiks CRI: czas, stdout/stderr, flaga</span>
+
+  stage.json {                              <span class="c">// log aplikacji w JSON</span>
+    expressions = { level = "level", trace_id = "trace_id" }
+  }
+
+  stage.labels {                            <span class="c">// level: kilka wartości → etykieta</span>
+    values = { level = "" }
+  }
+
+  stage.structured_metadata {               <span class="c">// trace_id: miliony wartości → NIE etykieta</span>
+    values = { trace_id = "" }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+  }
+}</pre>
+    <p class="src prose">Pod Alloy musi widzieć katalog węzła: w chartcie <code>grafana/alloy</code> ustaw <code>alloy.mounts.varlog: true</code> i <code>controller.type: daemonset</code> (domyślne). Adres Loki zależy od chartu i trybu, sprawdź <code>kubectl get svc -n monitoring</code>.</p>
+  </div>
+
+  <div class="tabpanel" id="tp-traces" role="tabpanel" hidden>
+<pre><span class="c">// Alloy jako Deployment + Service: aplikacje wysyłają tu OTLP</span>
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+<span class="c">// paczkuje spany przed wysyłką (mniej połączeń, lepsza kompresja)</span>
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+<span class="c">// otlp = gRPC; dla HTTP jest otelcol.exporter.otlphttp</span>
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo.monitoring.svc:4317"
+    tls {
+      insecure = true                       <span class="c">// ruch w klastrze bez TLS; produkcyjnie mTLS albo mesh</span>
+    }
+  }
+}</pre>
+    <p class="src prose">W aplikacji wystarczy <code>OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring.svc:4318</code> i <code>OTEL_SERVICE_NAME=checkout</code>. Między receiverem a batchem często dokłada się <code>otelcol.processor.k8sattributes</code> (dopisuje <code>k8s.namespace.name</code>, <code>k8s.pod.name</code>) i <code>otelcol.processor.tail_sampling</code> (zostawia np. wszystkie błędy i 10% reszty).</p>
+  </div>
+
+  <div class="tabpanel" id="tp-metrics" role="tabpanel" hidden>
+<pre><span class="c">// Alloy czyta te same ServiceMonitory co Prometheus Operator i sam scrapuje</span>
+prometheus.operator.servicemonitors "all" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus.monitoring.svc:9090/api/v1/write"
+  }
+}</pre>
+    <p class="src prose">Ten wariant ma sens, gdy magazynem jest Mimir, Grafana Cloud albo Prometheus w innym klastrze. Na jednym klastrze z kube-prometheus-stack zwykle zostawia się scrapowanie Prometheusowi, a Alloy zajmuje się logami i trace'ami. Prometheus przyjmie remote write tylko z <code>--web.enable-remote-write-receiver</code> (w chartcie <code>prometheus.prometheusSpec.enableRemoteWriteReceiver: true</code>).</p>
+  </div>
+
+  <h3>Jak sprawdzić, że potok działa</h3>
+  <ol class="steps prose">
+    <li><code>kubectl -n monitoring port-forward svc/alloy 12345</code> i otwórz <code>http://localhost:12345</code>. Graf komponentów: zielony = zdrowy, czerwony = błąd z opisem.</li>
+    <li>W komponencie <code>loki.process</code> włącz <em>Live debugging</em> (wymaga bloku <code>livedebugging { enabled = true }</code> w konfiguracji). Zobaczysz linie po każdym etapie.</li>
+    <li>W Grafanie Explore → Loki: <code>{namespace="shop"}</code>. Rozwiń linię: <code>level</code> ma być etykietą, <code>trace_id</code> polem structured metadata.</li>
+  </ol>
+</section>
+
+<section id="instrumentacja">
+  <h2><span class="num">05</span>Skąd biorą się spany: cztery sposoby</h2>
+  <p class="prose">Metryki kontenera i logi masz za darmo: daje je kubelet i stdout. Spany powstają wewnątrz procesu, więc ktoś musi tam wstawić SDK OpenTelemetry. Kolejne usługi łączą się w jeden trace dzięki nagłówkowi HTTP <code>traceparent</code>. Usługa, która go nie przekaże, przerywa trace.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Sposób</th><th>Co zmieniasz</th><th>Plusy</th><th>Minusy</th></tr></thead>
+      <tbody>
+        <tr><th>1. SDK + ręczne spany</th><td>kod</td><td>nazwy biznesowe (<code>charge-card</code>), własne atrybuty (<code>order.id</code>), <code>trace_id</code> w logach</td><td>praca w każdej usłudze i każdym języku</td></tr>
+        <tr><th>2. Auto-instrumentacja w obrazie</th><td>Dockerfile / start procesu (np. <code>opentelemetry-instrument python app.py</code>, <code>-javaagent:…</code>)</td><td>bez zmian w kodzie, od razu spany HTTP, baz, kolejek</td><td>przebudowa obrazu, tylko nazwy techniczne</td></tr>
+        <tr><th>3. OpenTelemetry Operator</th><td>adnotacja w szablonie poda, np. <code>instrumentation.opentelemetry.io/inject-python: "true"</code></td><td>bez zmian w kodzie i obrazie, konfiguracja w jednym obiekcie <code>Instrumentation</code></td><td>mutating webhook przy starcie poda (wymaga cert-managera), więcej pamięci, wersję SDK wybiera operator</td></tr>
+        <tr><th>4. eBPF (OBI, Beyla)</th><td>nic w aplikacji, DaemonSet z uprawnieniami</td><td>każdy język, nawet binarki bez źródeł</td><td>płytkie spany, słabsza propagacja kontekstu, uprzywilejowany pod</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose">W praktyce łączy się 2 albo 3 (szkielet: HTTP, bazy, kolejki) z 1 (kilka spanów biznesowych tam, gdzie ma to znaczenie). OBI (OpenTelemetry eBPF Instrumentation) to projekt OpenTelemetry zbudowany z kodu Grafana Beyla. Beyla jest dalej rozwijana jako dystrybucja Grafany.</p>
+  <h3>Log, który da się połączyć z trace'em</h3>
+<pre>{"ts":"2026-11-06T09:14:03.120Z","level":"error","msg":"karta odrzucona",
+ "service":"payments","order_id":"A-1042",
+ "trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7"}</pre>
+  <p class="prose">Logger musi dopisać <code>trace_id</code> z bieżącego kontekstu. Robią to integracje OTel dla popularnych loggerów (Python <code>logging</code>, Java Logback/Log4j, Node <code>pino</code>/<code>winston</code>). Zwykły <code>print</code> albo <code>console.log</code> tego nie zrobi.</p>
+</section>
+
+<section id="polaczenia">
+  <h2><span class="num">06</span>Połączenia w Grafanie: z wykresu do linii logu</h2>
+  <p class="prose">Trzy osobne bazy to jeszcze nie obserwowalność. Wartość jest w przejściach między nimi, a każde przejście to jedno pole w konfiguracji źródła danych.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Przejście</th><th>Ustawienie</th><th>Warunek</th></tr></thead>
+      <tbody>
+        <tr><th>Log → trace</th><td>Loki: <code>derivedFields</code>. Pole <code>trace_id</code> staje się linkiem do Tempo.</td><td>Linia ma <code>trace_id</code> (etykieta, structured metadata albo regex na treści).</td></tr>
+        <tr><th>Trace → logi</th><td>Tempo: <code>tracesToLogsV2</code>. Przycisk „Logs for this span” buduje zapytanie LogQL z atrybutów spana i okna czasu.</td><td>Atrybut spana (np. <code>service.name</code>) odpowiada etykiecie w Loki. Z <code>filterByTraceID</code> logi muszą mieć <code>trace_id</code>.</td></tr>
+        <tr><th>Metryka → trace</th><td>Prometheus: <code>exemplarTraceIdDestinations</code>. Kropki na wykresie z <code>trace_id</code> przykładowego żądania.</td><td>Aplikacja wystawia exemplary (format OpenMetrics) albo przychodzą z OTLP. W Prometheusie potrzebny <code>--enable-feature=exemplar-storage</code>.</td></tr>
+        <tr><th>Trace → metryki</th><td>Tempo: <code>tracesToMetrics</code> i <code>serviceMap</code>. Z trace'a do wykresu RED usługi, mapa usług w zakładce Service Graph.</td><td>Włączony metrics-generator albo TraceQL metrics.</td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre><span class="c"># provisioning/datasources/stack.yaml — trzy źródła połączone ze sobą</span>
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    url: http://prometheus.monitoring.svc:9090
+    jsonData:
+      exemplarTraceIdDestinations:
+        - name: trace_id             <span class="c"># nazwa etykiety exemplara</span>
+          datasourceUid: tempo
+
+  - name: Loki
+    type: loki
+    uid: loki
+    url: http://loki.monitoring.svc:3100
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          matcherType: label         <span class="c"># etykieta albo structured metadata</span>
+          matcherRegex: trace_id
+          url: '$${__value.raw}'     <span class="c"># $$ = dosłowny $ w provisioningu</span>
+          datasourceUid: tempo
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    url: http://tempo.monitoring.svc:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        filterByTraceID: true
+        tags:
+          - key: service.name        <span class="c"># atrybut spana…</span>
+            value: app               <span class="c"># …i etykieta w Loki, której ma odpowiadać</span>
+      tracesToMetrics:
+        datasourceUid: prometheus
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true</pre>
+  <p class="src prose">Ten plik wczytała Grafana 13.3 w kontenerze bez błędów provisioningu. Adresy usług zależą od chartów (np. w kube-prometheus-stack Prometheus to <code>&lt;release&gt;-kube-prometheus-prometheus</code>).</p>
+</section>
+
+<section id="zapytania">
+  <h2><span class="num">07</span>Ściąga zapytań do Explore</h2>
+  <p class="prose">Wpisz swój namespace i nazwę usługi, a zapytania podstawią je same. Przycisk „kopiuj” kopiuje gotowe zapytanie.</p>
+  <div class="qform">
+    <label>Namespace <input id="q-ns" value="shop" autocomplete="off" spellcheck="false"></label>
+    <label>Usługa (<code>service.name</code>) <input id="q-svc" value="checkout" autocomplete="off" spellcheck="false"></label>
+    <label>Kontener <input id="q-ct" value="app" autocomplete="off" spellcheck="false"></label>
+  </div>
+  <div class="qgrid">
+    <div class="qcol">
+      <h3><span class="tag m">PromQL</span> Prometheus</h3>
+      <div class="q"><div class="d">CPU podów w rdzeniach</div><pre data-q>sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="{NS}", container!=""}[5m]))</pre></div>
+      <div class="q"><div class="d">Pamięć robocza (to ją porównuje OOM killer z limitem)</div><pre data-q>sum by (pod) (container_memory_working_set_bytes{namespace="{NS}", container!=""})</pre></div>
+      <div class="q"><div class="d">Restarty w ostatniej godzinie</div><pre data-q>increase(kube_pod_container_status_restarts_total{namespace="{NS}"}[1h]) > 0</pre></div>
+      <div class="q"><div class="d">Żądania na sekundę ze span-metrics (metrics-generator)</div><pre data-q>sum(rate(traces_spanmetrics_calls_total{service="{SVC}", span_kind="SPAN_KIND_SERVER"}[5m]))</pre></div>
+      <div class="q"><div class="d">Odsetek błędów</div><pre data-q>sum(rate(traces_spanmetrics_calls_total{service="{SVC}", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}[5m]))
+/ sum(rate(traces_spanmetrics_calls_total{service="{SVC}", span_kind="SPAN_KIND_SERVER"}[5m]))</pre></div>
+      <div class="q"><div class="d">95. percentyl czasu odpowiedzi</div><pre data-q>histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_latency_bucket{service="{SVC}", span_kind="SPAN_KIND_SERVER"}[5m])))</pre></div>
+      <div class="q"><div class="d">Które cele nie odpowiadają na scrape</div><pre data-q>up{namespace="{NS}"} == 0</pre></div>
+    </div>
+    <div class="qcol">
+      <h3><span class="tag l">LogQL</span> Loki</h3>
+      <div class="q"><div class="d">Wszystkie logi kontenera</div><pre data-q>{namespace="{NS}", container="{CT}"}</pre></div>
+      <div class="q"><div class="d">Szukanie w treści (szybkie, bez parsowania)</div><pre data-q>{namespace="{NS}"} |= "error" != "healthz"</pre></div>
+      <div class="q"><div class="d">Po etykiecie <code>level</code> z Alloy</div><pre data-q>{namespace="{NS}", level="error"}</pre></div>
+      <div class="q"><div class="d">Parsowanie JSON i filtr po polu</div><pre data-q>{namespace="{NS}", container="{CT}"} | json | order_id="A-1042"</pre></div>
+      <div class="q"><div class="d">Wszystkie logi jednego żądania (structured metadata)</div><pre data-q>{namespace="{NS}"} | trace_id="4bf92f3577b34da6a3ce929d0e0e4736"</pre></div>
+      <div class="q"><div class="d">Liczba błędów na minutę per pod (metryka z logów)</div><pre data-q>sum by (pod) (count_over_time({namespace="{NS}", level="error"} [1m]))</pre></div>
+    </div>
+    <div class="qcol">
+      <h3><span class="tag t">TraceQL</span> Tempo</h3>
+      <div class="q"><div class="d">Błędne żądania usługi</div><pre data-q>{resource.service.name="{SVC}" && status=error}</pre></div>
+      <div class="q"><div class="d">Wolne wejścia do usługi, bez sond</div><pre data-q>{resource.service.name="{SVC}" && kind=server && duration > 500ms && name!="GET /healthz"}</pre></div>
+      <div class="q"><div class="d">Odpowiedzi 5xx (atrybut z konwencji OTel)</div><pre data-q>{resource.service.name="{SVC}" && span.http.response.status_code >= 500}</pre></div>
+      <div class="q"><div class="d">Trace'y, w których błąd wystąpił niżej w łańcuchu wywołań tej usługi</div><pre data-q>{resource.service.name="{SVC}"} >> {status=error}</pre></div>
+      <div class="q"><div class="d">TraceQL metrics: żądania na sekundę</div><pre data-q>{resource.service.name="{SVC}" && kind=server} | rate()</pre></div>
+      <div class="q"><div class="d">TraceQL metrics: p95 czasu per endpoint</div><pre data-q>{resource.service.name="{SVC}" && kind=server} | quantile_over_time(duration, .95) by (name)</pre></div>
+    </div>
+  </div>
+  <p class="src prose">Składnię każdego zapytania sprawdziły API Prometheusa 3.16, Loki 3.7.9 i Tempo 3.1.1. Zapytania span-metrics zwrócą dane tylko przy włączonym metrics-generatorze.</p>
+</section>
+
+<section id="kardynalnosc">
+  <h2><span class="num">08</span>Policz serie, zanim dodasz etykietę</h2>
+  <p class="prose">Liczba serii jednej metryki to iloczyn liczby wartości jej etykiet. Każda aktywna seria siedzi w pamięci Prometheusa. Histogram mnoży to jeszcze przez liczbę kubełków + 2 (<code>_sum</code> i <code>_count</code>). W Loki to samo dotyczy strumieni: każda nowa etykieta mnoży ich liczbę i rozdrabnia chunki.</p>
+  <div class="calc">
+    <div class="rows">
+      <label>Metody HTTP <input id="k-method" type="number" min="1" value="4"></label>
+      <label>Ścieżki (route) <input id="k-route" type="number" min="1" value="25"></label>
+      <label>Kody odpowiedzi <input id="k-code" type="number" min="1" value="6"></label>
+      <label>Pody <input id="k-pod" type="number" min="1" value="6"></label>
+      <label>Kubełki histogramu <input id="k-bkt" type="number" min="0" value="12"></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="k-user"> dodaj etykietę <code>user_id</code></label>
+    <label style="max-width:220px; margin-top:6px">liczba aktywnych użytkowników <input id="k-users" type="number" min="1" value="20000"></label>
+    <div class="result">
+      <div><div class="k">Serie licznika (counter)</div><div class="val m" id="k-o1">0</div><div class="x" id="k-x1"></div></div>
+      <div><div class="k">Serie histogramu czasu</div><div class="val m" id="k-o2">0</div><div class="x" id="k-x2"></div></div>
+      <div><div class="k">Histogram z URL zamiast route</div><div class="val no" id="k-o3">0</div><div class="x">np. <code>/orders/A-1042</code>: każde ID to nowa wartość, tu 1000 ID</div></div>
+    </div>
+  </div>
+  <p class="prose">Wysokokardynalne dane (<code>user_id</code>, <code>order_id</code>, <code>trace_id</code>, pełny URL) należą do <strong>treści logu, structured metadata albo atrybutów spana</strong>. Tam nie tworzą serii ani strumieni, a nadal da się po nich szukać.</p>
+</section>
+
+<section id="instalacja">
+  <h2><span class="num">09</span>Jak to postawić na Kubernetesie</h2>
+  <p class="prose">Cztery charty Helm w jednym namespace <code>monitoring</code>. Wersje z <code>helm search repo</code> na 06.11.2026.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Chart</th><th>Wersja (aplikacja)</th><th>Co instaluje</th><th>Na co uważać w values</th></tr></thead>
+      <tbody>
+        <tr><th><code>prometheus-community/<wbr>kube-prometheus-stack</code></th><td>92.21.1 (Prometheus 3.16, Alertmanager 0.34)</td><td>Prometheus Operator, Prometheus, Alertmanager, Grafana, kube-state-metrics, node-exporter, gotowe reguły i dashboardy</td><td><code>serviceMonitorSelectorNilUsesHelmValues: true</code> (domyślne) = Prometheus bierze tylko ServiceMonitory z etykietą <code>release</code>. Retencja domyślnie <code>10d</code>.</td></tr>
+        <tr><th><code>grafana-community/loki</code></th><td>21.0.0 (Loki 3.7.9)</td><td>Loki; domyślnie <code>deploymentMode: Monolithic</code></td><td>Od 16.03.2026 chart OSS rozwija repo <code>grafana-community</code>; <code>grafana/loki</code> zostało dla Grafana Enterprise Logs. Simple scalable i distributed wymagają object storage.</td></tr>
+        <tr><th><code>grafana-community/tempo</code></th><td>3.2.1 (Tempo 3.1.1)</td><td>Tempo w jednym procesie. Dla mikroserwisów <code>tempo-distributed</code>.</td><td><code>metricsGenerator.enabled: false</code> domyślnie. Włącz i podaj <code>remoteWriteUrl</code>, jeśli chcesz span-metrics i mapę usług.</td></tr>
+        <tr><th><code>grafana/alloy</code></th><td>1.15.0 (Alloy 1.21.3)</td><td>Alloy jako DaemonSet (domyślnie) z konfiguracją z ConfigMapy</td><td><code>alloy.mounts.varlog: true</code> do czytania logów z węzła. Konfigurację wkładasz w <code>alloy.configMap.content</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre>helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana-community     https://grafana-community.github.io/helm-charts
+helm repo add grafana               https://grafana.github.io/helm-charts
+helm repo update
+
+<span class="c"># kolejność ma znaczenie: najpierw CRD Operatora i Grafana, potem magazyny, na końcu zbieracz</span>
+helm upgrade --install kps   prometheus-community/kube-prometheus-stack -n monitoring --create-namespace -f kps.yaml --wait
+helm upgrade --install loki  grafana-community/loki  -n monitoring -f loki.yaml  --wait
+helm upgrade --install tempo grafana-community/tempo -n monitoring -f tempo.yaml --wait
+helm upgrade --install alloy grafana/alloy           -n monitoring -f alloy.yaml --wait</pre>
+  <div class="callout">Do nauki i na laptopie wystarczą tryby monolityczne z dyskiem lokalnym. Produkcyjnie: Loki i Tempo z object storage, Prometheus z dłuższą retencją albo remote write do Mimira/Thanosa, Grafana z hasłem z Secretu za Ingressem z TLS. Grafana z hasłem <code>admin</code> na publicznym adresie to pierwsza rzecz, którą znajdzie każdy skaner.</div>
+</section>
+
+<section id="pulapki" class="prose">
+  <h2><span class="num">10</span>Pułapki, na które wpada każdy</h2>
+  <details><summary><code>trace_id</code> albo <code>user_id</code> jako etykieta</summary><p>Miliony serii w Prometheusie, miliony strumieni w Loki. Prometheus puchnie w pamięci, Loki odrzuca zapis po przekroczeniu limitów. Takie wartości trzymaj w treści logu, structured metadata albo atrybutach spana.</p></details>
+  <details><summary>Sondy readiness i liveness zalewają Tempo</summary><p>Sonda co kilka sekund × liczba podów = tysiące trace'ów <code>GET /healthz</code>. Wyklucz je w TraceQL (<code>name!="GET /healthz"</code>), a lepiej odfiltruj w Alloy (<code>otelcol.processor.filter</code> albo tail sampling).</p></details>
+  <details><summary>ServiceMonitor jest, a celu nie ma w Prometheusie</summary><p>Trzy typowe powody: selektor Prometheusa wymaga etykiety <code>release: &lt;nazwa&gt;</code>, <code>port</code> w ServiceMonitorze to <em>nazwa</em> portu z Service'u (nie numer), albo selektor ServiceMonitora nie pasuje do etykiet Service'u. Sprawdź <strong>Status → Target health</strong> w UI Prometheusa.</p></details>
+  <details><summary>„Logs for this span” nic nie znajduje</summary><p>Aplikacja nie loguje <code>trace_id</code>, albo mapowanie w <code>tracesToLogsV2.tags</code> nie pasuje do etykiet Loki (np. span ma <code>service.name=checkout</code>, a w Loki etykieta <code>app</code> ma wartość <code>checkout-api</code>).</p></details>
+  <details><summary>Trace urywa się na jednej usłudze</summary><p>Ta usługa nie przekazuje nagłówka <code>traceparent</code> dalej: brak instrumentacji klienta HTTP, własny klient albo kolejka bez propagacji kontekstu w nagłówkach wiadomości.</p></details>
+  <details><summary><code>rate()</code> na gaugeu albo <code>sum()</code> na counterze bez <code>rate()</code></summary><p>Counter rośnie od startu procesu i zeruje się przy restarcie. Sama suma jest bez sensu, <code>rate()</code> obsługuje reset. Gauge (np. pamięć) czytasz wprost albo przez <code>avg_over_time()</code>.</p></details>
+  <details><summary>Okno <code>rate()</code> krótsze niż dwa scrape'y</summary><p><code>rate(x[30s])</code> przy scrape co 30 s ma często jedną próbkę i zwraca pustkę. Okno ma obejmować co najmniej 4 interwały, np. <code>[2m]</code> przy 30 s. W Grafanie wygodnie: <code>$__rate_interval</code>.</p></details>
+</section>
+
+<section id="slowniczek" class="prose">
+  <h2><span class="num">11</span>Słowniczek</h2>
+  <dl class="gloss">
+    <dt>seria</dt><dd>Ciąg próbek (czas, liczba) o tej samej nazwie metryki i tym samym zestawie etykiet.</dd>
+    <dt>scrape</dt><dd>Pobranie metryk przez Prometheusa z adresu <code>/metrics</code> celu, co <code>scrape_interval</code>.</dd>
+    <dt>kardynalność</dt><dd>Liczba różnych kombinacji wartości etykiet. Od niej zależy pamięć Prometheusa i liczba strumieni Loki.</dd>
+    <dt>strumień</dt><dd>W Loki: wszystkie linie z tym samym zestawem etykiet. Jednostka indeksu i kompresji.</dd>
+    <dt>structured metadata</dt><dd>Pary klucz-wartość przy linii logu w Loki, poza indeksem. Miejsce na <code>trace_id</code>.</dd>
+    <dt>trace</dt><dd>Historia jednego żądania przez wszystkie usługi: drzewo spanów z jednym <code>trace_id</code>.</dd>
+    <dt>span</dt><dd>Jeden krok w trace: wywołanie HTTP, zapytanie do bazy, funkcja. Ma początek, czas trwania, status, atrybuty i rodzica.</dd>
+    <dt>traceparent</dt><dd>Nagłówek W3C Trace Context: <code>00-&lt;trace_id&gt;-&lt;span_id rodzica&gt;-&lt;flagi&gt;</code>. Niesie kontekst między usługami.</dd>
+    <dt>OTLP</dt><dd>Protokół OpenTelemetry dla metryk, logów i trace'ów. 4317 = gRPC, 4318 = HTTP.</dd>
+    <dt>exemplar</dt><dd>Próbka metryki z doczepionym <code>trace_id</code> konkretnego żądania. Kropka na wykresie, z której klikasz do trace'a.</dd>
+    <dt>RED</dt><dd>Rate, Errors, Duration: trzy metryki opisujące każdą usługę obsługującą żądania.</dd>
+    <dt>span-metrics</dt><dd>Metryki RED wyliczane przez metrics-generator Tempo z napływających spanów.</dd>
+    <dt>head / tail sampling</dt><dd>Decyzja o zachowaniu trace'a na początku (w SDK, tanio, na ślepo) albo po jego zakończeniu (w kolektorze, np. „zachowaj wszystkie błędy”).</dd>
+    <dt>remote write</dt><dd>Protokół, którym Prometheus, Alloy albo Tempo wypychają próbki do innego magazynu zgodnego z Prometheusem.</dd>
+  </dl>
+</section>
+
+<section id="sprawdz" class="prose">
+  <h2><span class="num">12</span>Sprawdź się</h2>
+  <details><summary>Pod został usunięty godzinę temu. Gdzie jeszcze zobaczysz jego logi?</summary><p>W Loki. Alloy przeczytał je z pliku na węźle i wysłał, zanim pod zniknął. <code>kubectl logs</code> już nic nie pokaże, bo kubelet usuwa pliki logów razem z kontenerem.</p></details>
+  <details><summary>Aplikacja nie ma endpointu <code>/metrics</code>. Skąd wziąć liczbę żądań i odsetek błędów?</summary><p>Ze spanów. Metrics-generator Tempo liczy <code>traces_spanmetrics_calls_total</code> ze statusem i czasy, albo w locie TraceQL metrics: <code>{…} | rate()</code>. Wystarczy auto-instrumentacja albo eBPF.</p></details>
+  <details><summary>Chcesz w Loki szukać po <code>order_id</code>. Etykieta czy nie?</summary><p>Nie. Zostaw w treści JSON i filtruj <code>| json | order_id="A-1042"</code>, albo wyciągnij do structured metadata w <code>loki.process</code>. Etykieta z tysiącami wartości rozbije dane na tysiące małych strumieni.</p></details>
+  <details><summary>Alert „odsetek błędów &gt; 5%” odpalił się o 14:02. Jakie trzy kroki w Grafanie dzielą cię od przyczyny?</summary><p>1) Wykres błędów z alertu, zawężasz czas i usługę, ewentualnie klikasz exemplar. 2) TraceQL <code>{resource.service.name="…" && status=error}</code>, w trace'ie widzisz czerwony span w konkretnej usłudze. 3) „Logs for this span” pokazuje linię z treścią błędu.</p></details>
+  <details><summary>Promtail działa od lat i działa dobrze. Po co go ruszać?</summary><p>Promtail ma koniec wsparcia od 2.03.2026: brak poprawek bezpieczeństwa i błędów. <code>alloy convert --source-format=promtail</code> tłumaczy konfigurację. Uwaga: metryki samego Alloy mają inne nazwy, więc dashboardy i alerty o zbieraczu trzeba poprawić.</p></details>
+  <details><summary>W Tempo widzisz osobno trace z <code>frontend</code> i osobno z <code>payments</code>, choć to jedno kliknięcie użytkownika. Co jest zepsute?</summary><p>Propagacja kontekstu. Któraś usługa pomiędzy nie przekazuje <code>traceparent</code>, więc <code>payments</code> zaczyna nowy trace. Sprawdź instrumentację klienta HTTP albo kolejki w usłudze pośrodku.</p></details>
+  <details><summary><code>rate(http_requests_total[15s])</code> rysuje dziurawy wykres. Czemu?</summary><p>Okno krótsze niż dwa scrape'y (np. przy 30 s) często ma jedną próbkę, a <code>rate()</code> potrzebuje co najmniej dwóch. Użyj <code>[2m]</code> albo <code>$__rate_interval</code>.</p></details>
+  <details><summary>Czy Grafana przestanie pokazywać dane, gdy padnie Alloy?</summary><p>Nie. Pokaże wszystko, co już jest w magazynach. Przestaną napływać nowe logi i trace'y, a metryki dalej będą, jeśli scrapuje je Prometheus. Pomoże alert na brak danych, np. <code>absent_over_time({namespace="shop"}[10m])</code> w Loki albo <code>up{job=~".*alloy.*"} == 0</code>.</p></details>
+</section>
+
+<p class="src prose">Źródła: dokumentacja Prometheusa (feature flags, native histograms spec, przewodnik OpenTelemetry, ogłoszenie 3.8.0), Grafana Loki (deployment modes, labels, OTLP ingestion, migracja chartu do grafana-community), Grafana Tempo (release notes 3.0, Helm charts), Grafana Alloy (migracja z Promtaila, komponenty <code>otelcol.*</code>, <code>loki.*</code>, <code>prometheus.*</code>), dokumentacja Grafana Agent (koniec wsparcia), Grafana Drilldown; <code>helm search repo</code> i <code>helm show values</code> dla chartów z tabeli (06.11.2026); konfiguracje Alloy sprawdzone obrazem <code>grafana/alloy</code> v1.21.3. Zobacz też: lab09 (obserwowalność na stosie MemeOps).</p>
+
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+  /* ---------- Diagram ---------- */
+  var svg = $('map');
+  var nodes = svg.querySelectorAll('.node');
+  var edges = svg.querySelectorAll('.e');
+  var labels = svg.querySelectorAll('.lbl');
+  var panel = $('panel');
+
+  var INFO = {
+    app: { t: 'Twoja aplikacja', r: 'Źródło wszystkich trzech sygnałów. Sama wysyła tylko trace\'y; metryki i logi ktoś od niej pobiera.', d: [
+      ['Metryki', 'Wystawia <code>/metrics</code> (biblioteka Prometheusa albo eksporter OTel). Prometheus pobiera je, gdy wskaże go ServiceMonitor.'],
+      ['Logi', 'Pisze na stdout/stderr, najlepiej JSON z <code>level</code> i <code>trace_id</code>. Nie wie nic o Loki.'],
+      ['Trace\'y', 'SDK OpenTelemetry tworzy spany i wysyła je OTLP. Konfiguracja przez zmienne: <code>OTEL_SERVICE_NAME</code>, <code>OTEL_EXPORTER_OTLP_ENDPOINT</code>.'],
+      ['Gdy padnie', 'Metryki: <code>up == 0</code>. Logi: ostatnie linie przed śmiercią już są w Loki. Trace\'y: spany z bufora SDK mogą przepaść.']] },
+    kubelet: { t: 'kubelet / cAdvisor', r: 'Agent Kubernetesa na każdym węźle. Wbudowany cAdvisor mierzy zużycie zasobów każdego kontenera.', d: [
+      ['Endpoint', '<code>/metrics/cadvisor</code> na kubelecie (port 10250, HTTPS z tokenem).'],
+      ['Przykłady', '<code>container_cpu_usage_seconds_total</code>, <code>container_memory_working_set_bytes</code>, <code>container_network_receive_bytes_total</code>.'],
+      ['Uwaga', 'Seria z <code>container=""</code> to suma dla całego poda. Filtruj <code>container!=""</code>, inaczej policzysz podwójnie.']] },
+    ksm: { t: 'kube-state-metrics', r: 'Zamienia stan obiektów API Kubernetesa na metryki. Nie mierzy zużycia, tylko to, co jest zapisane w API.', d: [
+      ['Przykłady', '<code>kube_pod_container_status_restarts_total</code>, <code>kube_deployment_status_replicas_available</code>, <code>kube_pod_status_phase</code>.'],
+      ['Odpowiada na', '„Ile replik jest gotowych?”, „Który pod restartuje się w kółko?”, „Ile podów wisi w Pending?”.'],
+      ['Wdrożenie', 'Jeden Deployment na klaster, w kube-prometheus-stack domyślnie.']] },
+    ne: { t: 'node-exporter', r: 'Metryki systemu operacyjnego węzła: CPU, pamięć, dyski, sieć, system plików.', d: [
+      ['Wdrożenie', 'DaemonSet, po jednym na węźle, port 9100.'],
+      ['Przykłady', '<code>node_filesystem_avail_bytes</code>, <code>node_load1</code>, <code>node_memory_MemAvailable_bytes</code>.'],
+      ['Po co', 'Pełny dysk węzła albo brak pamięci to częsta przyczyna eksmisji podów. Bez node-exportera tego nie widać.']] },
+    varlog: { t: '/var/log/pods', r: 'Runtime kontenera (containerd, CRI-O) zapisuje każdą linię stdout/stderr do pliku na węźle.', d: [
+      ['Ścieżka', '<code>/var/log/pods/&lt;namespace&gt;_&lt;pod&gt;_&lt;uid&gt;/&lt;kontener&gt;/0.log</code>'],
+      ['Format linii', 'Prefiks CRI: <code>2026-11-06T09:14:03.120Z stdout F {"level":"error",…}</code>. Zdejmuje go <code>stage.cri</code> w Alloy.'],
+      ['Rotacja', 'Kubelet rotuje pliki (domyślnie 10 MiB, 5 plików) i kasuje je razem z kontenerem. Dlatego logi trzeba wysłać na bieżąco.']] },
+    gw: { t: 'Alloy jako bramka OTLP', r: 'Wspólny punkt odbioru spanów z aplikacji: jeden adres w klastrze zamiast konfigurowania Tempo w każdej aplikacji.', d: [
+      ['Wdrożenie', 'Deployment (2+ repliki) + Service z portami 4317 i 4318.'],
+      ['Komponenty', '<code>otelcol.receiver.otlp</code> → <code>otelcol.processor.k8sattributes</code> → <code>otelcol.processor.batch</code> → <code>otelcol.exporter.otlp</code>.'],
+      ['Dodaje', 'Metadane Kubernetesa, paczkowanie, ponowienia przy chwilowej awarii Tempo, tail sampling, filtrowanie sond.'],
+      ['Gdy padnie', 'SDK w aplikacjach ponawia i buforuje krótko, potem gubi spany. Aplikacja działa dalej.']] },
+    ds: { t: 'Alloy jako DaemonSet', r: 'Po jednym podzie na węźle. Czyta pliki logów kontenerów z tego węzła i wysyła je do Loki.', d: [
+      ['Komponenty', '<code>discovery.kubernetes</code> → <code>discovery.relabel</code> → <code>local.file_match</code> → <code>loki.source.file</code> → <code>loki.process</code> → <code>loki.write</code>.'],
+      ['Etykiety', 'Z metadanych poda: <code>namespace</code>, <code>pod</code>, <code>container</code>, <code>app</code>. Z treści: <code>level</code>. <code>trace_id</code> idzie do structured metadata.'],
+      ['Pozycja', 'Zapamiętuje, dokąd przeczytał każdy plik. Po restarcie czyta od tego miejsca, więc nie gubi i nie dubluje linii.'],
+      ['UI', '<code>kubectl -n monitoring port-forward svc/alloy 12345</code> → graf komponentów i ich stan.']] },
+    tempo: { t: 'Tempo', r: 'Magazyn trace\'ów. Przyjmuje spany, składa je w bloki i zapisuje w object storage.', d: [
+      ['Porty', '4317 (OTLP gRPC), 4318 (OTLP HTTP), 3200 (API zapytań, z niego korzysta Grafana).'],
+      ['Wyszukiwanie', 'Po <code>trace_id</code> albo TraceQL: <code>{resource.service.name="checkout" && status=error}</code>.'],
+      ['Metryki', 'metrics-generator wysyła <code>traces_spanmetrics_*</code> i <code>traces_service_graph_*</code> do Prometheusa (remote write).'],
+      ['Gdy padnie', 'Nowe spany czekają w buforze Alloy (ograniczonym), potem przepadają. Metryki i logi działają dalej.']] },
+    prom: { t: 'Prometheus', r: 'Baza szeregów czasowych, która sama pobiera metryki z celów i liczy reguły alertów.', d: [
+      ['Port', '9090: UI, API zapytań, <code>/api/v1/write</code> (remote write, jeśli włączony).'],
+      ['Cele', 'Z <code>ServiceMonitor</code> i <code>PodMonitor</code>. Lista w <strong>Status → Target health</strong>.'],
+      ['Przechowywanie', 'Lokalny TSDB: ostatnie ~2 h w pamięci (head), starsze w blokach na dysku. Retencja czasem albo rozmiarem.'],
+      ['Gdy padnie', 'Dziura w danych na czas awarii (pull nie ma czego dosłać) i brak alertów. Dlatego Prometheus jest zwykle jedyną rzeczą, którą monitoruje się z zewnątrz.']] },
+    am: { t: 'Alertmanager', r: 'Odbiera alerty z Prometheusa i decyduje, komu i jak je wysłać.', d: [
+      ['Robi', 'Grupowanie (jedno powiadomienie zamiast 50), wyciszenia (silences), hamowanie (inhibition: gdy padł węzeł, nie wysyłaj alertów jego podów), routing po etykietach.'],
+      ['Odbiorcy', 'Slack, e-mail, PagerDuty, Opsgenie, Teams, webhook.'],
+      ['Port', '9093.']] },
+    loki: { t: 'Loki', r: 'Magazyn logów. Indeksuje tylko etykiety, treść trzyma skompresowaną.', d: [
+      ['Port', '3100: <code>/loki/api/v1/push</code> (zapis), <code>/otlp</code> (OTLP), API zapytań dla Grafany.'],
+      ['Strumień', 'Unikalny zestaw etykiet, np. <code>{namespace="shop", app="checkout", container="app", level="error"}</code>.'],
+      ['Zapytanie', 'Najpierw selektor strumieni (szybki, z indeksu), potem filtry i parsery na treści.'],
+      ['Gdy padnie', 'Alloy buforuje i ponawia. Po dłuższej awarii część logów przepada, gdy kubelet zrotuje pliki.']] },
+    graf: { t: 'Grafana', r: 'Jedno okno na wszystkie sygnały. Nie przechowuje telemetrii, odpytuje Prometheusa, Loki i Tempo.', d: [
+      ['Port', '3000.'],
+      ['Widoki', 'Explore (zapytania ręczne), Drilldown (bez zapytań), dashboardy, Alerting.'],
+      ['Połączenia', 'Log → trace (<code>derivedFields</code>), trace → logi (<code>tracesToLogsV2</code>), metryka → trace (exemplary).'],
+      ['Gdy padnie', 'Tracisz widok, nie dane. Alerty z Prometheusa przez Alertmanager działają dalej.']] }
+  };
+
+  var STEPS = [
+    { t: 'Żądanie wchodzi do usługi checkout', n: ['app'], e: [],
+      x: 'Użytkownik klika „Zapłać”: <code>POST /api/orders</code>. SDK OpenTelemetry w <code>checkout</code> tworzy span główny (<code>kind=server</code>) i nowy <code>trace_id</code> <code>4bf92f35…</code>.' },
+    { t: 'checkout woła payments i przekazuje kontekst', n: ['app'], e: [],
+      x: 'Auto-instrumentacja klienta HTTP dokleja nagłówek <code>traceparent: 00-4bf92f35…-00f067aa0ba902b7-01</code>. <code>payments</code> odczytuje go i tworzy span-dziecko w tym samym trace\'ie. Bramka płatności odrzuca kartę, span dostaje <code>status=error</code>.' },
+    { t: 'payments loguje błąd na stdout', n: ['app', 'varlog'], e: ['e-app-log'],
+      x: 'Linia JSON: <code>{"level":"error","msg":"karta odrzucona","trace_id":"4bf92f35…"}</code>. Runtime kontenera dopisuje ją do pliku w <code>/var/log/pods/…</code> na węźle.' },
+    { t: 'Alloy na węźle wysyła linię do Loki', n: ['varlog', 'ds', 'loki'], e: ['e-log-ds', 'e-ds-loki'],
+      x: '<code>stage.cri</code> zdejmuje prefiks, <code>stage.json</code> wyciąga pola. <code>level="error"</code> zostaje etykietą, <code>trace_id</code> idzie do structured metadata. Paczka trafia na <code>/loki/api/v1/push</code>.' },
+    { t: 'SDK wysyła spany przez bramkę do Tempo', n: ['app', 'gw', 'tempo'], e: ['e-app-gw', 'e-gw-tempo'],
+      x: 'Zakończone spany czekają w BatchSpanProcessorze (domyślnie do 5 s), potem idą OTLP do Alloy. Alloy dopisuje <code>k8s.pod.name</code>, paczkuje i przekazuje do Tempo na 4317.' },
+    { t: 'Tempo liczy z tych spanów metryki', n: ['tempo', 'prom'], e: ['e-tempo-prom'],
+      x: 'metrics-generator zwiększa <code>traces_spanmetrics_calls_total{service="payments", status_code="STATUS_CODE_ERROR"}</code> i dopisuje krawędź <code>checkout → payments</code> do mapy usług. Wysyła to remote write do Prometheusa.' },
+    { t: 'Prometheus scrapuje i liczy regułę alertu', n: ['app', 'kubelet', 'prom', 'am'], e: ['e-app-prom', 'e-kub-prom', 'e-prom-am'],
+      x: 'Niezależnie od spanów Prometheus co 30 s pobiera <code>/metrics</code> aplikacji i kubeleta. Reguła „odsetek błędów &gt; 5%” jest prawdziwa przez <code>for: 5m</code>, więc alert przechodzi w stan <em>firing</em> i trafia do Alertmanagera, a ten do Slacka.' },
+    { t: 'Dyżurny idzie po nitce w Grafanie', n: ['graf', 'prom', 'tempo', 'loki'], e: ['e-prom-graf', 'e-tempo-graf', 'e-loki-graf'],
+      x: 'Wykres błędów (PromQL) → exemplar albo TraceQL <code>{status=error}</code> → trace z czerwonym spanem w <code>payments</code> → „Logs for this span” → linia „karta odrzucona” z Loki. Od alertu do przyczyny w trzech kliknięciach.' }
+  ];
+
+  var state = { flow: 'all', sel: null, tour: false, step: 0 };
+
+  function edgeIdsOfLabel(l) { return (l.getAttribute('data-for') || '').split(' '); }
+  function flowOf(el) { return el.classList.contains('m') ? 'm' : el.classList.contains('l') ? 'l' : 't'; }
+
+  function apply() {
+    var hlN = null, hlE = null;
+    if (state.tour) { hlN = STEPS[state.step].n; hlE = STEPS[state.step].e; }
+    nodes.forEach(function (n) {
+      var id = n.getAttribute('data-id');
+      var dim = hlN ? hlN.indexOf(id) === -1 : (state.flow !== 'all' && n.getAttribute('data-f').split(' ').indexOf(state.flow) === -1);
+      n.classList.toggle('dim', dim);
+      n.classList.toggle('sel', !state.tour && state.sel === id);
+    });
+    edges.forEach(function (e) {
+      var id = e.getAttribute('data-id');
+      var dim = hlE ? hlE.indexOf(id) === -1 : (state.flow !== 'all' && flowOf(e) !== state.flow);
+      e.classList.toggle('dim', dim);
+      e.classList.toggle('on', !!hlE && !dim);
+    });
+    labels.forEach(function (l) {
+      var ids = edgeIdsOfLabel(l), dim;
+      if (hlE) dim = !ids.some(function (i) { return hlE.indexOf(i) !== -1; });
+      else dim = state.flow !== 'all' && flowOf(l) !== state.flow;
+      l.classList.toggle('dim', dim);
+    });
+    document.querySelectorAll('.toolbar [data-flow]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(!state.tour && b.getAttribute('data-flow') === state.flow));
+    });
+    $('tour-btn').setAttribute('aria-pressed', String(state.tour));
+    render();
+  }
+
+  function render() {
+    if (state.tour) {
+      var s = STEPS[state.step];
+      panel.innerHTML = '<h4>' + (state.step + 1) + '. ' + s.t + '</h4><p class="role" style="color:var(--text)">' + s.x + '</p>' +
+        '<div class="stepnav"><button type="button" class="btn" id="st-prev">← Wstecz</button><button type="button" class="btn" id="st-next">Dalej →</button>' +
+        '<span class="stepnum">krok ' + (state.step + 1) + ' z ' + STEPS.length + '</span></div>';
+      $('st-prev').disabled = state.step === 0;
+      $('st-next').disabled = state.step === STEPS.length - 1;
+      $('st-prev').addEventListener('click', function () { state.step--; apply(); $('st-prev') && $('st-prev').focus(); });
+      $('st-next').addEventListener('click', function () { state.step++; apply(); var b = $('st-next'); if (b && !b.disabled) b.focus(); else if ($('st-prev')) $('st-prev').focus(); });
+      return;
+    }
+    if (!state.sel) { panel.innerHTML = '<h4>Kliknij klocek na diagramie</h4><p class="role">Albo włącz „Jedno żądanie krok po kroku”.</p>'; return; }
+    var i = INFO[state.sel];
+    var dl = i.d.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
+    panel.innerHTML = '<h4>' + i.t + '</h4><p class="role">' + i.r + '</p><dl>' + dl + '</dl>';
+  }
+
+  nodes.forEach(function (n) {
+    function pick() { state.tour = false; state.sel = n.getAttribute('data-id'); apply(); }
+    n.addEventListener('click', pick);
+    n.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
+  });
+  document.querySelectorAll('.toolbar [data-flow]').forEach(function (b) {
+    b.addEventListener('click', function () { state.tour = false; state.flow = b.getAttribute('data-flow'); apply(); });
+  });
+  $('tour-btn').addEventListener('click', function () {
+    state.tour = !state.tour; state.step = 0; state.flow = 'all'; apply();
+  });
+  apply();
+
+  /* ---------- Zakładki Alloy ---------- */
+  var tabs = document.querySelectorAll('[data-tab]');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (o) {
+        var on = o === t;
+        o.setAttribute('aria-selected', String(on)); o.setAttribute('aria-pressed', String(on));
+        $(o.getAttribute('data-tab')).hidden = !on;
+      });
+    });
+  });
+
+  /* ---------- Kopiowanie ---------- */
+  function addCopy(pre, getText) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'copy'; b.textContent = 'kopiuj';
+    b.addEventListener('click', function () {
+      var txt = getText();
+      var done = function () { b.textContent = 'skopiowano'; setTimeout(function () { b.textContent = 'kopiuj'; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function () {});
+    });
+    pre.appendChild(b);
+  }
+
+  /* ---------- Zapytania ---------- */
+  var qs = document.querySelectorAll('pre[data-q]');
+  qs.forEach(function (p) { p.setAttribute('data-tpl', p.textContent); });
+  var ins = { NS: $('q-ns'), SVC: $('q-svc'), CT: $('q-ct') };
+  Object.keys(ins).forEach(function (k) {
+    var v = store('obs-q-' + k); if (v) ins[k].value = v;
+    ins[k].addEventListener('input', function () { store('obs-q-' + k, ins[k].value); fill(); });
+  });
+  function fill() {
+    qs.forEach(function (p) {
+      var s = p.getAttribute('data-tpl')
+        .replace(/\{NS\}/g, ins.NS.value || 'shop')
+        .replace(/\{SVC\}/g, ins.SVC.value || 'checkout')
+        .replace(/\{CT\}/g, ins.CT.value || 'app');
+      var btn = p.querySelector('.copy');
+      p.textContent = s;
+      if (btn) p.appendChild(btn);
+    });
+  }
+  fill();
+  qs.forEach(function (p) { addCopy(p, function () { return p.firstChild ? p.firstChild.nodeValue : ''; }); });
+  document.querySelectorAll('#alloy pre, #polaczenia pre, #instalacja pre').forEach(function (p) {
+    addCopy(p, function () { var c = p.cloneNode(true); var b = c.querySelector('.copy'); if (b) b.remove(); return c.textContent; });
+  });
+  function fmt(n) { return n.toLocaleString('pl-PL'); }
+
+  /* ---------- Kalkulator kardynalności ---------- */
+  function num(id, d) { var v = parseInt($(id).value, 10); return isFinite(v) && v > 0 ? v : d; }
+  function calc() {
+    var m = num('k-method', 1), r = num('k-route', 1), c = num('k-code', 1), p = num('k-pod', 1);
+    var b = Math.max(0, parseInt($('k-bkt').value, 10) || 0);
+    var u = $('k-user').checked ? num('k-users', 1) : 1;
+    var base = m * r * c * p * u;
+    var hist = base * (b + 2);
+    $('k-o1').textContent = fmt(base);
+    $('k-x1').textContent = m + ' × ' + r + ' × ' + c + ' × ' + p + (u > 1 ? ' × ' + fmt(u) + ' (user_id)' : '');
+    $('k-o2').textContent = fmt(hist);
+    $('k-x2').textContent = fmt(base) + ' × (' + b + ' kubełków + _sum + _count)';
+    $('k-o2').className = 'val ' + (hist > 1e6 ? 'no' : 'm');
+    $('k-o1').className = 'val ' + (base > 1e6 ? 'no' : 'm');
+    $('k-o3').textContent = fmt(m * 1000 * c * p * u * (b + 2));
+  }
+  ['k-method', 'k-route', 'k-code', 'k-pod', 'k-bkt', 'k-users', 'k-user'].forEach(function (id) { $(id).addEventListener('input', calc); $(id).addEventListener('change', calc); });
+  calc();
+})();
+</script>
+</body>
+</html>

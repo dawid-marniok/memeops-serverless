@@ -16,3 +16,4 @@ Otwórz w przeglądarce, np. `xdg-open docs/01-knative-vs-k8s/index.html` (na Ma
 | 09 | [Wasm a kontener](09-wasm-vs-kontener/index.html) | dzień 2 · 2.5, demo 12 |
 | 10 | [cert-manager w Knative](10-cert-manager/index.html) | dzień 2 · 2.2, LAB 6 (HTTPS dla chętnych) |
 | 11 | [KEDA od środka](11-keda/index.html) | dzień 2 · 2.5, demo 11 |
+| 12 | [Obserwowalność w Kubernetesie](12-obserwowalnosc/index.html) | dzień 2 · 2.4, LAB 9 (temat ogólny: Prometheus, Loki, Tempo, Alloy, Grafana) |
